@@ -1,0 +1,213 @@
+.kiln-card {
+	border-radius: 12px;
+	border: 1px solid rgba(255, 255, 255, 0.09);
+	background: #161616;
+	overflow: hidden;
+	margin-top: 24px;
+	width: 75%;
+	margin-left: auto;
+	margin-right: auto;
+	font-family: inherit;
+}
+.kiln-header {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 12px 18px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+	background: rgba(255, 255, 255, 0.02);
+}
+.kiln-badge {
+	font-size: 0.65em;
+	font-weight: 700;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	padding: 2px 8px;
+	border-radius: 4px;
+	background: rgba(251, 191, 36, 0.12);
+	color: #fbbf24;
+}
+.kiln-header-title {
+	font-size: 0.88em;
+	font-weight: 600;
+	color: #9ca3af;
+}
+.kiln-loading {
+	padding: 24px;
+	text-align: center;
+	color: #4b5563;
+	font-size: 0.88em;
+}
+.kiln-verdict {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	padding: 14px 20px;
+}
+.kiln-verdict-icon {
+	font-size: 1.6em;
+	flex-shrink: 0;
+}
+.kiln-verdict-label {
+	font-weight: 700;
+	font-size: 0.95em;
+	text-transform: capitalize;
+	line-height: 1.3;
+}
+.kiln-verdict-advice {
+	font-size: 0.78em;
+	color: #6b7280;
+	margin-top: 2px;
+	line-height: 1.4;
+}
+.kiln-verdict-right {
+	margin-left: auto;
+	text-align: right;
+	flex-shrink: 0;
+}
+.kiln-delta-pct {
+	font-size: 1.3em;
+	font-weight: 700;
+	line-height: 1;
+}
+.kiln-delta-sub {
+	font-size: 0.68em;
+	color: #4b5563;
+	margin-top: 2px;
+}
+.kiln-bar-wrap {
+	padding: 0 20px 14px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.kiln-bar-labels {
+	display: flex;
+	justify-content: space-between;
+	font-size: 0.72em;
+	color: #4b5563;
+	margin-bottom: 5px;
+}
+.kiln-bar-track {
+	height: 6px;
+	border-radius: 99px;
+	background: rgba(255, 255, 255, 0.05);
+	overflow: hidden;
+	display: flex;
+}
+.kiln-bar-give {
+	height: 100%;
+	background: #f87171;
+	transition: width 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.kiln-bar-recv {
+	height: 100%;
+	background: #4ade80;
+	transition: width 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.kiln-sides {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.kiln-side {
+	padding: 14px 18px;
+}
+.kiln-side:first-child {
+	border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+.kiln-side-label {
+	font-size: 0.68em;
+	font-weight: 700;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: #4b5563;
+	margin-bottom: 8px;
+}
+.kiln-side-total {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	margin-top: 8px;
+	padding-top: 8px;
+	font-size: 0.82em;
+	color: #6b7280;
+}
+.kiln-side-total b {
+	color: #d1d5db;
+}
+.kiln-signals {
+	padding: 12px 20px;
+	border-top: 1px solid rgba(255, 255, 255, 0.05);
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+.kiln-signal {
+	font-size: 0.75em;
+	padding: 4px 10px;
+	border-radius: 6px;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	line-height: 1.3;
+}
+.kiln-signal-warn {
+	background: rgba(251, 191, 36, 0.08);
+	color: #fbbf24;
+}
+.kiln-signal-info {
+	background: rgba(99, 179, 237, 0.08);
+	color: #63b3ed;
+}
+.kiln-signal-good {
+	background: rgba(74, 222, 128, 0.08);
+	color: #4ade80;
+}
+.kiln-signal-bad {
+	background: rgba(248, 113, 113, 0.08);
+	color: #f87171;
+}
+.kiln-footer-note {
+	padding: 8px 20px 14px;
+	font-size: 0.7em;
+	color: #374151;
+	border-top: 1px solid rgba(255, 255, 255, 0.04);
+	line-height: 1.5;
+}
+.kiln-profile-bar {
+	display: flex;
+	gap: 6px;
+	padding: 10px 18px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+	align-items: center;
+}
+.kiln-profile-label {
+	font-size: 0.68em;
+	color: #4b5563;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	margin-right: 4px;
+}
+.kiln-profile-btn {
+	font-size: 0.72em;
+	font-weight: 600;
+	padding: 3px 10px;
+	border-radius: 6px;
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	background: transparent;
+	color: #6b7280;
+	cursor: pointer;
+	line-height: 1.4;
+	transition:
+		color 0.12s,
+		border-color 0.12s;
+}
+.kiln-profile-btn:hover {
+	color: #d1d5db;
+	border-color: rgba(255, 255, 255, 0.2);
+}
+.kiln-profile-active {
+	background: rgba(251, 191, 36, 0.12);
+	border-color: rgba(251, 191, 36, 0.3) !important;
+	color: #fbbf24 !important;
+}

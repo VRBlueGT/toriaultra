@@ -1,0 +1,2509 @@
+// Copyright (C) 2026 Index
+// Kiln - a quality-of-life browser extension for Polytoria.com
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+import errorIcon from "@/assets/error.svg";
+import data from "@/public/preferences.json";
+import type { FeatureId } from "@/utils/featureIds.generated";
+import { sendMessage } from "@/utils/messaging";
+import {
+	_savedThemes,
+	apiSessions,
+	cache,
+	type defaultPreferences,
+	dismissedNotices,
+	isMobileDevice,
+	preferences,
+} from "@/utils/storage";
+import { applyKilnTheme, THEME_PRESETS } from "@/utils/theme";
+import {
+	createModal,
+	getApiSession,
+	getConfig,
+	getUserDetails,
+	pullCache,
+	renderMarkdownLinks,
+	updateApiSession,
+} from "@/utils/utilities";
+
+const KILN_ID_REGEX =
+	/(?<![A-Za-z0-9_-])kiln:[A-Za-z0-9_-]{10}(?![A-Za-z0-9_-])/;
+
+type Tags =
+	| "all"
+	| "utility"
+	| "social"
+	| "economy"
+	| "development"
+	| "expression"
+	| "experimental"
+	| "new";
+
+type NoteType = "warning" | "info" | "secondary";
+
+type CategoryData = {
+	id: Tags;
+	name: string;
+	description: string;
+	icon: string;
+};
+
+type SettingData = {
+	name: string;
+	desc: string;
+	id: FeatureId;
+	requiresSync?: boolean;
+	notes?: Array<{ type: NoteType; text: string }>;
+	config?: Array<{
+		type: "select" | "check" | "searchable-select";
+		subsetting: string;
+		label?: string;
+		default?: string | boolean;
+		options?: Array<{ value: string; label: string }>;
+		hide?: boolean;
+	}>;
+	tags: Array<Tags>;
+	hide?: boolean;
+	desktopOnly?: boolean;
+};
+
+function isNewerVersion(latest: string, current: string): boolean {
+	const parse = (v: string) => v.split(".").map(Number);
+	const [lMaj, lMin, lPat] = parse(latest);
+	const [cMaj, cMin, cPat] = parse(current);
+	if (lMaj !== cMaj) return lMaj > cMaj;
+	if (lMin !== cMin) return lMin > cMin;
+	return lPat > cPat;
+}
+
+/**
+ * Injects the Kiln nav link into the settings sidebar.
+ */
+export function injectKilnTab() {
+	const nav = document.querySelector("nav.nav.nav-pills.flex-column");
+	if (!nav) return;
+
+	const isActive =
+		window.location.pathname.includes("kiln") &&
+		!window.location.pathname.includes("kiln-debug");
+
+	const link = document.createElement("a");
+	link.className = `nav-link${isActive ? " active" : ""}`;
+	link.href = "/my/settings/kiln";
+	link.innerHTML =
+		'<i class="fas fa-fire me-1"></i> <span class="pilltitle">Kiln</span>';
+
+	const hr = nav.querySelector("hr");
+	if (hr) nav.insertBefore(link, hr);
+	else nav.appendChild(link);
+}
+
+/**
+ * Renders the Kiln settings page with About / Preferences / Debug tabs.
+ */
+export async function kilnSettings() {
+	const content = document.getElementsByClassName(
+		"col-lg-10",
+	)[0] as HTMLElement;
+	const version = browser.runtime.getManifest().version;
+	const showDebug =
+		import.meta.env.MODE == "development" ||
+		new URLSearchParams(window.location.search).has("kiln-debug");
+
+	const sessions = await apiSessions.getValue();
+	const adminSession = sessions.find(
+		(s) => s.state === "verified" && s.userId === 2782 && s.accessToken,
+	);
+	const showAdmin = !!adminSession;
+
+	content.innerHTML = `
+		<div class="d-flex gap-2 w-100 mb-2">
+			<button type="button" class="btn btn-primary flex-grow-1" id="kiln-tab-about">About</button>
+			<button type="button" class="btn btn-secondary flex-grow-1" id="kiln-tab-prefs">Preferences</button>
+			<button type="button" class="btn btn-secondary flex-grow-1" id="kiln-tab-changelog">Changelog</button>
+			<button type="button" class="btn btn-secondary flex-grow-1" id="kiln-tab-sync">Sync</button>
+			${showAdmin ? '<button type="button" class="btn btn-secondary flex-grow-1" id="kiln-tab-admin">Admin</button>' : ""}
+			${showDebug ? '<button type="button" class="btn btn-secondary flex-grow-1" id="kiln-tab-debug">Debug</button>' : ""}
+		</div>
+		<div>
+			<div id="kiln-about-notices" class="mb-2"></div>
+			<div id="kiln-about"></div>
+			<div id="kiln-prefs" style="display:none;">
+				<div id="kiln-prefs-inner"></div>
+				<div class="mt-3 d-flex gap-2 d-none">
+					<button id="kiln-reset-btn" class="btn btn-warning btn-sm">Reset to Defaults</button>
+					<button id="kiln-sessions-btn" class="btn btn-secondary btn-sm">API Sessions</button>
+				</div>
+			</div>
+			<div id="kiln-changelog" style="display:none;"></div>
+			<div id="kiln-sync" style="display:none;"></div>
+			${showAdmin ? '<div id="kiln-admin" style="display:none;"><div id="kiln-admin-inner"></div></div>' : ""}
+			${showDebug ? '<div id="kiln-debug" style="display:none;"><div id="kiln-debug-inner" class="row g-3"></div></div>' : ""}
+		</div>
+	`;
+
+	const panels: Record<string, HTMLElement> = {
+		about: document.getElementById("kiln-about")!,
+		prefs: document.getElementById("kiln-prefs")!,
+		changelog: document.getElementById("kiln-changelog")!,
+		sync: document.getElementById("kiln-sync")!,
+		...(showAdmin ? { admin: document.getElementById("kiln-admin")! } : {}),
+		...(showDebug ? { debug: document.getElementById("kiln-debug")! } : {}),
+	};
+	const tabBtns: Record<string, HTMLElement> = {
+		about: document.getElementById("kiln-tab-about")!,
+		prefs: document.getElementById("kiln-tab-prefs")!,
+		changelog: document.getElementById("kiln-tab-changelog")!,
+		sync: document.getElementById("kiln-tab-sync")!,
+		...(showAdmin ? { admin: document.getElementById("kiln-tab-admin")! } : {}),
+		...(showDebug ? { debug: document.getElementById("kiln-tab-debug")! } : {}),
+	};
+
+	function switchTab(name: string) {
+		for (const [key, panel] of Object.entries(panels)) {
+			panel.style.display = key === name ? "" : "none";
+		}
+		for (const [key, btn] of Object.entries(tabBtns)) {
+			btn.className = `btn flex-grow-1 ${key === name ? "btn-primary" : "btn-secondary"}`;
+		}
+		const url = new URL(window.location.href);
+		url.searchParams.set("tab", name);
+		history.replaceState(null, "", url);
+	}
+
+	for (const [name, btn] of Object.entries(tabBtns)) {
+		btn.addEventListener("click", () => switchTab(name));
+	}
+
+	if (showAdmin) {
+		initAdminTab(adminSession!.userId);
+	}
+	if (showDebug) {
+		initDebugTab(document.getElementById("kiln-debug-inner") as HTMLElement);
+	}
+	initSessionsDialog();
+	initWhatsNewTab();
+	initSyncTab();
+	initAboutTab();
+
+	async function initAboutTab() {
+		const container = document.getElementById("kiln-about")!;
+		container.innerHTML = `
+			<div class="card mb-2">
+				<div class="card-body">
+					<h4 class="mb-1">Kiln</h4>
+					<p class="text-muted small mb-3">v${version} &middot; Made by <a href="https://polytoria.com/u/Index" target="_blank">Index</a></p>
+					<p class="mb-3">50+ features. Everything Polytoria should have built in.</p>
+					<div class="d-flex gap-2">
+						<a href="https://discord.gg/dczBuRDKPX" target="_blank" class="btn btn-primary btn-sm">
+							<i class="fab fa-discord me-1"></i> Join the Discord
+						</a>
+						<a href="https://kiln.indexx.dev/privacy" target="_blank" class="btn btn-outline-secondary btn-sm">
+							Privacy Policy
+						</a>
+					</div>
+				</div>
+			</div>
+			<div class="card mb-2">
+				<div class="card-header small fw-semibold d-flex justify-content-between align-items-center">
+					System Status
+					<button id="kiln-status-refresh" class="btn btn-sm btn-outline-secondary py-0 px-2" title="Refresh">
+						<i class="fas fa-sync-alt" style="font-size:0.75rem;"></i>
+					</button>
+				</div>
+				<div class="card-body p-0" id="kiln-status-list"></div>
+			</div>
+			<div class="card">
+				<div class="card-header small fw-semibold">Send Feedback</div>
+				<div class="card-body">
+					<p class="text-muted small mb-2">Have a suggestion, ran into a bug, or just want to say something? Send it directly to me! :D</p>
+					<div class="alert border-secondary small py-2 mb-2">
+						<i class="fas fa-info-circle me-1"></i>
+						Feedback is anonymous, so I can't reply directly. Please keep feedback related to Kiln, not Polytoria.
+					</div>
+					<div class="mb-1">
+						<select id="kiln-feedback-type" class="form-select form-select-sm bg-dark" style="max-width:220px;">
+							<option value="feature">Feature Suggestion</option>
+							<option value="general">General</option>
+							<option value="bug">Bug Report</option>
+						</select>
+					</div>
+					<div>
+						<textarea id="kiln-feedback-message" class="form-control form-control-sm bg-dark" rows="5" maxlength="2000" placeholder="Describe your suggestion, feedback, or bug..."></textarea>
+						<div class="text-muted small text-end mt-1"><span id="kiln-feedback-chars">0</span>/2000</div>
+					</div>
+					<div class="d-flex align-items-center gap-2">
+						<button id="kiln-feedback-submit" class="btn btn-primary btn-sm">Submit</button>
+						<span id="kiln-feedback-status" class="small"></span>
+					</div>
+				</div>
+			</div>
+			<div class="card mt-2">
+				<div class="card-header small fw-semibold">Notifications</div>
+				<div class="card-body py-2">
+					<div class="form-check form-switch mb-0">
+						<input class="form-check-input" type="checkbox" id="kiln-update-notices-toggle">
+						<label class="form-check-label small" for="kiln-update-notices-toggle">Show update available banners</label>
+					</div>
+					<div class="form-check form-switch mb-0 mt-2">
+						<input class="form-check-input" type="checkbox" id="kiln-post-update-notices-toggle">
+						<label class="form-check-label small" for="kiln-post-update-notices-toggle">Show "Kiln has updated" banners</label>
+					</div>
+				</div>
+			</div>
+		`;
+
+		const services = [
+			{ name: "Polytoria API", url: "https://api.polytoria.com/" },
+			{ name: "Kiln API", url: "https://kiln-api.indexx.dev/" },
+			{ name: "Polytoria.Trade API", url: "https://polytoria.trade/api/" },
+			{ name: "Polytrack", url: "https://polytrack.top/" },
+		];
+
+		async function checkStatus(force = false) {
+			const list = document.getElementById("kiln-status-list")!;
+			const refreshBtn = document.getElementById(
+				"kiln-status-refresh",
+			) as HTMLButtonElement;
+			refreshBtn.disabled = true;
+
+			list.innerHTML = services
+				.map(
+					(s, i) => `
+					<div class="d-flex align-items-center gap-2 px-3 py-2${i < services.length - 1 ? " border-bottom border-secondary" : ""}" data-status-service="${s.name}">
+						<span class="spinner-border spinner-border-sm text-muted" style="width:0.7rem;height:0.7rem;border-width:2px;" role="status"></span>
+						<span class="flex-grow-1 small">${s.name}</span>
+						<code class="text-muted" style="font-size:0.7rem;">${new URL(s.url).hostname}</code>
+					</div>
+				`,
+				)
+				.join("");
+
+			const results = (await pullCache(
+				"statusCheck",
+				async () =>
+					Promise.all(
+						services.map(async (service) => {
+							const start = Date.now();
+							try {
+								const controller = new AbortController();
+								const timeoutId = setTimeout(() => controller.abort(), 6000);
+								await fetch(service.url, {
+									method: "GET",
+									mode: "no-cors",
+									cache: "no-store",
+									signal: controller.signal,
+								});
+								clearTimeout(timeoutId);
+								return {
+									name: service.name,
+									ok: true,
+									label: `${Date.now() - start}ms`,
+								};
+							} catch (e) {
+								return {
+									name: service.name,
+									ok: false,
+									label:
+										(e as Error).name === "AbortError"
+											? "Timed out"
+											: "Unreachable",
+								};
+							}
+						}),
+					),
+				5 * 60 * 1000,
+				force,
+			)) as Array<{ name: string; ok: boolean; label: string }>;
+
+			for (const result of results) {
+				const row = list.querySelector<HTMLElement>(
+					`[data-status-service="${result.name}"]`,
+				)!;
+				row.innerHTML = `
+					<i class="fas fa-circle ${result.ok ? "text-success" : "text-danger"}" style="font-size:0.55rem;"></i>
+					<span class="flex-grow-1 small">${result.name}</span>
+					<span class="${result.ok ? "text-muted" : "text-danger"}" style="font-size:0.72rem;">${result.label}</span>
+				`;
+			}
+
+			refreshBtn.disabled = false;
+		}
+
+		checkStatus();
+		document
+			.getElementById("kiln-status-refresh")!
+			.addEventListener("click", () => checkStatus(true));
+
+		initFeedbackTab();
+
+		const toggle = document.getElementById(
+			"kiln-update-notices-toggle",
+		) as HTMLInputElement;
+		const currentDismissed = await dismissedNotices.getValue();
+		toggle.checked = !currentDismissed.includes("update-notices-disabled");
+		toggle.addEventListener("change", async () => {
+			const dismissed = await dismissedNotices.getValue();
+			if (toggle.checked) {
+				await dismissedNotices.setValue(
+					dismissed.filter((id) => id !== "update-notices-disabled"),
+				);
+			} else {
+				if (!dismissed.includes("update-notices-disabled")) {
+					await dismissedNotices.setValue([
+						...dismissed,
+						"update-notices-disabled",
+					]);
+				}
+			}
+		});
+
+		const postUpdateToggle = document.getElementById(
+			"kiln-post-update-notices-toggle",
+		) as HTMLInputElement;
+		postUpdateToggle.checked = !currentDismissed.includes(
+			"post-update-notices-disabled",
+		);
+		postUpdateToggle.addEventListener("change", async () => {
+			const dismissed = await dismissedNotices.getValue();
+			if (postUpdateToggle.checked) {
+				await dismissedNotices.setValue(
+					dismissed.filter((id) => id !== "post-update-notices-disabled"),
+				);
+			} else {
+				if (!dismissed.includes("post-update-notices-disabled")) {
+					await dismissedNotices.setValue([
+						...dismissed,
+						"post-update-notices-disabled",
+					]);
+				}
+			}
+		});
+
+		const config = await getConfig();
+		const notesContainer = document.getElementById("kiln-about-notices")!;
+		notesContainer.innerHTML = "";
+		if (
+			isNewerVersion(
+				config.latestVersion,
+				browser.runtime.getManifest().version,
+			)
+		) {
+			const el = document.createElement("div");
+			el.className = "alert border-warning mb-0";
+			el.innerHTML = `<b>Update available!</b> Kiln ${config.latestVersion} is out. Check for updates in your browser's extension manager.`;
+			notesContainer.appendChild(el);
+		}
+		for (const notice of config.notices) {
+			const el = document.createElement("div");
+			el.className = `alert border-${notice.type === "info" ? "primary" : "warning"} mb-0`;
+			el.innerHTML = renderMarkdownLinks(notice.message, "alert-link");
+			notesContainer.appendChild(el);
+		}
+	}
+
+	async function initPrefsTab() {
+		const inner = document.getElementById("kiln-prefs-inner")!;
+		inner.innerHTML = `
+			<div class="mb-2">
+				<input id="kiln-search" type="text" class="form-control form-control-sm" placeholder="Search preferences..." />
+			</div>
+			<div id="kiln-config-notes"></div>
+			<div id="kiln-settings-list"></div>
+		`;
+
+		const values = await preferences.getPreferences();
+		const config = await getConfig();
+		const settingsList = document.getElementById("kiln-settings-list")!;
+		const mobile = isMobileDevice();
+
+		const MODIFIER_TAGS = new Set(["experimental"]);
+		const categories = data.categories as CategoryData[];
+		const usedTags = new Set(
+			(data.preferences as SettingData[]).flatMap((s) =>
+				s.hide || (mobile && s.desktopOnly)
+					? []
+					: s.tags.filter((t) => !MODIFIER_TAGS.has(t)),
+			),
+		);
+		const groupOrder = categories
+			.filter((c) => usedTags.has(c.id))
+			.map((c) => c.id);
+		const categoryMap = Object.fromEntries(categories.map((c) => [c.id, c]));
+
+		const groupBodies: Record<string, HTMLElement> = {};
+		const newGroupBodies: Record<string, HTMLElement> = {};
+		const hiddenStore = document.createElement("div");
+		hiddenStore.style.display = "none";
+		settingsList.appendChild(hiddenStore);
+		for (const tag of groupOrder) {
+			const body = document.createElement("div");
+			body.className = "card-body";
+			hiddenStore.appendChild(body);
+			groupBodies[tag] = body;
+
+			const newBody = document.createElement("div");
+			newBody.className = "card-body";
+			hiddenStore.appendChild(newBody);
+			newGroupBodies[tag] = newBody;
+		}
+
+		function getState(id: FeatureId) {
+			return values.enabled.includes(id);
+		}
+
+		function updateRowState(row: HTMLElement, state: boolean) {
+			row.querySelector<HTMLInputElement>(".toggle-btn")!.checked = state;
+		}
+
+		function setConfigDisabled(row: HTMLElement, disabled: boolean) {
+			for (const el of Array.from(
+				row.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
+					"input:not(.toggle-btn), select",
+				),
+			)) {
+				el.disabled = disabled;
+			}
+		}
+
+		const sortKey = (name: string) =>
+			name.replace(/^[^A-Za-z]+/, "").toLowerCase();
+		const sortedPreferences = [...(data.preferences as SettingData[])].sort(
+			(a, b) => {
+				const aIsNew = a.tags.includes("new");
+				const bIsNew = b.tags.includes("new");
+				if (aIsNew !== bIsNew) return aIsNew ? -1 : 1;
+				return sortKey(a.name).localeCompare(sortKey(b.name));
+			},
+		);
+
+		for (const setting of sortedPreferences) {
+			if (setting.hide || (mobile && setting.desktopOnly)) continue;
+
+			const primaryTags = setting.tags.filter((t) => !MODIFIER_TAGS.has(t));
+			if (primaryTags.length === 0) continue;
+			const isNew = setting.tags.includes("new");
+
+			const state = getState(setting.id);
+			const remotelyDisabled =
+				config.flags[`features.${setting.id}.enabled`] === false;
+
+			const tagBadges = [...setting.tags]
+				.sort((a, b) => {
+					const p = (t: string) =>
+						t === "experimental" || t === "new" ? -1 : 1;
+					return p(a) - p(b);
+				})
+				.map((tag) => {
+					const cls =
+						tag === "experimental"
+							? "bg-warning text-dark"
+							: tag === "new"
+								? "bg-success"
+								: "bg-secondary";
+					return `<span class="badge ${cls} me-1">${tag.charAt(0).toUpperCase() + tag.slice(1)}</span>`;
+				})
+				.join("");
+
+			const allNotes = [
+				...(setting.requiresSync
+					? [
+							{
+								type: "info" as NoteType,
+								text: "Requires a linked Kiln account.",
+							},
+						]
+					: []),
+				...(setting.notes ?? []),
+			];
+			const noteHtml = allNotes
+				.map((note) => {
+					const cls =
+						note.type === "warning"
+							? "text-warning"
+							: note.type === "info"
+								? "text-info"
+								: "text-secondary";
+					return `<span class="${cls} small d-block">* ${note.text}</span>`;
+				})
+				.join("");
+
+			const cardInnerHtml = `
+				<div class="d-flex justify-content-between align-items-start">
+					<div class="flex-grow-1 me-3">
+						<div class="fw-semibold mb-1">${setting.name}</div>
+						<div class="mb-1">${tagBadges}</div>
+						<div class="text-muted small mb-1">${setting.desc}</div>
+						${noteHtml}
+						${remotelyDisabled ? '<span class="text-danger small d-block">* This feature is currently unavailable.</span>' : ""}
+					</div>
+					<div class="form-check form-switch" style="transform:scale(1.5);transform-origin:right center;">
+						<input class="form-check-input toggle-btn" type="checkbox" role="switch" ${state ? "checked" : ""} ${remotelyDisabled ? "disabled" : ""} />
+					</div>
+				</div>
+				<div class="kiln-config mt-1"></div>
+			`;
+
+			const settingCards: HTMLElement[] = [];
+
+			for (const primaryTag of primaryTags) {
+				const body =
+					primaryTag === "new"
+						? groupBodies[primaryTag]
+						: isNew
+							? newGroupBodies[primaryTag]
+							: groupBodies[primaryTag];
+				if (!body) continue;
+
+				const isFirst = body.children.length === 0;
+				const card = document.createElement("div");
+				card.id =
+					settingCards.length === 0
+						? setting.id
+						: `${setting.id}-${primaryTag}`;
+				card.dataset.settingId = setting.id;
+				card.dataset.new = isNew ? "true" : undefined!;
+				card.className = `${isFirst ? "pb-2" : "py-2"} border-bottom border-secondary`;
+				card.innerHTML = cardInnerHtml;
+
+				body.appendChild(card);
+				settingCards.push(card);
+
+				const configContainer = card.querySelector(
+					".kiln-config",
+				) as HTMLElement;
+				setConfigDisabled(card, !state);
+
+				if (setting.config) {
+					for (const sub of setting.config) {
+						if (sub.hide) continue;
+
+						if (sub.type === "select") {
+							const select = document.createElement("select");
+							select.className = "form-select form-select-sm mb-2";
+							select.style.maxWidth = "350px";
+							for (const opt of sub.options ?? []) {
+								const option = document.createElement("option");
+								option.value = opt.value;
+								option.textContent = opt.label;
+								select.appendChild(option);
+							}
+							const saved = (
+								values.config[
+									setting.id as keyof typeof values.config
+								] as Record<string, any>
+							)?.[sub.subsetting];
+							select.value = saved ?? (sub.default as string) ?? "";
+							select.addEventListener("change", () => {
+								if (!values.config[setting.id as keyof typeof values.config])
+									(values.config as Record<string, any>)[setting.id] = {};
+								(
+									values.config[
+										setting.id as keyof typeof values.config
+									] as Record<string, any>
+								)[sub.subsetting] = select.options[select.selectedIndex].value;
+								preferences.setValue(values);
+							});
+							configContainer.appendChild(select);
+						} else if (sub.type === "searchable-select") {
+							const wrapper = document.createElement("div");
+							wrapper.className = "mb-2";
+							wrapper.style.maxWidth = "350px";
+
+							const input = document.createElement("input");
+							input.type = "text";
+							input.className = "form-control form-control-sm";
+							const listId = `datalist-${setting.id}-${sub.subsetting}-${primaryTag}`;
+							input.setAttribute("list", listId);
+							input.autocomplete = "off";
+							input.placeholder = "Search currencies…";
+
+							const datalist = document.createElement("datalist");
+							datalist.id = listId;
+							for (const opt of sub.options ?? []) {
+								const option = document.createElement("option");
+								option.value = opt.label;
+								datalist.appendChild(option);
+							}
+
+							const savedCode =
+								(
+									values.config[
+										setting.id as keyof typeof values.config
+									] as Record<string, any>
+								)?.[sub.subsetting] ??
+								(sub.default as string) ??
+								"";
+							const savedOption = sub.options?.find(
+								(o) => o.value === savedCode,
+							);
+							input.value = savedOption?.label ?? savedCode;
+
+							input.addEventListener("change", () => {
+								const match = input.value.match(/\(([^)]+)\)$/);
+								if (match) {
+									const code = match[1];
+									if (sub.options?.some((o) => o.value === code)) {
+										if (
+											!values.config[setting.id as keyof typeof values.config]
+										)
+											(values.config as Record<string, any>)[setting.id] = {};
+										(
+											values.config[
+												setting.id as keyof typeof values.config
+											] as Record<string, any>
+										)[sub.subsetting] = code;
+										preferences.setValue(values);
+										return;
+									}
+								}
+								const cur = (
+									values.config[
+										setting.id as keyof typeof values.config
+									] as Record<string, any>
+								)?.[sub.subsetting];
+								const curOpt = sub.options?.find((o) => o.value === cur);
+								input.value = curOpt?.label ?? cur ?? "";
+							});
+
+							wrapper.appendChild(input);
+							wrapper.appendChild(datalist);
+							configContainer.appendChild(wrapper);
+						} else if (sub.type === "check") {
+							const span = document.createElement("span");
+							span.className = "form-check form-switch";
+							const checkId = `check-${setting.id}-${sub.subsetting}-${primaryTag}`;
+							span.innerHTML = `
+								<input class="form-check-input" type="checkbox" role="switch" id="${checkId}" />
+								<label class="form-check-label" for="${checkId}">${sub.label}</label>
+							`;
+							const checkbox =
+								span.querySelector<HTMLInputElement>(".form-check-input")!;
+							checkbox.checked =
+								(
+									values.config[
+										setting.id as keyof typeof values.config
+									] as Record<string, any>
+								)?.[sub.subsetting] ??
+								(sub.default as boolean) ??
+								false;
+							checkbox.addEventListener("change", () => {
+								if (!values.config[setting.id as keyof typeof values.config])
+									(values.config as Record<string, any>)[setting.id] = {};
+								(
+									values.config[
+										setting.id as keyof typeof values.config
+									] as Record<string, any>
+								)[sub.subsetting] = checkbox.checked;
+								preferences.setValue(values);
+							});
+							configContainer.appendChild(span);
+						}
+					}
+				}
+			}
+
+			if (settingCards.length === 0) continue;
+
+			if (setting.id === "themeCreator") {
+				const card = settingCards[0];
+				const configContainer = card.querySelector(
+					".kiln-config",
+				) as HTMLElement;
+				const openBtn = document.createElement("button");
+				openBtn.className = "btn btn-sm btn-outline-secondary mt-2";
+				openBtn.innerHTML = '<i class="fas fa-palette me-1"></i>Manage Themes';
+				openBtn.disabled = !state;
+				configContainer.appendChild(openBtn);
+				openBtn.addEventListener("click", () => openThemeManager(values));
+
+				if (!remotelyDisabled) {
+					card
+						.querySelector<HTMLInputElement>(".toggle-btn")!
+						.addEventListener("change", async () => {
+							const newState = !getState(setting.id);
+							if (!newState) {
+								values.enabled = values.enabled.filter((x) => x !== setting.id);
+								if (!values.disabled.includes(setting.id))
+									values.disabled.push(setting.id);
+								applyKilnTheme(null);
+							} else {
+								values.enabled.push(setting.id);
+								values.disabled = values.disabled.filter(
+									(x) => x !== setting.id,
+								);
+								const saved = await _savedThemes.getValue();
+								const activeId =
+									(values.config.themeCreator as any).activeThemeId ||
+									"default";
+								if (activeId !== "default") {
+									const colors =
+										activeId in THEME_PRESETS
+											? THEME_PRESETS[activeId]
+											: (saved.find((t) => t.id === activeId) ?? null);
+									applyKilnTheme(colors);
+								}
+							}
+							updateRowState(card, newState);
+							openBtn.disabled = !newState;
+							await preferences.setValue(values);
+						});
+				}
+				continue;
+			}
+
+			if (!remotelyDisabled) {
+				for (const card of settingCards) {
+					const toggle = card.querySelector<HTMLInputElement>(".toggle-btn")!;
+					toggle.addEventListener("change", async () => {
+						const newState = !getState(setting.id);
+						if (!newState) {
+							values.enabled = values.enabled.filter((x) => x !== setting.id);
+							if (!values.disabled.includes(setting.id))
+								values.disabled.push(setting.id);
+						} else {
+							values.enabled.push(setting.id);
+							values.disabled = values.disabled.filter((x) => x !== setting.id);
+						}
+						for (const c of settingCards) {
+							updateRowState(c, newState);
+							setConfigDisabled(c, !newState);
+						}
+						await preferences.setValue(values);
+					});
+				}
+			}
+		}
+
+		const categoryListEl = document.createElement("div");
+		settingsList.appendChild(categoryListEl);
+		const detailViewEl = document.createElement("div");
+		detailViewEl.style.display = "none";
+		settingsList.appendChild(detailViewEl);
+
+		const searchInput = document.getElementById(
+			"kiln-search",
+		) as HTMLInputElement;
+
+		let currentTag: Tags | null = null;
+
+		function updateBorders(container: HTMLElement) {
+			const visible = Array.from(container.children).filter(
+				(r) => (r as HTMLElement).style.display !== "none",
+			) as HTMLElement[];
+			for (let i = 0; i < visible.length; i++) {
+				const last = i === visible.length - 1;
+				visible[i].classList.toggle("border-bottom", !last);
+				visible[i].classList.toggle("border-secondary", !last);
+				visible[i].style.paddingBottom = last ? "0" : "";
+			}
+		}
+
+		function showSearchResults(q: string) {
+			let flat = document.getElementById("kiln-search-results");
+			if (!flat) {
+				flat = document.createElement("div");
+				flat.id = "kiln-search-results";
+				const seenSettingIds = new Set<string>();
+				for (const tag of groupOrder) {
+					for (const row of Array.from(
+						newGroupBodies[tag].children,
+					) as HTMLElement[]) {
+						const sid = row.dataset.settingId || row.id;
+						if (seenSettingIds.has(sid)) continue;
+						seenSettingIds.add(sid);
+						row.dataset.tag = tag;
+						flat.appendChild(row);
+					}
+					for (const row of Array.from(
+						groupBodies[tag].children,
+					) as HTMLElement[]) {
+						const sid = row.dataset.settingId || row.id;
+						if (seenSettingIds.has(sid)) continue;
+						seenSettingIds.add(sid);
+						row.dataset.tag = tag;
+						flat.appendChild(row);
+					}
+				}
+				const noResults = document.createElement("div");
+				noResults.id = "kiln-search-no-results";
+				noResults.className = "text-center p-3";
+				noResults.style.display = "none";
+				noResults.innerHTML = `
+					<img src="${errorIcon}" width="80" height="80" class="mb-2">
+					<p class="text-muted small mb-0">No preferences found.</p>
+				`;
+				const cardBody = document.createElement("div");
+				cardBody.className = "card-body";
+				cardBody.appendChild(flat);
+				cardBody.appendChild(noResults);
+				const card = document.createElement("div");
+				card.className = "card";
+				card.style.opacity = "0";
+				card.style.transform = "translateY(-6px)";
+				card.style.transition = "opacity 250ms ease, transform 250ms ease";
+				card.appendChild(cardBody);
+				categoryListEl.innerHTML = "";
+				categoryListEl.appendChild(card);
+				requestAnimationFrame(() =>
+					requestAnimationFrame(() => {
+						card.style.opacity = "1";
+						card.style.transform = "translateY(0)";
+					}),
+				);
+			}
+			for (const row of Array.from(flat.children) as HTMLElement[]) {
+				const sid = row.dataset.settingId || row.id;
+				const setting = (data.preferences as SettingData[]).find(
+					(s) => s.id === sid,
+				);
+				row.style.display =
+					setting &&
+					(setting.name.toLowerCase().includes(q) ||
+						(q.length > 4 && setting.desc.toLowerCase().includes(q)))
+						? ""
+						: "none";
+			}
+			updateBorders(flat);
+			const noResultsEl = document.getElementById("kiln-search-no-results");
+			if (noResultsEl) {
+				const anyVisible = Array.from(flat.children).some(
+					(r) => (r as HTMLElement).style.display !== "none",
+				);
+				noResultsEl.style.display = anyVisible ? "none" : "";
+			}
+		}
+
+		function hideSearchResults() {
+			const flat = document.getElementById("kiln-search-results");
+			if (!flat) return;
+			for (const row of Array.from(flat.children) as HTMLElement[]) {
+				const tag = row.dataset.tag as Tags;
+				row.style.display = "";
+				if (tag) {
+					const target =
+						row.dataset.new === "true" ? newGroupBodies[tag] : groupBodies[tag];
+					if (target) target.appendChild(row);
+				}
+			}
+		}
+
+		function renderCategoryTiles() {
+			categoryListEl.innerHTML = "";
+			for (const tag of groupOrder) {
+				const cat = categoryMap[tag];
+				const rows = [
+					...Array.from(newGroupBodies[tag].children),
+					...Array.from(groupBodies[tag].children),
+				] as HTMLElement[];
+				const tile = document.createElement("div");
+				tile.className = "card mb-2";
+				tile.style.cursor = "pointer";
+				tile.dataset.tag = tag;
+				tile.innerHTML = `
+					<div class="card-body d-flex justify-content-between align-items-center">
+						<div class="d-flex align-items-center gap-3">
+							<i class="${cat.icon} fa-fw text-muted" style="font-size:1.2rem;"></i>
+							<div>
+								<div class="fw-semibold">${cat.name}</div>
+								<div class="text-muted small">${cat.description}</div>
+							</div>
+						</div>
+						<div class="d-flex align-items-center gap-2 flex-shrink-0">
+							<span class="text-muted small fw-light">${rows.length} feature${rows.length !== 1 ? "s" : ""}</span>
+							<i class="fas fa-chevron-right text-muted"></i>
+						</div>
+					</div>
+				`;
+				tile.addEventListener("click", () => renderCategoryDetail(tag as Tags));
+				categoryListEl.appendChild(tile);
+			}
+		}
+
+		function renderCategoryList() {
+			for (const tag of groupOrder) {
+				for (const body of [newGroupBodies[tag], groupBodies[tag]]) {
+					if (body.parentElement !== hiddenStore) {
+						for (const row of Array.from(body.children) as HTMLElement[]) {
+							row.style.display = "";
+						}
+						hiddenStore.appendChild(body);
+					}
+				}
+			}
+			currentTag = null;
+			detailViewEl.innerHTML = "";
+			categoryListEl.style.display = "";
+			detailViewEl.style.display = "none";
+
+			const q = searchInput.value.toLowerCase();
+			if (q) {
+				showSearchResults(q);
+			} else {
+				hideSearchResults();
+				renderCategoryTiles();
+			}
+		}
+
+		function renderCategoryDetail(tag: Tags) {
+			currentTag = tag;
+			categoryListEl.style.display = "none";
+			detailViewEl.style.display = "";
+			detailViewEl.innerHTML = "";
+
+			const header = document.createElement("div");
+			header.className = "d-flex align-items-center gap-2 mb-2";
+			const cat = categoryMap[tag];
+			header.innerHTML = `
+				<button class="btn btn-outline-secondary btn-sm kiln-back-btn">
+					<i class="fas fa-arrow-left me-1"></i> Back
+				</button>
+				<i class="${cat.icon} fa-fw text-muted"></i>
+				<span class="fw-semibold">${cat.name}</span>
+			`;
+			header
+				.querySelector<HTMLButtonElement>(".kiln-back-btn")!
+				.addEventListener("click", () => {
+					searchInput.value = "";
+					renderCategoryList();
+				});
+			detailViewEl.appendChild(header);
+
+			if (newGroupBodies[tag].children.length > 0) {
+				const newCard = document.createElement("div");
+				newCard.className = "card mb-2";
+				const newCardHeader = document.createElement("div");
+				newCardHeader.className =
+					"card-header small fw-semibold text-success d-flex justify-content-between align-items-center";
+				newCardHeader.style.cursor = "pointer";
+				newCardHeader.innerHTML = `<span>New</span><i class="fas fa-chevron-down" style="font-size:0.75rem;transition:transform 200ms;"></i>`;
+				const newBody = newGroupBodies[tag];
+				newCardHeader.querySelector("i")!.style.transform = "rotate(180deg)";
+				newCardHeader.addEventListener("click", () => {
+					const collapsed = newBody.style.display === "none";
+					newBody.style.display = collapsed ? "" : "none";
+					newCardHeader.querySelector("i")!.style.transform = collapsed
+						? "rotate(180deg)"
+						: "";
+					newCardHeader.style.borderRadius = collapsed ? "" : "inherit";
+					newCardHeader.style.borderBottom = collapsed ? "" : "none";
+					if (collapsed) updateBorders(newBody);
+				});
+				newCard.appendChild(newCardHeader);
+				newCard.appendChild(newBody);
+				detailViewEl.appendChild(newCard);
+				updateBorders(newBody);
+			}
+
+			const card = document.createElement("div");
+			card.className = "card";
+			card.appendChild(groupBodies[tag]);
+			detailViewEl.appendChild(card);
+			updateBorders(groupBodies[tag]);
+		}
+
+		let searchDebounce: ReturnType<typeof setTimeout> | null = null;
+		searchInput.oninput = () => {
+			if (searchDebounce) clearTimeout(searchDebounce);
+			searchDebounce = setTimeout(() => {
+				const q = searchInput.value.toLowerCase();
+				if (currentTag) {
+					renderCategoryList();
+				} else if (q) {
+					showSearchResults(q);
+				} else {
+					hideSearchResults();
+					renderCategoryTiles();
+				}
+			}, 150);
+		};
+		renderCategoryList();
+	}
+
+	document
+		.getElementById("kiln-reset-btn")!
+		.addEventListener("click", async () => {
+			await preferences.setValue(preferences.fallback);
+			await initPrefsTab();
+		});
+
+	await initPrefsTab();
+
+	const tabParam = new URLSearchParams(window.location.search).get("tab");
+	switchTab(tabParam && tabParam in panels ? tabParam : "about");
+}
+
+async function openThemeManager(_values: typeof defaultPreferences) {
+	window.open("https://polytoria.com/home?kiln-theme-editor", "_blank");
+}
+
+function initAdminTab(userId: number) {
+	const inner = document.getElementById("kiln-admin-inner") as HTMLElement;
+
+	inner.innerHTML = `
+		<div class="d-flex gap-2 mb-3">
+			<button class="btn btn-primary flex-grow-1" id="kadmin-tab-config">Config</button>
+			<button class="btn btn-secondary flex-grow-1" id="kadmin-tab-themes">Themes</button>
+		</div>
+		<div id="kadmin-config"></div>
+		<div id="kadmin-themes" style="display:none;"></div>
+	`;
+
+	const themesPanel = document.getElementById("kadmin-themes")!;
+	const configPanel = document.getElementById("kadmin-config")!;
+	const themesBtn = document.getElementById("kadmin-tab-themes")!;
+	const configBtn = document.getElementById("kadmin-tab-config")!;
+	let themesLoaded = false;
+
+	function switchAdminTab(name: "themes" | "config") {
+		themesPanel.style.display = name === "themes" ? "" : "none";
+		configPanel.style.display = name === "config" ? "" : "none";
+		themesBtn.className = `btn flex-grow-1 ${name === "themes" ? "btn-primary" : "btn-secondary"}`;
+		configBtn.className = `btn flex-grow-1 ${name === "config" ? "btn-primary" : "btn-secondary"}`;
+		if (name === "themes" && !themesLoaded) {
+			themesLoaded = true;
+			renderPendingThemes();
+		}
+	}
+
+	themesBtn.addEventListener("click", () => switchAdminTab("themes"));
+	configBtn.addEventListener("click", () => switchAdminTab("config"));
+
+	async function renderPendingThemes() {
+		themesPanel.innerHTML = `<p class="text-muted small">Loading…</p>`;
+		const result = await sendMessage("adminGetPendingThemes", userId);
+		if (!result.ok) {
+			themesPanel.innerHTML = `<p class="text-danger small">Failed to load: ${result.message}</p>`;
+			return;
+		}
+		const themes = result.data.data;
+
+		const deleteForm = `
+			<div class="card mb-3">
+				<div class="card-body py-2">
+					<div class="d-flex gap-2 align-items-center">
+						<input id="kadmin-delete-id" type="text" class="form-control form-control-sm" style="max-width:200px;" placeholder="Theme ID…" />
+						<button id="kadmin-delete-btn" class="btn btn-danger btn-sm">Delete</button>
+						<span id="kadmin-delete-status" class="small"></span>
+					</div>
+				</div>
+			</div>
+		`;
+
+		if (themes.length === 0) {
+			themesPanel.innerHTML = `${deleteForm}<p class="text-muted small">No pending themes.</p>`;
+		} else {
+			themesPanel.innerHTML =
+				deleteForm +
+				themes
+					.map(
+						(t) => `
+				<div class="card mb-3" data-theme-id="${t.id}">
+					<div class="card-body">
+						<div class="d-flex align-items-start gap-3">
+							<div class="d-flex gap-1 flex-shrink-0">
+								<div style="width:32px;height:32px;border-radius:6px;background:${t.accentColor};" title="Accent"></div>
+								<div style="width:32px;height:32px;border-radius:6px;background:${t.navbarColor};" title="Navbar"></div>
+							</div>
+							<div class="flex-grow-1 min-w-0">
+								<div class="fw-semibold">${t.name}</div>
+								<div class="text-muted small">ID: <code>${t.id}</code> &middot; User ID: ${t.userId}${t.fontFamily ? ` &middot; Font: ${t.fontFamily}` : ""}</div>
+								${
+									t.customCss
+										? `<pre id="css-pre-${t.id}" class="mt-2 mb-1 p-2 rounded bg-black text-success" style="font-size:0.7rem;max-height:120px;overflow:hidden;white-space:pre-wrap;">${t.customCss.replace(/</g, "&lt;").slice(0, 500)}${t.customCss.length > 500 ? "\n…" : ""}</pre><button class="btn btn-link btn-sm p-0 text-secondary" style="font-size:0.75rem;" data-expand="${t.id}">View full CSS (${t.customCss.length} chars)</button>`
+										: ""
+								}
+							</div>
+							<div class="d-flex gap-2 flex-shrink-0">
+								<button class="btn btn-success btn-sm" data-action="approve" data-id="${t.id}">Approve</button>
+								<button class="btn btn-danger btn-sm" data-action="decline" data-id="${t.id}">Decline</button>
+								<button class="btn btn-outline-danger btn-sm" data-action="delete" data-id="${t.id}">Delete</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			`,
+					)
+					.join("");
+
+			for (const t of themes) {
+				if (!t.customCss) continue;
+				const expandBtn = themesPanel.querySelector<HTMLButtonElement>(
+					`[data-expand="${t.id}"]`,
+				);
+				const pre = document.getElementById(`css-pre-${t.id}`);
+				if (!expandBtn || !pre) continue;
+				expandBtn.addEventListener("click", () => {
+					pre.textContent = t.customCss!;
+					pre.style.maxHeight = "none";
+					expandBtn.remove();
+				});
+			}
+
+			for (const btn of themesPanel.querySelectorAll<HTMLButtonElement>(
+				"[data-action]",
+			)) {
+				btn.addEventListener("click", async () => {
+					const id = btn.dataset.id!;
+					const action = btn.dataset.action as "approve" | "decline" | "delete";
+					btn.disabled = true;
+					if (action === "delete") {
+						const result = await sendMessage("adminDeleteTheme", {
+							userId,
+							id,
+						});
+						if (result.ok) {
+							await renderPendingThemes();
+						} else {
+							btn.disabled = false;
+							btn.insertAdjacentHTML(
+								"afterend",
+								`<span class="text-danger small ms-2">Failed: ${result.message}</span>`,
+							);
+						}
+					} else {
+						const result = await sendMessage("adminReviewTheme", {
+							userId,
+							id,
+							action,
+						});
+						if (result.ok) {
+							await renderPendingThemes();
+						} else {
+							btn.disabled = false;
+							btn.insertAdjacentHTML(
+								"afterend",
+								`<span class="text-danger small ms-2">Failed: ${result.message}</span>`,
+							);
+						}
+					}
+				});
+			}
+		}
+
+		const deleteBtn = document.getElementById(
+			"kadmin-delete-btn",
+		) as HTMLButtonElement;
+		const deleteInput = document.getElementById(
+			"kadmin-delete-id",
+		) as HTMLInputElement;
+		const deleteStatus = document.getElementById(
+			"kadmin-delete-status",
+		) as HTMLElement;
+		deleteBtn.addEventListener("click", async () => {
+			const id = deleteInput.value.trim();
+			if (!id) return;
+			deleteBtn.disabled = true;
+			deleteStatus.textContent = "Deleting…";
+			deleteStatus.className = "small text-muted";
+			const result = await sendMessage("adminDeleteTheme", { userId, id });
+			if (result.ok) {
+				deleteInput.value = "";
+				deleteStatus.textContent = "Deleted.";
+				deleteStatus.className = "small text-success";
+				await renderPendingThemes();
+			} else {
+				deleteStatus.textContent = `Failed: ${result.message}`;
+				deleteStatus.className = "small text-danger";
+				deleteBtn.disabled = false;
+			}
+		});
+	}
+
+	loadConfigPanel();
+
+	async function loadConfigPanel() {
+		configPanel.innerHTML = `<p class="text-muted small">Loading…</p>`;
+		const result = await sendMessage("adminListConfigs", userId);
+		if (!result.ok) {
+			configPanel.innerHTML = `<p class="text-danger small">Failed to load: ${result.message}</p>`;
+			return;
+		}
+		renderVersionList(result.data.data);
+	}
+
+	type VersionRow =
+		import("@kiln/schemas").Extension.AdminConfigListApi["data"][number];
+
+	function renderVersionList(rows: VersionRow[]) {
+		const hasDefault = rows.some((r) => r.version === "default");
+
+		configPanel.innerHTML = `
+			<div class="d-flex gap-2 align-items-center mb-3">
+				<input id="kac-new-ver" type="text" class="form-control form-control-sm" style="max-width:200px;"
+				       placeholder="${hasDefault ? "e.g. 2.4.0" : "default"}" />
+				<button id="kac-new-create" class="btn btn-outline-primary btn-sm">Create</button>
+			</div>
+			<table class="table table-sm mb-0">
+				<thead><tr><th>Version</th><th>Updated</th><th></th></tr></thead>
+				<tbody>
+					${rows
+						.map(
+							(r) => `
+						<tr>
+							<td><code>${r.version}</code></td>
+							<td class="text-muted small">${r.updatedAt ? r.updatedAt.slice(0, 10) : "—"}</td>
+							<td class="text-end">
+								<button class="btn btn-outline-secondary btn-sm py-0" data-edit="${r.version}">Edit</button>
+								${r.version !== "default" ? `<button class="btn btn-outline-danger btn-sm py-0 ms-1" data-delete="${r.version}">Delete</button>` : ""}
+							</td>
+						</tr>
+					`,
+						)
+						.join("")}
+					${rows.length === 0 ? `<tr><td colspan="3" class="text-muted small">No configs yet. Create one above.</td></tr>` : ""}
+				</tbody>
+			</table>
+		`;
+
+		(
+			document.getElementById("kac-new-create") as HTMLButtonElement
+		).addEventListener("click", async () => {
+			const ver = (
+				document.getElementById("kac-new-ver") as HTMLInputElement
+			).value.trim();
+			if (!ver) return;
+			const result = await sendMessage("adminUpdateConfig", {
+				userId,
+				version: ver,
+				patch: {},
+			});
+			if (!result.ok) {
+				alert(`Failed to create: ${result.message}`);
+				return;
+			}
+			renderConfigEditor(ver, result.data.data);
+		});
+
+		for (const btn of configPanel.querySelectorAll<HTMLButtonElement>(
+			"[data-edit]",
+		)) {
+			btn.addEventListener("click", async () => {
+				const ver = btn.dataset.edit!;
+				btn.disabled = true;
+				const result = await sendMessage("adminGetConfig", {
+					userId,
+					version: ver,
+				});
+				btn.disabled = false;
+				if (!result.ok) {
+					alert(`Failed to load: ${result.message}`);
+					return;
+				}
+				renderConfigEditor(ver, result.data);
+			});
+		}
+
+		for (const btn of configPanel.querySelectorAll<HTMLButtonElement>(
+			"[data-delete]",
+		)) {
+			btn.addEventListener("click", async () => {
+				const ver = btn.dataset.delete!;
+				if (!confirm(`Delete config for "${ver}"?`)) return;
+				btn.disabled = true;
+				const result = await sendMessage("adminDeleteConfig", {
+					userId,
+					version: ver,
+				});
+				if (!result.ok) {
+					alert(`Failed: ${result.message}`);
+					btn.disabled = false;
+					return;
+				}
+				loadConfigPanel();
+			});
+		}
+	}
+
+	function renderConfigEditor(
+		version: string,
+		initial: import("@kiln/schemas").Extension.ExtensionConfig,
+	) {
+		type Notice = { id: string; message: string; type: "info" | "warning" };
+		const draft = structuredClone(initial) as typeof initial & {
+			notices: Notice[];
+			flags: Record<string, boolean>;
+		};
+
+		const apiKeys = [
+			"public",
+			"internal",
+			"extension",
+			"proxy",
+			"currencyRates",
+		] as const;
+		const limitKeys = [
+			"maxPinnedWorlds",
+			"maxNFTItems",
+			"maxNFTSerialsPerItem",
+			"maxBlockedTraders",
+			"maxPublishedThemes",
+			"maxPinnedAchievements",
+		] as const;
+
+		configPanel.innerHTML = `
+			<div class="d-flex align-items-center gap-2 mb-3">
+				<button id="kac-back" class="btn btn-outline-secondary btn-sm">&larr; Back</button>
+				<span class="small text-muted">Editing <code>${version}</code></span>
+			</div>
+
+			<div class="card mb-2">
+				<div class="card-body">
+					<div class="row g-3 mb-3">
+						<div class="col-auto">
+							<label class="form-label small text-muted mb-1">Latest Version</label>
+							<input id="kac-latest-ver" type="text" class="form-control form-control-sm" style="max-width:160px;" value="${draft.latestVersion}" />
+						</div>
+					</div>
+					<div class="small text-muted mb-2">API Availability</div>
+					<div class="d-flex flex-wrap gap-3">
+						${apiKeys
+							.map(
+								(k) => `
+							<div class="form-check form-switch">
+								<input class="form-check-input" type="checkbox" role="switch" id="kac-api-${k}" ${draft.apiAvailability[k] ? "checked" : ""} />
+								<label class="form-check-label small" for="kac-api-${k}">${k}</label>
+							</div>
+						`,
+							)
+							.join("")}
+					</div>
+				</div>
+			</div>
+
+			<div class="card mb-2">
+				<div class="card-header small fw-semibold">Limits</div>
+				<div class="card-body">
+					<div class="row g-2">
+						${limitKeys
+							.map(
+								(k) => `
+							<div class="col-sm-6 col-lg-3">
+								<label class="form-label small text-muted mb-1">${k}</label>
+								<input id="kac-limit-${k}" type="number" class="form-control form-control-sm" min="0" value="${(draft.limits as any)[k]}" />
+							</div>
+						`,
+							)
+							.join("")}
+					</div>
+				</div>
+			</div>
+
+			<div class="card mb-2">
+				<div class="card-header small fw-semibold d-flex justify-content-between align-items-center">
+					Notices
+					<button id="kac-notice-add" class="btn btn-outline-primary btn-sm py-0">+ Add</button>
+				</div>
+				<div class="card-body p-0">
+					<div id="kac-notices-list"></div>
+					<div id="kac-notice-form" class="p-3 border-top" style="display:none;">
+						<div class="row g-2 align-items-end">
+							<div class="col">
+								<input id="kac-notice-msg" type="text" class="form-control form-control-sm" placeholder="Message" maxlength="300" />
+							</div>
+							<div class="col-auto">
+								<select id="kac-notice-type" class="form-select form-select-sm">
+									<option value="info">Info</option>
+									<option value="warning">Warning</option>
+								</select>
+							</div>
+							<div class="col-auto">
+								<button id="kac-notice-save" class="btn btn-primary btn-sm">Add</button>
+								<button id="kac-notice-cancel" class="btn btn-secondary btn-sm ms-1">Cancel</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<div class="card mb-2">
+				<div class="card-header small fw-semibold d-flex justify-content-between align-items-center">
+					Feature Flags
+					<button id="kac-flag-add" class="btn btn-outline-primary btn-sm py-0">+ Add Flag</button>
+				</div>
+				<div class="card-body p-0">
+					<div id="kac-flags-list"></div>
+					<div id="kac-flag-form" class="p-3 border-top" style="display:none;">
+						<div class="row g-2 align-items-end">
+							<div class="col">
+								<input id="kac-flag-key" type="text" class="form-control form-control-sm" placeholder="Flag key" />
+							</div>
+							<div class="col-auto">
+								<select id="kac-flag-val" class="form-select form-select-sm">
+									<option value="true">true</option>
+									<option value="false">false</option>
+								</select>
+							</div>
+							<div class="col-auto">
+								<button id="kac-flag-save" class="btn btn-primary btn-sm">Add</button>
+								<button id="kac-flag-cancel" class="btn btn-secondary btn-sm ms-1">Cancel</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<div class="card mb-3">
+				<div class="card-header small fw-semibold">Users</div>
+				<div class="card-body">
+					<label class="form-label small text-muted mb-1">Generative AI User IDs (comma-separated)</label>
+					<input id="kac-ai-users" type="text" class="form-control form-control-sm" value="${draft.users.generativeAI.join(", ")}" />
+				</div>
+			</div>
+
+			<div class="d-flex align-items-center gap-3">
+				<button id="kac-save" class="btn btn-primary btn-sm px-4">Save</button>
+				<span id="kac-status" class="small"></span>
+			</div>
+		`;
+
+		document
+			.getElementById("kac-back")!
+			.addEventListener("click", () => loadConfigPanel());
+
+		function renderNotices() {
+			const list = document.getElementById("kac-notices-list")!;
+			if (draft.notices.length === 0) {
+				list.innerHTML = `<p class="text-muted small px-3 py-2 mb-0">No notices.</p>`;
+				return;
+			}
+			list.innerHTML = draft.notices
+				.map(
+					(n, i) => `
+				<div class="d-flex align-items-center gap-2 px-3 py-2 border-bottom">
+					<span class="badge ${n.type === "warning" ? "bg-warning text-dark" : "bg-primary"}">${n.type}</span>
+					<span class="flex-grow-1 small">${n.message}</span>
+					<button class="btn btn-outline-danger btn-sm py-0" data-notice-delete="${i}">&times;</button>
+				</div>
+			`,
+				)
+				.join("");
+			for (const btn of list.querySelectorAll<HTMLButtonElement>(
+				"[data-notice-delete]",
+			)) {
+				btn.addEventListener("click", () => {
+					draft.notices.splice(Number(btn.dataset.noticeDelete), 1);
+					renderNotices();
+				});
+			}
+		}
+		renderNotices();
+
+		const noticeForm = document.getElementById("kac-notice-form")!;
+		document.getElementById("kac-notice-add")!.addEventListener("click", () => {
+			noticeForm.style.display = "";
+		});
+		document
+			.getElementById("kac-notice-cancel")!
+			.addEventListener("click", () => {
+				noticeForm.style.display = "none";
+			});
+		document
+			.getElementById("kac-notice-save")!
+			.addEventListener("click", () => {
+				const msg = (
+					document.getElementById("kac-notice-msg") as HTMLInputElement
+				).value.trim();
+				if (!msg) return;
+				const type = (
+					document.getElementById("kac-notice-type") as HTMLSelectElement
+				).value as "info" | "warning";
+				draft.notices.push({
+					id: Math.random().toString(36).slice(2, 8),
+					message: msg,
+					type,
+				});
+				(document.getElementById("kac-notice-msg") as HTMLInputElement).value =
+					"";
+				noticeForm.style.display = "none";
+				renderNotices();
+			});
+
+		function renderFlags() {
+			const list = document.getElementById("kac-flags-list")!;
+			const entries = Object.entries(draft.flags);
+			if (entries.length === 0) {
+				list.innerHTML = `<p class="text-muted small px-3 py-2 mb-0">No flags.</p>`;
+				return;
+			}
+			list.innerHTML = entries
+				.map(
+					([key, val]) => `
+				<div class="d-flex align-items-center gap-2 px-3 py-2 border-bottom">
+					<code class="flex-grow-1 small">${key}</code>
+					<div class="form-check form-switch mb-0">
+						<input class="form-check-input" type="checkbox" role="switch" data-flag-key="${key}" ${val ? "checked" : ""} />
+					</div>
+					<button class="btn btn-outline-danger btn-sm py-0" data-flag-delete="${key}">&times;</button>
+				</div>
+			`,
+				)
+				.join("");
+			for (const el of list.querySelectorAll<HTMLInputElement>(
+				"[data-flag-key]",
+			)) {
+				el.addEventListener("change", () => {
+					draft.flags[el.dataset.flagKey!] = el.checked;
+				});
+			}
+			for (const btn of list.querySelectorAll<HTMLButtonElement>(
+				"[data-flag-delete]",
+			)) {
+				btn.addEventListener("click", () => {
+					delete draft.flags[btn.dataset.flagDelete!];
+					renderFlags();
+				});
+			}
+		}
+		renderFlags();
+
+		const flagForm = document.getElementById("kac-flag-form")!;
+		document.getElementById("kac-flag-add")!.addEventListener("click", () => {
+			flagForm.style.display = "";
+		});
+		document
+			.getElementById("kac-flag-cancel")!
+			.addEventListener("click", () => {
+				flagForm.style.display = "none";
+			});
+		document.getElementById("kac-flag-save")!.addEventListener("click", () => {
+			const key = (
+				document.getElementById("kac-flag-key") as HTMLInputElement
+			).value.trim();
+			if (!key || key in draft.flags) return;
+			draft.flags[key] =
+				(document.getElementById("kac-flag-val") as HTMLSelectElement).value ===
+				"true";
+			(document.getElementById("kac-flag-key") as HTMLInputElement).value = "";
+			flagForm.style.display = "none";
+			renderFlags();
+		});
+
+		document.getElementById("kac-save")!.addEventListener("click", async () => {
+			const saveBtn = document.getElementById("kac-save") as HTMLButtonElement;
+			const status = document.getElementById("kac-status")!;
+
+			draft.latestVersion = (
+				document.getElementById("kac-latest-ver") as HTMLInputElement
+			).value.trim();
+			for (const k of apiKeys) {
+				draft.apiAvailability[k] = (
+					document.getElementById(`kac-api-${k}`) as HTMLInputElement
+				).checked;
+			}
+			for (const k of limitKeys) {
+				(draft.limits as any)[k] =
+					Number(
+						(document.getElementById(`kac-limit-${k}`) as HTMLInputElement)
+							.value,
+					) || 0;
+			}
+			const aiRaw = (
+				document.getElementById("kac-ai-users") as HTMLInputElement
+			).value;
+			draft.users.generativeAI = aiRaw
+				.split(",")
+				.map((s) => parseInt(s.trim(), 10))
+				.filter((n) => !Number.isNaN(n));
+
+			saveBtn.disabled = true;
+			status.textContent = "Saving…";
+			status.className = "small text-muted";
+
+			const result = await sendMessage("adminUpdateConfig", {
+				userId,
+				version,
+				patch: draft,
+			});
+			if (result.ok) {
+				status.textContent = "Saved!";
+				status.className = "small text-success";
+				setTimeout(() => {
+					status.textContent = "";
+				}, 3000);
+			} else {
+				status.textContent = `Failed: ${result.message}`;
+				status.className = "small text-danger";
+			}
+			saveBtn.disabled = false;
+		});
+	}
+}
+
+function renderInline(text: string): string {
+	return text
+		.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, src) => {
+			const url = src.startsWith("/")
+				? browser.runtime.getURL(src.slice(1))
+				: src;
+			return `<img src="${url}" alt="${alt}" style="max-width:100%;border-radius:4px;" />`;
+		})
+		.replace(/\{([^|}]+)\|([^}]+)\}/g, '<span class="badge bg-$2">$1</span>')
+		.replace(/\{([^}]+)\}/g, '<span class="badge bg-secondary">$1</span>')
+		.replace(/~~(.+?)~~/g, "<s>$1</s>")
+		.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+		.replace(/\*(.+?)\*/g, "<em>$1</em>")
+		.replace(/`([^`]+)`/g, "<code>$1</code>");
+}
+
+function renderChangelogMd(md: string): string {
+	return md.split("\n").reduce(
+		(acc, line) => {
+			if (line.startsWith("## ")) {
+				if (acc.inList) {
+					acc.html += "</ul>";
+					acc.inList = false;
+				}
+				const mt = acc.first ? "" : " mt-3";
+				acc.first = false;
+				acc.html += `<h5 class="${mt}mb-1">${renderInline(line.slice(3))}</h5>`;
+			} else if (line.startsWith("### ")) {
+				if (acc.inList) {
+					acc.html += "</ul>";
+					acc.inList = false;
+				}
+				acc.html += `<h6 class="text-muted mt-2 mb-1">${renderInline(line.slice(4))}</h6>`;
+			} else if (line.startsWith("- ")) {
+				if (!acc.inList) {
+					acc.html += "<ul>";
+					acc.inList = true;
+				}
+				acc.html += `<li class="small">${renderInline(line.slice(2))}</li>`;
+			} else if (line.trim() === "") {
+				if (acc.inList) {
+					acc.html += "</ul>";
+					acc.inList = false;
+				}
+			} else {
+				if (acc.inList) {
+					acc.html += "</ul>";
+					acc.inList = false;
+				}
+				acc.html += `<p class="small mb-1">${renderInline(line)}</p>`;
+			}
+			return acc;
+		},
+		{ html: "", inList: false, first: true } as {
+			html: string;
+			inList: boolean;
+			first: boolean;
+		},
+	).html;
+}
+
+async function initSyncTab() {
+	const container = document.getElementById("kiln-sync")!;
+	container.innerHTML = `<div class="text-muted small">Loading…</div>`;
+
+	const [user, sessions] = await Promise.all([
+		getUserDetails(),
+		apiSessions.getValue(),
+	]);
+
+	const isLinked =
+		!!user &&
+		sessions.some((s) => s.userId === user.userId && s.state === "verified");
+
+	const linkedFeatures = (data.preferences as SettingData[]).filter(
+		(s) => !s.hide && s.requiresSync,
+	);
+
+	const featureListHtml = linkedFeatures
+		.map(
+			(f, i) => `
+		<div class="d-flex align-items-start gap-2 px-3 py-2${i < linkedFeatures.length - 1 ? " border-bottom border-secondary" : ""}">
+			<i class="fas fa-${isLinked ? "check-circle text-success" : "lock text-muted"}" style="font-size:0.75rem;flex-shrink:0;margin-top:3px;"></i>
+			<div>
+				<div class="small fw-semibold">${f.name}</div>
+				<div class="text-muted" style="font-size:0.75rem;">${f.desc}</div>
+			</div>
+		</div>
+	`,
+		)
+		.join("");
+
+	const statusIcon = isLinked
+		? `<i class="fas fa-check-circle text-success" style="font-size:1.4rem;flex-shrink:0;"></i>`
+		: `<i class="fas fa-times-circle text-danger" style="font-size:1.4rem;flex-shrink:0;"></i>`;
+	const statusName = user ? user.username : "Not logged in";
+	const statusDesc = isLinked
+		? "Linked to Kiln! Sync features are available."
+		: "Not linked to Kiln. Link your account to unlock additional features.";
+	const statusBtn = isLinked
+		? `<button id="kiln-sync-action-btn" class="btn btn-outline-secondary btn-sm flex-shrink-0">Manage Linked Accounts</button>`
+		: `<button id="kiln-sync-action-btn" class="btn btn-primary btn-sm flex-shrink-0">Link Account</button>`;
+
+	const featuresHeader = isLinked
+		? "Unlocked Features"
+		: "Features Requiring a Linked Account";
+
+	container.innerHTML = `
+		<div class="card mb-2">
+			<div class="card-body d-flex align-items-center gap-3">
+				${statusIcon}
+				<div class="flex-grow-1">
+					<div class="fw-semibold">${statusName}</div>
+					<div class="text-muted small">${statusDesc}</div>
+				</div>
+				${user ? statusBtn : ""}
+			</div>
+		</div>
+		<div class="card">
+			<div class="card-header small fw-semibold">${featuresHeader}</div>
+			<div class="card-body p-0">${featureListHtml}</div>
+		</div>
+	`;
+
+	document
+		.getElementById("kiln-sync-action-btn")
+		?.addEventListener("click", () => {
+			if (isLinked) {
+				document.getElementById("kiln-sessions-btn")!.click();
+			} else if (user) {
+				openVerificationFlowModal(user.userId);
+			}
+		});
+}
+
+async function initWhatsNewTab() {
+	const container = document.getElementById("kiln-changelog")!;
+	container.innerHTML = `<div class="card"><div class="card-body text-muted small">Loading changelog…</div></div>`;
+
+	const result = await sendMessage("getChangelog");
+	if (!result.ok) {
+		container.innerHTML = `<div class="card"><div class="card-body text-danger small">Failed to load changelog.</div></div>`;
+		return;
+	}
+
+	const md = result.data as string;
+	const sections: { label: string; content: string }[] = [];
+	for (const part of md.split(/(?=^## Kiln v)/m)) {
+		const trimmed = part.trim();
+		if (!trimmed) continue;
+		const match = trimmed.match(/^## Kiln (v[\d.]+)/);
+		if (match) sections.push({ label: match[1], content: trimmed });
+	}
+
+	if (sections.length <= 1) {
+		container.innerHTML = `<div class="card"><div class="card-body">${renderChangelogMd(md)}</div></div>`;
+		return;
+	}
+
+	container.innerHTML = `
+		<div class="mb-2">
+			<select id="kiln-changelog-version" class="form-select form-select-sm" style="max-width:220px;">
+				${sections.map((s, i) => `<option value="${i}">${s.label}${i === 0 ? " (Latest)" : ""}</option>`).join("")}
+			</select>
+		</div>
+		<div class="card">
+			<div class="card-body" id="kiln-changelog-content">${renderChangelogMd(sections[0].content)}</div>
+		</div>
+	`;
+
+	document
+		.getElementById("kiln-changelog-version")!
+		.addEventListener("change", (e) => {
+			const idx = Number((e.target as HTMLSelectElement).value);
+			document.getElementById("kiln-changelog-content")!.innerHTML =
+				renderChangelogMd(sections[idx].content);
+		});
+}
+
+function initFeedbackTab() {
+	const textarea = document.getElementById(
+		"kiln-feedback-message",
+	) as HTMLTextAreaElement;
+	const chars = document.getElementById("kiln-feedback-chars") as HTMLElement;
+	const submitBtn = document.getElementById(
+		"kiln-feedback-submit",
+	) as HTMLButtonElement;
+	const status = document.getElementById("kiln-feedback-status") as HTMLElement;
+
+	textarea.addEventListener("input", () => {
+		chars.textContent = String(textarea.value.length);
+	});
+
+	submitBtn.addEventListener("click", async () => {
+		const type = (
+			document.getElementById("kiln-feedback-type") as HTMLSelectElement
+		).value as "feature" | "general" | "bug";
+		const message = textarea.value.trim();
+
+		if (!message) {
+			status.textContent = "Please enter a message.";
+			status.className = "small text-warning";
+			return;
+		}
+
+		submitBtn.disabled = true;
+		status.textContent = "Sending…";
+		status.className = "small text-muted";
+
+		const version = browser.runtime.getManifest().version;
+		const result = await sendMessage("submitFeedback", {
+			type,
+			message,
+			version,
+		});
+
+		if (result.ok) {
+			status.textContent = "Feedback sent! Thanks.";
+			status.className = "small text-success";
+			textarea.value = "";
+			chars.textContent = "0";
+			setTimeout(() => {
+				status.textContent = "";
+			}, 4000);
+		} else {
+			status.textContent =
+				result.code === "RATE_LIMITED"
+					? "Slow down — try again in a minute."
+					: "Something went wrong. Try again later.";
+			status.className = "small text-danger";
+		}
+
+		submitBtn.disabled = false;
+	});
+}
+
+function initDebugTab(container: HTMLElement) {
+	const SYNC_KEYS = [
+		"preferences",
+		"favoritedPlaces",
+		"bestFriends",
+		"avatarSandboxOutfits",
+		"savedThemes",
+	] as const;
+	const LOCAL_KEYS = [
+		"cache",
+		"savedThemes",
+		"kilnSessions",
+		"seenTradeIds",
+		"dismissedNotices",
+	] as const;
+	const SYNC_QUOTA = 102400; // Chrome sync quota: 100 KB
+	const LOCAL_QUOTA = 10485760; // Chrome local quota: 10 MB
+
+	function formatBytes(bytes: number): string {
+		if (bytes === 0) return "0 B";
+		if (bytes < 1024) return `${bytes} B`;
+		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+		return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+	}
+
+	container.innerHTML = `
+		<div class="col-12">
+			<div class="card border-secondary">
+				<div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+					<span>Storage</span>
+					<button id="kd-refresh-storage" class="btn btn-sm btn-outline-secondary py-0 px-2" title="Refresh sizes">
+						<i class="fas fa-sync-alt" style="font-size:0.75rem;"></i>
+					</button>
+				</div>
+				<div class="card-body pb-2" id="kd-storage-body">
+					<p class="text-muted small mb-0">Loading…</p>
+				</div>
+			</div>
+		</div>
+		<div class="col-12">
+			<div class="card border-secondary">
+				<div class="card-header fw-semibold">Remote Config</div>
+				<div class="card-body d-flex gap-2 flex-wrap">
+					<button id="kd-view-config" class="btn btn-sm btn-outline-secondary">Fetch &amp; View</button>
+				</div>
+				<pre id="kd-config-out" class="mx-3 mb-3 p-2 rounded bg-black text-success" style="display:none;max-height:220px;overflow:auto;font-size:0.72rem;"></pre>
+			</div>
+		</div>
+		<div class="col-12">
+			<div class="card border-secondary">
+				<div class="card-header fw-semibold">Cache</div>
+				<div class="card-body d-flex gap-2 flex-wrap">
+					<button id="kd-view-cache-meta" class="btn btn-sm btn-outline-secondary">View Meta</button>
+					<button id="kd-clear-cache" class="btn btn-sm btn-outline-danger">Clear</button>
+				</div>
+				<pre id="kd-cache-out" class="mx-3 mb-3 p-2 rounded bg-black text-success" style="display:none;max-height:220px;overflow:auto;font-size:0.72rem;"></pre>
+			</div>
+		</div>
+		<div class="col-12">
+			<div class="card border-secondary">
+				<div class="card-header fw-semibold">Sessions</div>
+				<div class="card-body d-flex gap-2 flex-wrap">
+					<button id="kd-view-sessions" class="btn btn-sm btn-outline-secondary">View</button>
+					<button id="kd-clear-sessions" class="btn btn-sm btn-outline-danger">Clear</button>
+				</div>
+				<pre id="kd-sessions-out" class="mx-3 mb-3 p-2 rounded bg-black text-success" style="display:none;max-height:220px;overflow:auto;font-size:0.72rem;"></pre>
+			</div>
+		</div>
+		<div class="col-12">
+			<div class="card border-secondary">
+				<div class="card-header fw-semibold">Preferences</div>
+				<div class="card-body d-flex gap-2 flex-wrap">
+					<button id="kd-view-prefs" class="btn btn-sm btn-outline-secondary">View</button>
+					<button id="kd-reset-prefs" class="btn btn-sm btn-outline-danger">Reset to Defaults</button>
+				</div>
+				<pre id="kd-prefs-out" class="mx-3 mb-3 p-2 rounded bg-black text-success" style="display:none;max-height:220px;overflow:auto;font-size:0.72rem;"></pre>
+			</div>
+		</div>
+		<div class="col-12">
+			<div class="card border-secondary">
+				<div class="card-header fw-semibold">Dismissed Notices</div>
+				<div class="card-body d-flex gap-2 flex-wrap">
+					<button id="kd-view-dismissed" class="btn btn-sm btn-outline-secondary">View</button>
+					<button id="kd-reset-dismissed" class="btn btn-sm btn-outline-warning">Reset</button>
+				</div>
+				<pre id="kd-dismissed-out" class="mx-3 mb-3 p-2 rounded bg-black text-success" style="display:none;max-height:220px;overflow:auto;font-size:0.72rem;"></pre>
+			</div>
+		</div>
+	`;
+
+	async function loadStorageOverview() {
+		const body = document.getElementById("kd-storage-body")!;
+		const refreshBtn = document.getElementById(
+			"kd-refresh-storage",
+		) as HTMLButtonElement;
+		refreshBtn.disabled = true;
+		body.innerHTML = '<p class="text-muted small mb-0">Loading…</p>';
+
+		try {
+			const [syncTotal, localTotal] = await Promise.all([
+				browser.storage.sync.getBytesInUse(null as any),
+				browser.storage.local.getBytesInUse(null as any),
+			]);
+
+			const syncSizes = await Promise.all(
+				SYNC_KEYS.map((k) =>
+					browser.storage.sync.getBytesInUse(k).then((b) => [k, b] as const),
+				),
+			);
+			const localSizes = await Promise.all(
+				LOCAL_KEYS.map((k) =>
+					browser.storage.local.getBytesInUse(k).then((b) => [k, b] as const),
+				),
+			);
+
+			const syncPct = Math.min(100, Math.round((syncTotal / SYNC_QUOTA) * 100));
+			const localPct = Math.min(
+				100,
+				Math.round((localTotal / LOCAL_QUOTA) * 100),
+			);
+			const barCls = (pct: number) =>
+				pct > 80 ? "bg-danger" : pct > 50 ? "bg-warning" : "bg-primary";
+			const pctLabel = (pct: number, total: number) =>
+				total === 0 ? "0%" : pct < 1 ? "<1%" : `${pct}%`;
+
+			const maxSync = Math.max(...syncSizes.map(([, b]) => b), 1);
+			const maxLocal = Math.max(...localSizes.map(([, b]) => b), 1);
+
+			const rowHtml = (
+				key: string,
+				size: number,
+				store: "sync" | "local",
+				maxSize: number,
+			) => {
+				const barW = Math.round((size / maxSize) * 100);
+				const storeBadge =
+					store === "sync"
+						? '<span class="badge bg-primary" style="font-size:0.65rem;min-width:38px;">sync</span>'
+						: '<span class="badge bg-secondary" style="font-size:0.65rem;min-width:38px;">local</span>';
+				return `
+					<tr>
+						<td style="font-size:0.8rem;"><code>${key}</code></td>
+						<td>${storeBadge}</td>
+						<td>
+							<div class="d-flex align-items-center gap-2">
+								<div style="flex:1;min-width:48px;">
+									<div class="progress" style="height:4px;">
+										<div class="progress-bar ${barCls(barW)}" style="width:${barW}%;"></div>
+									</div>
+								</div>
+								<span class="text-muted text-end" style="min-width:48px;font-size:0.78rem;">${formatBytes(size)}</span>
+							</div>
+						</td>
+					</tr>
+				`;
+			};
+
+			body.innerHTML = `
+				<div class="row g-3 mb-3">
+					<div class="col-sm-6">
+						<div class="d-flex justify-content-between align-items-baseline mb-1">
+							<span class="small text-muted">Sync</span>
+							<span style="font-size:0.8rem;">${formatBytes(syncTotal)} <span class="text-muted">/ ${formatBytes(SYNC_QUOTA)}</span></span>
+						</div>
+						<div class="progress mb-1" style="height:6px;">
+							<div class="progress-bar ${barCls(syncPct)}" style="width:${syncPct}%;"></div>
+						</div>
+						<div class="text-muted text-end" style="font-size:0.72rem;">${pctLabel(syncPct, syncTotal)} used</div>
+					</div>
+					<div class="col-sm-6">
+						<div class="d-flex justify-content-between align-items-baseline mb-1">
+							<span class="small text-muted">Local</span>
+							<span style="font-size:0.8rem;">${formatBytes(localTotal)} <span class="text-muted">/ ${formatBytes(LOCAL_QUOTA)}</span></span>
+						</div>
+						<div class="progress mb-1" style="height:6px;">
+							<div class="progress-bar ${barCls(localPct)}" style="width:${localPct}%;"></div>
+						</div>
+						<div class="text-muted text-end" style="font-size:0.72rem;">${pctLabel(localPct, localTotal)} used</div>
+					</div>
+				</div>
+				<table class="table table-sm mb-0">
+					<thead>
+						<tr class="text-muted" style="font-size:0.72rem;">
+							<th class="fw-normal">Key</th>
+							<th class="fw-normal">Store</th>
+							<th class="fw-normal">Size</th>
+						</tr>
+					</thead>
+					<tbody>
+						${syncSizes.map(([k, b]) => rowHtml(k, b, "sync", maxSync)).join("")}
+						${localSizes.map(([k, b]) => rowHtml(k, b, "local", maxLocal)).join("")}
+					</tbody>
+				</table>
+			`;
+		} catch (e) {
+			body.innerHTML = `<p class="text-danger small mb-0">Failed to load storage info: ${e}</p>`;
+		} finally {
+			refreshBtn.disabled = false;
+		}
+	}
+
+	loadStorageOverview();
+	document
+		.getElementById("kd-refresh-storage")!
+		.addEventListener("click", loadStorageOverview);
+
+	function toggle(preId: string, json: unknown) {
+		const el = document.getElementById(preId)!;
+		if (el.style.display === "none") {
+			el.textContent = JSON.stringify(json, null, 2);
+			el.style.display = "block";
+		} else {
+			el.style.display = "none";
+		}
+	}
+
+	function flash(btn: HTMLElement, label: string) {
+		const orig = btn.innerHTML;
+		btn.innerHTML = label;
+		btn.setAttribute("disabled", "");
+		setTimeout(() => {
+			btn.innerHTML = orig;
+			btn.removeAttribute("disabled");
+		}, 1500);
+	}
+
+	document
+		.getElementById("kd-clear-cache")!
+		.addEventListener("click", async (e) => {
+			await cache.setValue(cache.fallback);
+			await cache.removeMeta();
+			flash(e.currentTarget as HTMLElement, "Cleared!");
+			loadStorageOverview();
+		});
+
+	document
+		.getElementById("kd-view-cache-meta")!
+		.addEventListener("click", async () => {
+			toggle(
+				"kd-cache-out",
+				(await cache.getMeta()) as Record<string, unknown>,
+			);
+		});
+
+	document
+		.getElementById("kd-view-sessions")!
+		.addEventListener("click", async () => {
+			const sessions = await apiSessions.getValue();
+			const masked = sessions.map((s) => ({
+				...s,
+				accessToken: s.accessToken
+					? `${s.accessToken.slice(0, 8)}…`
+					: undefined,
+				refreshToken: s.refreshToken
+					? `${s.refreshToken.slice(0, 8)}…`
+					: undefined,
+				verificationToken: s.verificationToken
+					? `${s.verificationToken.slice(0, 8)}…`
+					: undefined,
+			}));
+			toggle("kd-sessions-out", masked);
+		});
+
+	document
+		.getElementById("kd-clear-sessions")!
+		.addEventListener("click", async (e) => {
+			await apiSessions.setValue([]);
+			flash(e.currentTarget as HTMLElement, "Cleared!");
+			loadStorageOverview();
+		});
+
+	document
+		.getElementById("kd-view-prefs")!
+		.addEventListener("click", async () => {
+			toggle("kd-prefs-out", await preferences.getPreferences());
+		});
+
+	document
+		.getElementById("kd-reset-prefs")!
+		.addEventListener("click", async (e) => {
+			await preferences.setValue(preferences.fallback);
+			flash(e.currentTarget as HTMLElement, "Reset!");
+			loadStorageOverview();
+		});
+
+	document
+		.getElementById("kd-view-dismissed")!
+		.addEventListener("click", async () => {
+			toggle("kd-dismissed-out", await dismissedNotices.getValue());
+		});
+
+	document
+		.getElementById("kd-reset-dismissed")!
+		.addEventListener("click", async (e) => {
+			await dismissedNotices.setValue([]);
+			flash(e.currentTarget as HTMLElement, "Reset!");
+			loadStorageOverview();
+		});
+
+	document
+		.getElementById("kd-view-config")!
+		.addEventListener("click", async () => {
+			toggle("kd-config-out", await getConfig());
+		});
+}
+
+async function openVerificationFlowModal(userId: number) {
+	const modal = createModal();
+
+	function setContent(html: string) {
+		modal.innerHTML = html;
+	}
+
+	function addCloseBtn() {
+		modal
+			.querySelector<HTMLButtonElement>("#kvf-close")
+			?.addEventListener("click", () => modal.close());
+	}
+
+	function renderRules() {
+		setContent(`
+			<div class="d-flex justify-content-between align-items-center mb-3">
+				<h5 class="mb-0">Before you link...</h5>
+				<button class="btn btn-sm btn-secondary" id="kvf-close">✕</button>
+			</div>
+			<p class="small text-muted mb-2">Just a few things to keep Kiln inclusive to everyone, the following rules apply to content you post via Kiln (such as published Kiln themes):</p>
+			<ul class="small mb-3">
+				<li>Be respectful. No hate speech, harassment, or discrimination of any kind will be tolerated.</li>
+				<li>Don't upload inappropriate, explicit, or offensive content.</li>
+				<li>Don't try to exploit or abuse Kiln's features.</li>
+				<li>Don't impersonate other users.</li>
+				<li>Common sense and Polytoria site rules apply.</li>
+			</ul>
+			<div class="alert border-secondary small mb-2">
+				<i class="fas fa-info-circle me-1"></i>
+				<strong>How linking works:</strong> You complete an action that Kiln can verify, such as putting a short code in your bio, to prove you own the account. Kiln only reads your public Polytoria profile to verify you. Kiln has no access to your Polytoria account, your password, settings, or anything private.
+			</div>
+			<div class="d-flex justify-content-end gap-2">
+				<button class="btn btn-secondary btn-sm" id="kvf-close-2">Cancel</button>
+				<button class="btn btn-primary btn-sm" id="kvf-rules-next">Agree</button>
+			</div>
+		`);
+		addCloseBtn();
+		modal
+			.querySelector("#kvf-close-2")
+			?.addEventListener("click", () => modal.close());
+		modal
+			.querySelector("#kvf-rules-next")
+			?.addEventListener("click", renderManualCode);
+	}
+
+	function renderMethodSelect() {
+		setContent(`
+			<div class="d-flex justify-content-between align-items-center mb-3">
+				<h5 class="mb-0">Choose Verification Method</h5>
+				<button class="btn btn-sm btn-secondary" id="kvf-close">✕</button>
+			</div>
+			<p class="small text-muted mb-3">Select how you'd like to verify your Polytoria account.</p>
+			<div class="d-flex flex-column gap-2 mb-3">
+				<button class="btn btn-outline-secondary text-start p-3" id="kvf-method-manual">
+					<div class="fw-semibold mb-1"><i class="fas fa-code me-2"></i>Manual Code Verification</div>
+					<div class="text-muted small">Paste a code into your Polytoria bio to prove account ownership.</div>
+				</button>
+				<button class="btn btn-outline-secondary text-start p-3" id="kvf-method-auto" disabled>
+					<div class="fw-semibold mb-1">
+						<i class="fas fa-bolt me-2"></i>Automatic Code Verification
+						<span class="badge bg-secondary ms-1" style="font-size:0.7rem;">Coming Soon</span>
+					</div>
+					<div class="text-muted small">Automatically verify using a code in your bio, but without you having to do anything.</div>
+				</button>
+				<button class="btn btn-outline-secondary text-start p-3" id="kvf-method-ingame" disabled>
+					<div class="fw-semibold mb-1">
+						<i class="fas fa-gamepad me-2"></i>In-Game Verification
+						<span class="badge bg-secondary ms-1" style="font-size:0.7rem;">Coming Soon</span>
+					</div>
+					<div class="text-muted small">Verify by joining a Polytoria world.</div>
+				</button>
+			</div>
+			<div class="text-end">
+				<button class="btn btn-secondary btn-sm" id="kvf-back">← Back</button>
+			</div>
+		`);
+		addCloseBtn();
+		modal.querySelector("#kvf-back")?.addEventListener("click", renderRules);
+		modal
+			.querySelector("#kvf-method-manual")
+			?.addEventListener("click", renderManualCode);
+	}
+
+	async function renderManualCode() {
+		setContent(`
+			<div class="d-flex justify-content-between align-items-center mb-3">
+				<h5 class="mb-0">Manual Code Verification</h5>
+				<button class="btn btn-sm btn-secondary" id="kvf-close">✕</button>
+			</div>
+			<div id="kvf-manual-body">
+				<p class="text-muted small"><i class="fas fa-spinner fa-spin me-1"></i>Starting verification…</p>
+			</div>
+		`);
+		addCloseBtn();
+
+		const body = modal.querySelector("#kvf-manual-body") as HTMLElement;
+
+		function renderManualError(message: string) {
+			body.innerHTML = `
+				<p class="text-danger small mb-3">${message}</p>
+				<button class="btn btn-secondary btn-sm" id="kvf-err-back">← Back</button>
+			`;
+			body
+				.querySelector("#kvf-err-back")
+				?.addEventListener("click", renderMethodSelect);
+		}
+
+		const sessions = await apiSessions.getValue();
+		const existing = sessions.find(
+			(s) =>
+				s.userId === userId &&
+				s.state === "pending" &&
+				s.phrase &&
+				s.verificationToken,
+		);
+
+		function isJwtExpired(token: string): boolean {
+			try {
+				const payload = JSON.parse(atob(token.split(".")[1]));
+				return Date.now() >= payload.exp * 1000;
+			} catch {
+				return true;
+			}
+		}
+
+		let phrase: string;
+
+		if (existing?.phrase && !isJwtExpired(existing.verificationToken!)) {
+			phrase = existing.phrase;
+		} else {
+			const startResult = await sendMessage("startKilnVerification", userId);
+			if (!startResult.ok) {
+				renderManualError(
+					"Failed to start verification. Please try again later.",
+				);
+				return;
+			}
+			const { phrase: p, token } = startResult.data.data;
+			phrase = p;
+
+			const fresh = await apiSessions.getValue();
+			fresh.push({
+				userId,
+				state: "pending",
+				verificationToken: token,
+				phrase,
+			});
+			await apiSessions.setValue(fresh);
+		}
+
+		body.innerHTML = `
+			<p class="small text-muted mb-2">
+				Add this code anywhere in your
+				<a href="https://polytoria.com/my/settings/profile" target="_blank" class="text-muted" style="text-decoration:underline;">Polytoria bio</a>.
+				Kiln will detect it automatically. You can remove it from your bio once verified.
+			</p>
+			<div class="d-flex align-items-center gap-2 mb-3">
+				<code id="kvf-phrase" class="flex-fill p-2" style="background:rgba(255,255,255,0.08);border-radius:4px;font-size:0.85em;word-break:break-all;"></code>
+				<button class="btn btn-sm btn-outline-secondary flex-shrink-0" id="kvf-copy"><i class="fas fa-copy"></i></button>
+			</div>
+			<div class="d-flex gap-2">
+				<button class="btn btn-secondary btn-sm" id="kvf-manual-back">← Back</button>
+				<button class="btn btn-primary btn-sm" id="kvf-manual-done">Got it</button>
+			</div>
+		`;
+
+		(body.querySelector("#kvf-phrase") as HTMLElement).textContent = phrase;
+
+		const copyBtn = body.querySelector<HTMLButtonElement>("#kvf-copy")!;
+		copyBtn.addEventListener("click", () => {
+			navigator.clipboard.writeText(phrase);
+			copyBtn.innerHTML = '<i class="fas fa-check"></i>';
+			setTimeout(() => {
+				copyBtn.innerHTML = '<i class="fas fa-copy"></i>';
+			}, 1500);
+		});
+
+		body
+			.querySelector("#kvf-manual-back")
+			?.addEventListener("click", renderRules);
+		body
+			.querySelector("#kvf-manual-done")
+			?.addEventListener("click", () => modal.close());
+	}
+
+	renderRules();
+	modal.showModal();
+}
+
+function initSessionsDialog() {
+	const dialog = createModal();
+	dialog.innerHTML = `
+		<div class="d-flex justify-content-between align-items-center mb-2">
+			<h5 class="mb-0" style="color: #fff;">API Sessions</h5>
+			<button class="btn btn-sm btn-secondary" id="kiln-sessions-close">✕</button>
+		</div>
+		<div id="kiln-sessions-list"></div>
+	`;
+
+	dialog
+		.querySelector<HTMLButtonElement>("#kiln-sessions-close")!
+		.addEventListener("click", () => dialog.close());
+
+	document
+		.getElementById("kiln-sessions-btn")!
+		.addEventListener("click", async () => {
+			await renderSessionsList();
+			dialog.showModal();
+		});
+}
+
+async function renderSessionsList() {
+	const list = document.getElementById("kiln-sessions-list") as HTMLElement;
+	const sessions = await apiSessions.getValue();
+
+	if (sessions.length === 0) {
+		list.innerHTML = `<p class="text-muted mb-0 small">No linked accounts.</p>`;
+		return;
+	}
+
+	list.innerHTML = `
+		<table class="table table-sm mb-0">
+			<thead>
+				<tr><th>User ID</th><th>State</th><th></th></tr>
+			</thead>
+			<tbody>
+				${sessions
+					.map(
+						(s) => `
+					<tr>
+						<td>${s.userId}</td>
+						<td>
+							<span class="badge ${s.state === "verified" ? "bg-success" : "bg-warning text-dark"}">${s.state}</span>
+							${s.state === "pending" && s.phrase ? `<br/><code style="font-size:0.8em;">${s.phrase}</code>` : ""}
+						</td>
+						<td><button class="btn btn-outline-danger btn-sm" data-remove-session="${s.userId}">Remove</button></td>
+					</tr>
+				`,
+					)
+					.join("")}
+			</tbody>
+		</table>
+	`;
+
+	for (const btn of list.querySelectorAll<HTMLButtonElement>(
+		"[data-remove-session]",
+	)) {
+		btn.addEventListener("click", async () => {
+			const userId = parseInt(btn.dataset.removeSession!, 10);
+			const current = await apiSessions.getValue();
+			await apiSessions.setValue(current.filter((s) => s.userId !== userId));
+			await renderSessionsList();
+		});
+	}
+}
+
+/**
+ * Standalone debug page at /my/settings/kiln-debug.
+ */
+export async function kilnDebug() {
+	const content = document.getElementsByClassName(
+		"col-lg-10",
+	)[0] as HTMLElement;
+	content.innerHTML = `<div class="row g-3" id="kd-root"></div>`;
+	initDebugTab(document.getElementById("kd-root") as HTMLElement);
+}
+
+/**
+ * Checks for a Kiln verification code in the bio of the user, and if it is found, pings the API to complete the authentication flow.
+ */
+export async function checkForVerificationCode(userId: number) {
+	const descriptionTextbox = document.getElementById("description")!;
+
+	const session = await getApiSession(userId);
+
+	if (
+		session &&
+		session.state != "verified" &&
+		descriptionTextbox.textContent
+	) {
+		const match = descriptionTextbox.textContent.match(KILN_ID_REGEX);
+
+		if (match) {
+			const verificationResult = await sendMessage(
+				"finishKilnVerification",
+				userId,
+			);
+			if (!verificationResult.ok || !verificationResult.data.data.userId)
+				return;
+			const verification = verificationResult.data;
+
+			if (verification.data.userId) {
+				const modal = createModal();
+				modal.style.overflow = "hidden";
+
+				modal.innerHTML = `
+                <div class="row text-muted mb-2" style="font-size: 0.8rem;">
+                    <div class="col">
+                        <h5 class="mb-0" style="color: #fff;">Kiln Verification</h5>
+                        You're verified!
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-info w-100 mx-auto" onclick="this.parentElement.parentElement.parentElement.close();">X</button>
+                    </div>
+                    </div>
+                </div>
+                <div class="modal-body text-center text-light">
+                    <p class="mt-4 mb-3">Verification is done! You've unlocked sharing character sandbox outfits, sharing favorited worlds, time played, and more!</p>
+                </div>
+                `;
+
+				await updateApiSession(userId, (session) => {
+					session.state = "verified";
+					session.accessToken = verification.data.accessToken;
+					session.refreshToken = verification.data.refreshToken;
+					delete session.verificationToken;
+				});
+
+				modal.showModal();
+			}
+		}
+	}
+}

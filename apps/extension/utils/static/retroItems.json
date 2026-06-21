@@ -1,0 +1,622 @@
+{
+    "1487": {
+        "type": "hat",
+        "accessoryType": "headCover",
+        "name": "Operimentum Lucendi",
+        "price": 100,
+        "createdAt": "September 10 2019",
+        "updatedAt": "August 28 2020"
+    },
+    "1915": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "Debugger's Top Hat",
+        "price": false,
+        "createdAt": "March 9 2020",
+        "updatedAt": "July 19 2022"
+    },
+    "2279": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "1st Anniversary Cake",
+        "price": false,
+        "createdAt": "April 16 2020",
+        "updatedAt": "November 10 2020"
+    },
+    "3261": {
+        "type": "hat",
+        "accessoryType": "neckAccessory",
+        "name": "Staff Badge",
+        "price": null
+    },
+    "3547": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "Beginners Guide: Limiteds",
+        "price": 5,
+        "createdAt": "August 20 2020",
+        "updatedAt": "August 20 2020"
+    },
+    "4054": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "Void Fedora",
+        "price": 35,
+        "createdAt": "August 30 2020",
+        "updatedAt": "August 30 2020"
+    },
+    "4546": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "Lumin Fedora",
+        "price": 150,
+        "createdAt": "September 3 2020",
+        "updatedAt": "November 27 2022"
+    },
+    "4591": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "Lucendi Fedora",
+        "price": 420,
+        "createdAt": "September 5 2020",
+        "updatedAt": "September 5 2020"
+    },
+    "10599": {
+        "type": "hat",
+        "accessoryType": "backAccessory",
+        "name": "Back Flag",
+        "price": 50,
+        "createdAt": "August 15 2021",
+        "updatedAt": "August 15 2021"
+    },
+    "7400": {
+        "type": "hat",
+        "accessoryType": "hair",
+        "name": "Dreads",
+        "price": 20,
+        "createdAt": "January 5 2021",
+        "updatedAt": "January 5 2021"
+    },
+    "1504": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "Bloxtopia Beanie",
+        "price": null
+    },
+    "3063": {
+        "type": "hat",
+        "accessoryType": "neckAccessory",
+        "name": "Blue Sun Necklace",
+        "price": 5,
+        "createdAt": "August 5 2020",
+        "updatedAt": "August 5 2020"
+    },
+    "4670": {
+        "type": "hat",
+        "accessoryType": "backAccessory",
+        "name": "Crystal L96A1",
+        "price": 250,
+        "createdAt": "September 7 2020",
+        "updatedAt": "September 7 2020"
+    },
+    "2385": {
+        "type": "tool",
+        "accessoryType": "hat",
+        "name": "Silver Wrench",
+        "price": 5,
+        "createdAt": "April 24 2020",
+        "updatedAt": "April 24 2020",
+        "asset": "https://c0.ptacdn.com/assets/g_tALSrl2ZcBo4FW6b_X1X1Djb8dZ6L7.glb"
+    },
+    "2382": {
+        "type": "hat",
+        "accessoryType": "hair",
+        "name": "Blue Rockstar",
+        "price": 20,
+        "createdAt": "April 24 2020",
+        "updatedAt": "April 24 2020"
+    },
+    "11723": {
+        "type": "hat",
+        "accessoryType": "backAccessory",
+        "name": "Classic Skateboard : Light Blue Coral",
+        "price": 25,
+        "createdAt": "November 20 2021",
+        "updatedAt": "November 20 2021"
+    },
+    "10640": {
+        "type": "hat",
+        "accessoryType": "headCover",
+        "name": "Dark Crusader helmet",
+        "price": 200,
+        "createdAt": "August 22 2021",
+        "updatedAt": "August 22 2021"
+    },
+    "11816": {
+        "type": "hat",
+        "accessoryType": "headCover",
+        "name": "Operimentum Caverna",
+        "price": 1000,
+        "createdAt": "November 26 2021",
+        "updatedAt": "November 26 2021"
+    },
+    "6326": {
+        "type": "hat",
+        "accessoryType": "faceAccessory",
+        "name": "Blue Clock Gazers",
+        "price": 50,
+        "createdAt": "November 26 2020",
+        "updatedAt": "November 26 2020"
+    },
+    "9647": {
+        "type": "hat",
+        "accessoryType": "headCover",
+        "name": "Special Operations Mask",
+        "price": 75,
+        "createdAt": "June 2 2021",
+        "updatedAt": "June 2 2021"
+    },
+    "3797": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "Let Him Cook",
+        "price": null
+    },
+    "7219": {
+        "type": "hat",
+        "accessoryType": "faceAccessory",
+        "name": "Steampunk Goggles",
+        "price": false,
+        "createdAt": "December 20 2020",
+        "updatedAt": "June 5 2021"
+    },
+    "10409": {
+        "type": "hat",
+        "accessoryType": "faceAccessory",
+        "name": "Clown Nose",
+        "price": 15,
+        "createdAt": "July 25 2021",
+        "updatedAt": "July 25 2021"
+    },
+    "3158": {
+        "type": "hat",
+        "accessoryType": "headCover",
+        "name": "Tenebris Natus",
+        "price": 1000,
+        "createdAt": "August 10 2020",
+        "updatedAt": "August 10 2020"
+    },
+    "2892": {
+        "type": "hat",
+        "accessoryType": "faceAccessory",
+        "name": "Canadian Pride",
+        "price": null
+    },
+    "4115": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "Rainbow Tophat",
+        "price": 1500,
+        "createdAt": "August 30 2020",
+        "updatedAt": "August 30 2020"
+    },
+    "12390": {
+        "type": "tool",
+        "accessoryType": "hat",
+        "name": "Polytoria Video Game",
+        "price": 5,
+        "createdAt": "January 7 2022",
+        "updatedAt": "January 8 2022",
+        "asset": "https://c0.ptacdn.com/assets/z7WSmb6ksXRy44tAM-rGi8amndT6Z6ki.glb"
+    },
+    "4325": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "Exclamation Mark",
+        "price": 20,
+        "createdAt": "August 31 2020",
+        "updatedAt": "April 8 2021"
+    },
+    "12013": {
+        "type": "hat",
+        "accessoryType": "backAccessory",
+        "name": "Sack of Presents",
+        "price": false,
+        "createdAt": "December 3 2021",
+        "updatedAt": "December 3 2021"
+    },
+    "4030": {
+        "type": "hat",
+        "accessoryType": "headCover",
+        "name": "Plague Doctor",
+        "price": 10,
+        "createdAt": "August 30 2020",
+        "updatedAt": "August 30 2020"
+    },
+    "1423": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "Golden Antlers",
+        "price": 25,
+        "createdAt": "September 2 2019",
+        "updatedAt": "April 27 2021"
+    },
+    "1888": {
+        "type": "hat",
+        "accessoryType": "headCover",
+        "name": "Frigus Petasum",
+        "price": 100,
+        "createdAt": "March 8 2020",
+        "updatedAt": "February 21 2023"
+    },
+    "5674": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "Crown of October Delights",
+        "price": false,
+        "createdAt": "October 31 2020",
+        "updatedAt": "October 31 2020"
+    },
+    "3875": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "Fire Crown",
+        "price": 800,
+        "createdAt": "August 29 2020",
+        "updatedAt": "August 29 2020"
+    },
+    "2143": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "Soup Antlers",
+        "price": 5,
+        "createdAt": "April 1 2020",
+        "updatedAt": "April 1 2020"
+    },
+    "2142": {
+        "type": "hat",
+        "accessoryType": "headCover",
+        "name": "Planet Soup",
+        "price": 50,
+        "createdAt": "April 1 2020",
+        "updatedAt": "April 1 2020"
+    },
+    "2144": {
+        "type": "tool",
+        "accessoryType": "hat",
+        "name": "Soup Sign",
+        "price": 1,
+        "createdAt": "April 1 2020",
+        "updatedAt": "April 1 2020",
+        "asset": "https://c0.ptacdn.com/assets/jqt1CLjl_S2ZaNTeEEoRttRFPkLO7jUV.glb"
+    },
+    "1553": {
+        "type": "hat",
+        "accessoryType": "headCover",
+        "name": "Operimentum Void",
+        "price": 4000,
+        "createdAt": "September 14 2019",
+        "updatedAt": "September 26 2019"
+    },
+    "1506": {
+        "type": "hat",
+        "accessoryType": "headCover",
+        "name": "Operimentum Ignis",
+        "price": 1500,
+        "createdAt": "September 11 2019",
+        "updatedAt": "September 4 2020"
+    },
+    "4756": {
+        "type": "hat",
+        "accessoryType": "headCover",
+        "name": "Brick Operimentum",
+        "price": 5000,
+        "createdAt": "September 8 2020",
+        "updatedAt": "November 5 2020"
+    },
+    "1920": {
+        "type": "hat",
+        "accessoryType": "headCover",
+        "name": "Operimentum Crystallo",
+        "price": 100,
+        "createdAt": "March 10 2020",
+        "updatedAt": "October 7 2020"
+    },
+    "3227": {
+        "type": "hat",
+        "accessoryType": "headCover",
+        "name": "Operimentum Glacies",
+        "price": 1750,
+        "createdAt": "August 12 2020",
+        "updatedAt": "August 12 2020"
+    },
+    "2672": {
+        "type": "hat",
+        "accessoryType": "headCover",
+        "name": "Caelum Frigus",
+        "price": 50,
+        "createdAt": "May 31 2020",
+        "updatedAt": "November 6 2021"
+    },
+    "2754": {
+        "type": "tool",
+        "accessoryType": "hat",
+        "name": "Polytoria Sign",
+        "price": 20,
+        "createdAt": "June 18 2020",
+        "updatedAt": "November 11 2020",
+        "asset": "https://c0.ptacdn.com/assets/usUW06MS1MfES5Cf4D8ZBe6agbBFHQ1u.glb"
+    },
+    "6448": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "Classic Blue Beanie",
+        "price": false,
+        "createdAt": "November 29 2020",
+        "updatedAt": "November 29 2020"
+    },
+    "3495": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "NOOB!!!",
+        "price": null
+    },
+    "3180": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "Template Hat",
+        "price": null
+    },
+    "2746": {
+        "type": "hat",
+        "accessoryType": "frontAccessory",
+        "name": "Veterans Medal",
+        "price": false,
+        "createdAt": "June 15 2020",
+        "updatedAt": "June 15 2020"
+    },
+    "2217": {
+        "type": "hat",
+        "accessoryType": "headCover",
+        "name": "Camo Egg",
+        "price": 1,
+        "createdAt": "April 10 2020",
+        "updatedAt": "June 3 2020"
+    },
+    "21921": {
+        "type": "tool",
+        "accessoryType": "hat",
+        "name": "Void Touched Key",
+        "price": null,
+        "asset": "https://c0.ptacdn.com/assets/9wsBmx4nXet8r39Se4C_IxZvPgeQThcE.glb"
+    },
+    "2045": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "Book of Creativity",
+        "price": null
+    },
+    "18020": {
+        "type": "hat",
+        "accessoryType": "backAccessory",
+        "name": "Crimson King",
+        "price": 500,
+        "createdAt": "June 27 2022",
+        "updatedAt": "June 27 2022"
+    },
+    "1290": {
+        "type": "hat",
+        "accessoryType": "headCover",
+        "name": "Haunted Saucepan",
+        "price": 15,
+        "createdAt": "August 29 2019",
+        "updatedAt": "June 19 2021"
+    },
+    "12807": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "hat :D",
+        "price": null
+    },
+    "3189": {
+        "type": "tool",
+        "accessoryType": "hat",
+        "name": "6000 Sign",
+        "price": false,
+        "createdAt": "August 11 2020",
+        "updatedAt": "August 27 2020",
+        "asset": "https://c0.ptacdn.com/assets/lWUWI33dFAQNMecPjsh1YybG8sldDI7X.glb"
+    },
+    "10605": {
+        "type": "tool",
+        "accessoryType": "hat",
+        "name": "Praise The Teapots Sign",
+        "price": 250,
+        "createdAt": "August 16 2021",
+        "updatedAt": "August 16 2021",
+        "asset": "https://c0.ptacdn.com/assets/tiDIpnw5oQthqpk8NZ9IFQMojC9XMXr_.glb"
+    },
+    "11678": {
+        "type": "tool",
+        "accessoryType": "hat",
+        "name": "Almighty Bod Demo",
+        "price": null,
+        "asset": "https://c0.ptacdn.com/assets/u-aDgbF0hXP2LBCtllj2E35q4AGDv5fg.glb"
+    },
+    "1552": {
+        "type": "hat",
+        "accessoryType": "faceAccessory",
+        "name": "sigmas ONLY!",
+        "price": null
+    },
+    "11844": {
+        "type": "hat",
+        "accessoryType": "headCover",
+        "name": "Frigus Fulnem",
+        "price": 150,
+        "createdAt": "November 27 2021",
+        "updatedAt": "November 27 2021"
+    },
+    "17154": {
+        "type": "hat",
+        "accessoryType": "hair",
+        "name": "Navy Blue Hair",
+        "price": 25,
+        "createdAt": "May 29 2022",
+        "updatedAt": "May 29 2022"
+    },
+    "2471": {
+        "type": "hat",
+        "accessoryType": "backAccessory",
+        "name": "Runic Blade",
+        "price": 50,
+        "createdAt": "May 8 2020",
+        "updatedAt": "May 8 2020"
+    },
+    "281": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "Green Banded Fedora",
+        "price": 15,
+        "createdAt": "April 17 2019",
+        "updatedAt": "November 25 2022"
+    },
+    "3587": {
+        "type": "hat",
+        "accessoryType": "headCover",
+        "name": "Midnight Helm",
+        "price": null
+    },
+    "8250": {
+        "type": "hat",
+        "accessoryType": "headCover",
+        "name": "Egg of Tricks",
+        "price": false,
+        "createdAt": "April 1 2021",
+        "updatedAt": "May 20 2022"
+    },
+    "9828": {
+        "type": "hat",
+        "accessoryType": "faceAccessory",
+        "name": "Shattered Sinister Horns",
+        "price": 100,
+        "createdAt": "June 10 2021",
+        "updatedAt": "June 10 2021"
+    },
+    "3330": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "Horns of the Black Ruby",
+        "price": null
+    },
+    "2047": {
+        "type": "tool",
+        "accessoryType": "",
+        "name": "\"help\" Sign",
+        "price": null,
+        "asset": "https://c0.ptacdn.com/assets/TmUUj2uilNvsC3-vAVUSPW7GtG1UE999.glb"
+    },
+    "1948": {
+        "type": "hat",
+        "accessoryType": "headCover",
+        "name": "Jeremy the Vampire Cat",
+        "price": null
+    },
+    "1942": {
+        "type": "tool",
+        "accessoryType": "hat",
+        "name": "\"abc\" Sign",
+        "price": null,
+        "asset": "https://c0.ptacdn.com/assets/vNe1Tu6D3I7TjUbq9SWFCyLYgmtQHx1b.glb"
+    },
+    "2183": {
+        "type": "hat",
+        "accessoryType": "headCover",
+        "name": "Superium VGA",
+        "price": null
+    },
+    "2186": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "Superium Classic Cap",
+        "price": null
+    },
+    "2837": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "127.0.0.1",
+        "price": null
+    },
+    "3129": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "Delivery! :D",
+        "price": null
+    },
+    "3439": {
+        "type": "hat",
+        "accessoryType": "headCover",
+        "name": "Box :O",
+        "price": null
+    },
+    "3470": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "4x4x4x4 Crown",
+        "price": null
+    },
+    "3472": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "Corrupt Crown",
+        "price": null
+    },
+    "3492": {
+        "type": "hat",
+        "accessoryType": "headCover",
+        "name": "please ignore",
+        "price": null
+    },
+    "3567": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "Crown of Polytoria",
+        "price": null
+    },
+    "3535": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "Hard Hat",
+        "price": null
+    },
+    "3597": {
+        "type": "hat",
+        "accessoryType": "headCover",
+        "name": "Cardboard Operimentum",
+        "price": null
+    },
+    "3734": {
+        "type": "hat",
+        "accessoryType": "hat",
+        "name": "uh oh",
+        "price": null
+    },
+    "18742": {
+        "type": "tool",
+        "accessoryType": "hat",
+        "name": "Tactical Water Pistol",
+        "price": false,
+        "createdAt": "July 21 2022",
+        "updatedAt": "July 21 2022",
+        "asset": "https://c0.ptacdn.com/assets/JJ9d3kSG9ps3Y2GNv00YEN-lYj6EalC-.glb"
+    },
+    "18746": {
+        "type": "tool",
+        "accessoryType": "hat",
+        "name": "Tactical Water Rifle",
+        "price": false,
+        "createdAt": "July 21 2022",
+        "updatedAt": "July 21 2022",
+        "asset": "https://c0.ptacdn.com/assets/6mjOE5qEGDDVIHrRVJDj4IYOd1HPTQ-1.glb"
+    }
+}

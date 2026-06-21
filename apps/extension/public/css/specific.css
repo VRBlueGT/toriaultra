@@ -1,0 +1,211 @@
+/** biome-ignore-all lint/complexity/noImportantStyles: It's fine */
+
+/* ------------------------------------------ */
+
+/*
+    THEME CREATOR
+*/
+
+.kiln-theme-presets {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.kiln-theme-preset {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	cursor: pointer;
+	padding: 6px 10px;
+	border-radius: 10px;
+	border: 2px solid transparent;
+	background: rgba(255, 255, 255, 0.05);
+	transition: border-color 0.15s, background 0.15s;
+	font-size: 0.8rem;
+	min-width: 70px;
+	text-align: center;
+	user-select: none;
+}
+
+.kiln-theme-preset:hover {
+	background: rgba(255, 255, 255, 0.1);
+}
+
+.kiln-theme-preset--active {
+	border-color: #fff !important;
+	background: rgba(255, 255, 255, 0.12) !important;
+}
+
+.kiln-theme-swatch {
+	width: 40px;
+	height: 40px;
+	border-radius: 50%;
+	border: 2px solid rgba(255, 255, 255, 0.2);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 1.3rem;
+}
+
+.kiln-theme-swatch--custom {
+	background: conic-gradient(
+		#f43f5e, #f97316, #facc15, #22c55e,
+		#06b6d4, #a855f7, #f43f5e
+	);
+	font-size: 1.1rem;
+}
+
+.kiln-te-color-picker {
+	width: 36px;
+	height: 36px;
+	border-radius: 8px;
+	border: 1px solid rgba(255,255,255,0.2);
+	padding: 2px;
+	cursor: pointer;
+	background: none;
+}
+
+.kiln-te-hex-input {
+	width: 100px !important;
+	font-family: monospace;
+	font-size: 0.85rem !important;
+}
+
+/* ------------------------------------------ */
+
+/*
+    INLINE EDITING
+*/
+
+body[data-kiln-extension-inlineEditing="true"]
+.kiln-extension-inlineEditing-visible {
+	display: block !important;
+}
+.kiln-extension-inlineEditing-visible {
+	display: none;
+}
+
+body[data-kiln-extension-inlineEditing="true"]
+	.kiln-extension-inlineEditing-hidden {
+	display: none !important;
+}
+.kiln-extension-inlineEditing-hidden {
+	display: block;
+}
+
+/* ------------------------------------------ */
+
+/*
+    MODALS
+*/
+
+html:has(.kiln-extension-modal[open]),
+body:has(.kiln-extension-modal[open]) {
+	overflow: hidden;
+}
+
+.kiln-extension-modal::backdrop {
+	background: rgba(0, 0, 0, 0.73);
+}
+
+.kiln-extension-modal {
+	width: min(450px, 90vw);
+	border: 1px solid #484848;
+	background-color: #181818;
+	border-radius: 20px;
+	padding: 16px;
+	color: #fff;
+}
+
+.kiln-extension-modal.kiln-modal--lg {
+	width: min(900px, 95vw);
+	max-height: 85vh;
+	overflow-y: auto;
+}
+
+/* ------------------------------------------ */
+
+/*
+	EVENT PLACE CARD HIGHLIGHT ANIMATION
+	CSS BY @dargy ON POLYTORIA
+*/
+
+.event-card {
+	background-size: 200% 200% !important;
+
+	-webkit-animation: EventPlace 5s ease infinite;
+	-moz-animation: EventPlace 5s ease infinite;
+	animation: EventPlace 5s ease infinite;
+}
+
+@-webkit-keyframes EventPlace {
+	0% {
+		background-position: 10% 0%;
+	}
+	50% {
+		background-position: 91% 100%;
+	}
+	100% {
+		background-position: 10% 0%;
+	}
+}
+
+@-moz-keyframes EventPlace {
+	0% {
+		background-position: 10% 0%;
+	}
+	50% {
+		background-position: 91% 100%;
+	}
+	100% {
+		background-position: 10% 0%;
+	}
+}
+
+@keyframes EventPlace {
+	0% {
+		background-position: 10% 0%;
+	}
+	50% {
+		background-position: 91% 100%;
+	}
+	100% {
+		background-position: 10% 0%;
+	}
+}
+
+/* - */
+
+/*
+    AVATAR SANDBOX
+*/
+
+.ribbon-kiln-extension-custom span {
+	background-color: orange !important;
+}
+
+.ribbon-kiln-extension-custom::after,
+.ribbon-kiln-extension-custom::before {
+	border-color: #c68000 !important;
+}
+
+.ribbon-kiln-extension-unknown span {
+	background-color: #000 !important;
+}
+
+.ribbon-kiln-extension-unknown::after,
+.ribbon-kiln-extension-unknown::before {
+	border-color: #121212 !important;
+}
+
+.ribbon-kiln-extension-retro span {
+	background-color: purple !important;
+	font-family: "Courier New", Courier, monospace;
+}
+
+.ribbon-kiln-extension-retro::after,
+.ribbon-kiln-extension-retro::before {
+	border-color: rgb(104, 0, 104) !important;
+}

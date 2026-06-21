@@ -1,0 +1,28 @@
+{
+	"latestVersion": "2.6.0",
+	"updateLogURL": "https://kiln.indexx.dev/blog/v2-3-0",
+	"notices": [],
+	"apiAvailability": {
+		"public": true,
+		"internal": true,
+		"extension": true,
+		"proxy": true,
+		"currencyRates": true
+	},
+	"flags": {
+		"apis.usePublicApiProxy": false,
+		"apis.isExtensionApiStable": true,
+		"features.timePlayed.enabled": false
+	},
+	"limits": {
+		"maxPinnedWorlds": 25,
+		"maxNFTItems": 50,
+		"maxNFTSerialsPerItem": 10,
+		"maxBlockedTraders": 200,
+		"maxPublishedThemes": 15,
+		"maxPinnedAchievements": 5
+	},
+	"users": {
+		"generativeAI": [48196, 767253]
+	}
+}

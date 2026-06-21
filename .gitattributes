@@ -1,0 +1,4 @@
+* text=auto
+
+apps/extension/assets/** linguist-vendored
+apps/extension/public/css/polytoria.css linguist-vendored

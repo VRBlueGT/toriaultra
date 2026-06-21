@@ -1,0 +1,224 @@
+// Copyright (C) 2026 Index
+// Kiln - a quality-of-life browser extension for Polytoria.com
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+import { Extension } from "@kiln/schemas";
+import type z from "zod";
+import fallbackConfig from "@/utils/static/fallbackConfig.json";
+import metadata from "@/utils/static/metadata.json";
+import { apiSessions } from "@/utils/storage";
+import type { ApiTypes, Result } from "@/utils/types";
+import { getFlag, pullCache } from "@/utils/utilities";
+
+export const KILN_API_BASE = metadata.endpoints.extension;
+
+type ResolvedUrls = typeof metadata.endpoints;
+export type FetchedConfig = Extension.ExtensionConfig & {
+	resolvedUrls: ResolvedUrls;
+};
+
+export class ApiDisabledError extends Error {
+	readonly apiName: string;
+	constructor(apiName: string) {
+		super(`[Kiln] API "${apiName}" is disabled`);
+		this.name = "ApiDisabledError";
+		this.apiName = apiName;
+	}
+}
+
+export class NoSessionError extends Error {
+	constructor() {
+		super("[Kiln] No verified session found for user");
+		this.name = "NoSessionError";
+	}
+}
+
+export class ApiHttpError extends Error {
+	readonly status: number;
+	constructor(status: number, statusText: string) {
+		super(`[Kiln] API Error: ${status} ${statusText}`);
+		this.name = "ApiHttpError";
+		this.status = status;
+	}
+}
+
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+
+export function checkRateLimit(key: string, limit: number) {
+	const now = Date.now();
+	let data = rateLimitMap.get(key);
+
+	if (!data || now >= data.resetTime) {
+		data = { count: 0, resetTime: now + 60000 };
+		rateLimitMap.set(key, data);
+	}
+
+	if (data.count >= limit) {
+		throw new Error("Rate limit exceeded. Try again in a minute.");
+	}
+
+	data.count++;
+}
+
+const inflightRequests = new Map<string, Promise<any>>();
+
+export function dedupe<T>(key: string, fn: () => Promise<T>): Promise<T> {
+	const existing = inflightRequests.get(key);
+	if (existing) return existing;
+
+	const promise = fn().finally(() => inflightRequests.delete(key));
+	inflightRequests.set(key, promise);
+	return promise;
+}
+
+export async function safeFetch<T>(
+	url: string,
+	schema?: z.ZodType<T> | null,
+	options: RequestInit = {},
+	blob: boolean = false,
+	allowErrorResponse: boolean = false,
+): Promise<T> {
+	const response = await fetch(url, {
+		...options,
+		credentials: "include",
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+	if (!response.ok && !allowErrorResponse) {
+		throw new ApiHttpError(response.status, response.statusText);
+	}
+
+	if (schema) {
+		const json = await response.json();
+		return schema.parse(json);
+	}
+
+	const text = !blob ? await response.text() : await response.blob();
+	return text as unknown as T;
+}
+
+export async function fetchConfig(): Promise<FetchedConfig> {
+	return dedupe("getConfig", () =>
+		pullCache(
+			"remoteConfig",
+			async () => {
+				const resolvedUrls = {
+					...metadata.endpoints,
+					extension: KILN_API_BASE,
+				};
+				try {
+					const version = browser.runtime.getManifest().version;
+					const result = await safeFetch(
+						`${KILN_API_BASE}config?v=${version}`,
+						Extension.ExtensionConfigSchema,
+						{ method: "GET" },
+					);
+					result.flags = { ...fallbackConfig.flags, ...result.flags };
+					if (
+						getFlag(result.flags, "apis.usePublicApiProxy", false) &&
+						result.apiAvailability.proxy
+					) {
+						resolvedUrls.public = `${KILN_API_BASE}proxy/`;
+					}
+					return { ...result, resolvedUrls };
+				} catch (_err) {
+					console.warn(
+						"[Kiln] Couldn't reach remote config server, using fallback config",
+					);
+					return { ...fallbackConfig, resolvedUrls };
+				}
+			},
+			30 * 60 * 1000,
+			false,
+		),
+	);
+}
+
+export async function withApi(
+	rateKey: string,
+	apiName: ApiTypes,
+): Promise<FetchedConfig> {
+	checkRateLimit(rateKey, 100);
+	const config = await fetchConfig();
+	if (!config.apiAvailability[apiName]) throw new ApiDisabledError(apiName);
+	return config;
+}
+
+export async function handle<T>(fn: () => Promise<T>): Promise<Result<T>> {
+	try {
+		return { ok: true, data: await fn() };
+	} catch (err) {
+		return {
+			ok: false,
+			code:
+				err instanceof ApiDisabledError
+					? "API_DISABLED"
+					: err instanceof NoSessionError
+						? "NO_SESSION"
+						: err instanceof Error && err.message.includes("Rate limit")
+							? "RATE_LIMITED"
+							: "UNKNOWN",
+			message: err instanceof Error ? err.message : String(err),
+		};
+	}
+}
+
+export async function withAuthSession<T>(
+	userId: number,
+	fn: (token: string, config: FetchedConfig) => Promise<T>,
+): Promise<T> {
+	const config = await withApi("kiln_api", "extension");
+	const sessionStore = await apiSessions.getValue();
+	const session = sessionStore.find((s) => s.userId == userId);
+	if (!session?.accessToken) throw new NoSessionError();
+
+	try {
+		return await fn(session.accessToken, config);
+	} catch (err) {
+		if (
+			!(
+				err instanceof ApiHttpError &&
+				(err.status === 401 || err.status === 403)
+			)
+		)
+			throw err;
+		if (!session.refreshToken) throw new NoSessionError();
+
+		const refreshed = await safeFetch(
+			`${config.resolvedUrls.extension}auth/refresh`,
+			Extension.RefreshTokenApi,
+			{
+				method: "POST",
+				headers: { "x-kiln-refresh-token": session.refreshToken },
+			},
+		);
+
+		const updatedStore = sessionStore.map((s) =>
+			s.userId == userId
+				? {
+						...s,
+						accessToken: refreshed.data.accessToken,
+						refreshToken: refreshed.data.refreshToken,
+					}
+				: s,
+		);
+		await apiSessions.setValue(updatedStore);
+
+		return fn(refreshed.data.accessToken, config);
+	}
+}

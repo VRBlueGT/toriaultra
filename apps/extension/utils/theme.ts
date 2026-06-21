@@ -1,0 +1,1047 @@
+// Copyright (C) 2026 Index
+// Kiln - a quality-of-life browser extension for Polytoria.com
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+import metadata from "@/utils/static/metadata.json";
+import type { EffectSlot, EffectType, ThemeEffect } from "./types";
+
+export const EFFECT_SLOTS: Record<
+	EffectSlot,
+	{ label: string; types: EffectType[] }
+> = {
+	global: {
+		label: "Global",
+		types: ["border-radius", "letter-spacing", "text-transform"],
+	},
+	cards: {
+		label: "Cards",
+		types: [
+			"border-radius",
+			"box-shadow",
+			"border-width",
+			"border-color",
+			"border-style",
+			"background-color",
+		],
+	},
+	buttons: {
+		label: "Buttons",
+		types: [
+			"border-radius",
+			"box-shadow",
+			"border-width",
+			"border-color",
+			"border-style",
+			"letter-spacing",
+			"text-transform",
+		],
+	},
+	inputs: {
+		label: "Inputs",
+		types: [
+			"border-radius",
+			"border-width",
+			"border-color",
+			"border-style",
+			"background-color",
+		],
+	},
+	navbar: {
+		label: "Navbar",
+		types: ["box-shadow", "border-width", "border-color", "background-color"],
+	},
+	modals: {
+		label: "Modals",
+		types: ["border-radius", "box-shadow", "border-color", "background-color"],
+	},
+	avatars: {
+		label: "Avatars",
+		types: [
+			"border-color",
+			"border-width",
+			"border-style",
+			"box-shadow",
+			"frame-image",
+			"frame-shape",
+		],
+	},
+};
+
+export const EFFECT_TYPE_CONFIGS: Record<
+	EffectType,
+	{
+		label: string;
+		input:
+			| {
+					kind: "slider";
+					min: number;
+					max: number;
+					step: number;
+					unit: string;
+					default: number;
+			  }
+			| {
+					kind: "select";
+					options: { value: string; label: string }[];
+					default: string;
+			  }
+			| { kind: "color"; default: string }
+			| { kind: "color-alpha"; default: string }
+			| { kind: "url"; default: string };
+	}
+> = {
+	"border-radius": {
+		label: "Border Radius",
+		input: { kind: "slider", min: 0, max: 32, step: 1, unit: "px", default: 8 },
+	},
+	"box-shadow": {
+		label: "Box Shadow",
+		input: {
+			kind: "select",
+			options: [
+				{ value: "none", label: "None" },
+				{ value: "subtle", label: "Subtle" },
+				{ value: "medium", label: "Medium" },
+				{ value: "strong", label: "Strong" },
+			],
+			default: "subtle",
+		},
+	},
+	"border-width": {
+		label: "Border Width",
+		input: { kind: "slider", min: 0, max: 4, step: 1, unit: "px", default: 1 },
+	},
+	"border-color": {
+		label: "Border Color",
+		input: { kind: "color", default: "#ffffff" },
+	},
+	"border-style": {
+		label: "Border Style",
+		input: {
+			kind: "select",
+			options: [
+				{ value: "solid", label: "Solid" },
+				{ value: "dashed", label: "Dashed" },
+				{ value: "dotted", label: "Dotted" },
+				{ value: "none", label: "None" },
+			],
+			default: "solid",
+		},
+	},
+	"background-color": {
+		label: "Background Color",
+		input: { kind: "color-alpha", default: "rgba(26,26,26,1)" },
+	},
+	"letter-spacing": {
+		label: "Letter Spacing",
+		input: {
+			kind: "slider",
+			min: 0,
+			max: 5,
+			step: 0.5,
+			unit: "px",
+			default: 0.5,
+		},
+	},
+	"text-transform": {
+		label: "Text Transform",
+		input: {
+			kind: "select",
+			options: [
+				{ value: "none", label: "None" },
+				{ value: "uppercase", label: "UPPERCASE" },
+				{ value: "capitalize", label: "Capitalize" },
+				{ value: "lowercase", label: "lowercase" },
+			],
+			default: "uppercase",
+		},
+	},
+	"frame-image": {
+		label: "Frame Image",
+		input: { kind: "url", default: "" },
+	},
+	"frame-shape": {
+		label: "Frame Shape",
+		input: {
+			kind: "select",
+			options: [
+				{ value: "round", label: "Round" },
+				{ value: "square", label: "Square" },
+			],
+			default: "round",
+		},
+	},
+};
+
+function buildSingleEffectCSS(effect: ThemeEffect): string {
+	const key = `${effect.slot}:${effect.type}`;
+	switch (key) {
+		case "global:border-radius": {
+			const v = `${effect.value}px`;
+			return `:root { --bs-border-radius: ${v}; --bs-border-radius-sm: calc(${v} * 0.75); --bs-border-radius-lg: calc(${v} * 1.5); --bs-border-radius-xl: calc(${v} * 2); }`;
+		}
+		case "cards:border-radius": {
+			const v = `${effect.value}px`;
+			return `.card { border-radius: ${v} !important; }\n.card-header:first-child { border-top-left-radius: calc(${v} - 1px) !important; border-top-right-radius: calc(${v} - 1px) !important; }\n.card-footer:last-child { border-bottom-left-radius: calc(${v} - 1px) !important; border-bottom-right-radius: calc(${v} - 1px) !important; }`;
+		}
+		case "buttons:border-radius":
+			return `.btn { border-radius: ${effect.value}px !important; }`;
+		case "inputs:border-radius":
+			return `.form-control, .form-select { border-radius: ${effect.value}px !important; }`;
+		case "modals:border-radius":
+			return `.modal-content { border-radius: ${effect.value}px !important; }`;
+
+		case "cards:box-shadow":
+		case "buttons:box-shadow":
+		case "modals:box-shadow":
+		case "navbar:box-shadow": {
+			const shadows: Record<string, string> = {
+				none: "none",
+				subtle: "0 2px 8px rgba(0,0,0,0.3)",
+				medium: "0 4px 16px rgba(0,0,0,0.5)",
+				strong: "0 8px 32px rgba(0,0,0,0.7)",
+			};
+			const shadow = shadows[String(effect.value)] ?? "none";
+			const sel =
+				effect.slot === "cards"
+					? ".card"
+					: effect.slot === "buttons"
+						? ".btn"
+						: effect.slot === "modals"
+							? ".modal-content"
+							: "nav.navbar";
+			return `${sel} { box-shadow: ${shadow} !important; }`;
+		}
+
+		case "cards:border-width":
+			return `.card { border-width: ${effect.value}px !important; }`;
+		case "buttons:border-width":
+			return `.btn { border-width: ${effect.value}px !important; }`;
+		case "inputs:border-width":
+			return `.form-control, .form-select { border-width: ${effect.value}px !important; }`;
+		case "navbar:border-width":
+			return `nav.navbar { border-bottom: ${effect.value}px solid var(--bs-border-color) !important; }`;
+
+		case "cards:border-color":
+			return `.card { border-color: ${effect.value} !important; --bs-card-border-color: ${effect.value}; }`;
+		case "buttons:border-color":
+			return `.btn:not(.btn-primary):not(.btn-outline-primary) { border-color: ${effect.value} !important; }`;
+		case "inputs:border-color":
+			return `.form-control, .form-select { border-color: ${effect.value} !important; }`;
+		case "modals:border-color":
+			return `.modal-content { border-color: ${effect.value} !important; }`;
+		case "navbar:border-color":
+			return `nav.navbar { border-bottom-color: ${effect.value} !important; border-bottom-style: solid !important; }`;
+
+		case "cards:border-style":
+			return `.card { border-style: ${effect.value} !important; }`;
+		case "buttons:border-style":
+			return `.btn { border-style: ${effect.value} !important; }`;
+		case "inputs:border-style":
+			return `.form-control, .form-select { border-style: ${effect.value} !important; }`;
+
+		case "cards:background-color":
+			return `.card { background-color: ${effect.value} !important; --bs-card-bg: ${effect.value}; }`;
+		case "inputs:background-color":
+			return `.form-control, .form-select { background-color: ${effect.value} !important; }\n.form-control:focus { background-color: ${effect.value} !important; }`;
+		case "navbar:background-color":
+			return `.bg-navbar, nav.navbar { background-color: ${effect.value} !important; }`;
+		case "modals:background-color":
+			return `.modal-content { background-color: ${effect.value} !important; }`;
+
+		case "global:letter-spacing":
+			return `body { letter-spacing: ${effect.value}px !important; }`;
+		case "buttons:letter-spacing":
+			return `.btn { letter-spacing: ${effect.value}px !important; }`;
+
+		case "global:text-transform":
+			return `body { text-transform: ${effect.value} !important; }`;
+		case "buttons:text-transform":
+			return `.btn { text-transform: ${effect.value} !important; }`;
+
+		case "avatars:border-color":
+			return `.img-fluid.rounded-circle { border-color: ${effect.value} !important; }`;
+		case "avatars:border-width":
+			return `.img-fluid.rounded-circle { border-width: ${effect.value}px !important; border-style: solid; }`;
+		case "avatars:border-style":
+			return `.img-fluid.rounded-circle { border-style: ${effect.value} !important; }`;
+		case "avatars:box-shadow": {
+			const shadows: Record<string, string> = {
+				none: "none",
+				subtle: "0 0 6px 2px rgba(0,0,0,0.5)",
+				medium: "0 0 12px 4px rgba(0,0,0,0.6)",
+				strong: "0 0 20px 6px rgba(0,0,0,0.75)",
+			};
+			const shadow = shadows[String(effect.value)] ?? "none";
+			return `.img-fluid.rounded-circle { box-shadow: ${shadow} !important; }`;
+		}
+		case "avatars:frame-image": {
+			const url = String(effect.value).trim();
+			if (!url) return "";
+			const safeUrl = JSON.stringify(proxyThemeImageUrl(url));
+			return `a:has(> .img-fluid.rounded-circle) { position: relative !important; display: inline-block !important; line-height: 0; overflow: visible !important; }
+a:has(> .img-fluid.rounded-circle)::after { content: ""; position: absolute; z-index: 2; inset: -5px; pointer-events: none; background: url(${safeUrl}) center / 100% 100% no-repeat; }
+a:has(> .img-fluid.rounded-circle) > .img-fluid.rounded-circle { border: 0 !important; box-shadow: none !important; }
+.friend-circle { position: relative; overflow: visible !important; }
+.friend-circle::after { content: ""; position: absolute; z-index: 2; top: -5px; left: -5px; width: 100px; height: 100px; pointer-events: none; background: url(${safeUrl}) center / 100% 100% no-repeat; }
+.friend-circle > img[width="90"] { display: block !important; position: relative; z-index: 1; width: 76px !important; height: 76px !important; margin: 7px !important; object-fit: cover !important; border: 0 !important; border-radius: 50% !important; box-shadow: none !important; clip-path: none !important; }`;
+		}
+		case "avatars:frame-shape": {
+			if (effect.value === "square") {
+				return `a:has(> .img-fluid.rounded-circle) > .img-fluid.rounded-circle { border-radius: 8px !important; clip-path: inset(0 round 8px) !important; }
+.friend-circle > img[width="90"] { border-radius: 0 !important; clip-path: inset(0 round 8px) !important; }`;
+			}
+			return `a:has(> .img-fluid.rounded-circle) > .img-fluid.rounded-circle { border-radius: 50% !important; clip-path: none !important; }
+.friend-circle > img[width="90"] { border-radius: 50% !important; clip-path: none !important; }`;
+		}
+	}
+	return "";
+}
+
+export function buildEffectsCSS(effects: ThemeEffect[]): string {
+	return effects.map(buildSingleEffectCSS).filter(Boolean).join("\n");
+}
+
+export const FONTS: Record<
+	string,
+	{ name: string; googleFamily?: string; localFile?: string; stack: string }
+> = {
+	default: { name: "Default (Polytoria)", stack: "" },
+	"polytoria-logo": {
+		name: "Polytoria Logo Font",
+		localFile: "fonts/PolytoriaLogoFont-Regular.ttf",
+		stack: "'PolytoriaLogoFont', sans-serif",
+	},
+	inter: {
+		name: "Inter",
+		googleFamily: "Inter:wght@400;500;600;700",
+		stack: "'Inter', sans-serif",
+	},
+	roboto: {
+		name: "Roboto",
+		googleFamily: "Roboto:wght@400;500;700",
+		stack: "'Roboto', sans-serif",
+	},
+	poppins: {
+		name: "Poppins",
+		googleFamily: "Poppins:wght@400;500;600;700",
+		stack: "'Poppins', sans-serif",
+	},
+	nunito: {
+		name: "Nunito",
+		googleFamily: "Nunito:wght@400;600;700",
+		stack: "'Nunito', sans-serif",
+	},
+	raleway: {
+		name: "Raleway",
+		googleFamily: "Raleway:wght@400;500;600;700",
+		stack: "'Raleway', sans-serif",
+	},
+	montserrat: {
+		name: "Montserrat",
+		googleFamily: "Montserrat:wght@400;500;600;700",
+		stack: "'Montserrat', sans-serif",
+	},
+	"space-grotesk": {
+		name: "Space Grotesk",
+		googleFamily: "Space+Grotesk:wght@400;500;600;700",
+		stack: "'Space Grotesk', sans-serif",
+	},
+	"dm-sans": {
+		name: "DM Sans",
+		googleFamily: "DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700",
+		stack: "'DM Sans', sans-serif",
+	},
+	"playfair-display": {
+		name: "Playfair Display",
+		googleFamily: "Playfair+Display:wght@400;600;700",
+		stack: "'Playfair Display', serif",
+	},
+	"jetbrains-mono": {
+		name: "JetBrains Mono",
+		googleFamily: "JetBrains+Mono:wght@400;500;700",
+		stack: "'JetBrains Mono', monospace",
+	},
+};
+
+export const THEME_PRESETS: Record<
+	string,
+	{ name: string; accentColor: string; navbarColor: string }
+> = {
+	ocean: {
+		name: "Ocean",
+		accentColor: "#06b6d4",
+		navbarColor: "#0c4a6e",
+	},
+	sunset: {
+		name: "Sunset",
+		accentColor: "#f97316",
+		navbarColor: "#431407",
+	},
+	forest: {
+		name: "Forest",
+		accentColor: "#22c55e",
+		navbarColor: "#14532d",
+	},
+	nebula: {
+		name: "Nebula",
+		accentColor: "#a855f7",
+		navbarColor: "#3b0764",
+	},
+	rose: {
+		name: "Rose",
+		accentColor: "#f43f5e",
+		navbarColor: "#4c0519",
+	},
+	monochrome: {
+		name: "Mono",
+		accentColor: "#6b7280",
+		navbarColor: "#000000",
+	},
+};
+
+export const COLOR_TOKENS: Record<string, { label: string; apply: (v: string) => string }> = {
+	bodyBg: {
+		label: "Page Background",
+		apply: (v) => `body { background-color: ${v} !important; } :root { --bs-body-bg: ${v}; }`,
+	},
+	bodyText: {
+		label: "Body Text",
+		apply: (v) => `body { color: ${v} !important; } :root { --bs-body-color: ${v}; }`,
+	},
+	cardBg: {
+		label: "Card Background",
+		apply: (v) => `.card { background-color: ${v} !important; --bs-card-bg: ${v}; }`,
+	},
+	linkColor: {
+		label: "Links",
+		apply: (v) => `:root { --bs-link-color: ${v}; --bs-link-hover-color: ${v}; }`,
+	},
+	mutedText: {
+		label: "Muted Text",
+		apply: (v) => `.text-muted { color: ${v} !important; } :root { --bs-secondary-color: ${v}; }`,
+	},
+};
+
+export function proxyThemeImageUrl(url: string): string {
+	const trimmed = url.trim();
+	if (
+		!trimmed ||
+		trimmed.startsWith("data:") ||
+		trimmed.startsWith(metadata.endpoints.extension)
+	)
+		return trimmed;
+	return `${metadata.endpoints.extension}theme/image?url=${encodeURIComponent(trimmed)}`;
+}
+
+export function hexToRgb(hex: string): [number, number, number] {
+	const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+	if (!m) return [0, 0, 0];
+	return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
+}
+
+export function rgbToHex(r: number, g: number, b: number): string {
+	return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+}
+
+export function rgbToHsl(
+	r: number,
+	g: number,
+	b: number,
+): [number, number, number] {
+	r /= 255;
+	g /= 255;
+	b /= 255;
+	const max = Math.max(r, g, b);
+	const min = Math.min(r, g, b);
+	let h = 0;
+	let s = 0;
+	const l = (max + min) / 2;
+	if (max !== min) {
+		const d = max - min;
+		s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+		switch (max) {
+			case r:
+				h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+				break;
+			case g:
+				h = ((b - r) / d + 2) / 6;
+				break;
+			case b:
+				h = ((r - g) / d + 4) / 6;
+				break;
+		}
+	}
+	return [h, s, l];
+}
+
+export function hslToRgb(
+	h: number,
+	s: number,
+	l: number,
+): [number, number, number] {
+	if (s === 0) {
+		const v = Math.round(l * 255);
+		return [v, v, v];
+	}
+	const hue2rgb = (p: number, q: number, t: number) => {
+		if (t < 0) t += 1;
+		if (t > 1) t -= 1;
+		if (t < 1 / 6) return p + (q - p) * 6 * t;
+		if (t < 1 / 2) return q;
+		if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+		return p;
+	};
+	const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+	const p = 2 * l - q;
+	return [
+		Math.round(hue2rgb(p, q, h + 1 / 3) * 255),
+		Math.round(hue2rgb(p, q, h) * 255),
+		Math.round(hue2rgb(p, q, h - 1 / 3) * 255),
+	];
+}
+
+export function darkenHex(hex: string, percent: number): string {
+	const [r, g, b] = hexToRgb(hex);
+	const [h, s, l] = rgbToHsl(r, g, b);
+	const [nr, ng, nb] = hslToRgb(h, s, Math.max(0, l - percent / 100));
+	return rgbToHex(nr, ng, nb);
+}
+
+export function lightenHex(hex: string, percent: number): string {
+	const [r, g, b] = hexToRgb(hex);
+	const [h, s, l] = rgbToHsl(r, g, b);
+	const [nr, ng, nb] = hslToRgb(h, s, Math.min(1, l + percent / 100));
+	return rgbToHex(nr, ng, nb);
+}
+
+/** Returns "#000" or "#fff" depending on which contrasts better against the given background. */
+export function getContrastColor(hex: string): "#000000" | "#ffffff" {
+	const [r, g, b] = hexToRgb(hex);
+	const toLinear = (c: number) => {
+		const s = c / 255;
+		return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+	};
+	const L = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+	return L > 0.179 ? "#000000" : "#ffffff";
+}
+
+export function isValidHex(hex: string): boolean {
+	return /^#[0-9a-f]{6}$/i.test(hex);
+}
+
+/**
+ * Converts a target hex color to a CSS filter string that tints the
+ * Polytoria logo (base color: red, ~HSL 0, 1, 0.5) to approximate it.
+ */
+export function hexToIconFilter(hex: string): string {
+	const [r, g, b] = hexToRgb(hex);
+	const [h, s, l] = rgbToHsl(r, g, b);
+	const hueRotateDeg = Math.round(h * 360);
+	if (s < 0.05) {
+		const brightness = Math.min(10, l / 0.45).toFixed(2);
+		return `saturate(0) brightness(${brightness})`;
+	}
+	const saturate = Math.min(20, s * 1.1).toFixed(2);
+	const brightness = Math.min(5, l / 0.45).toFixed(2);
+	return `hue-rotate(${hueRotateDeg}deg) saturate(${saturate}) brightness(${brightness})`;
+}
+
+export function buildThemeCSS(
+	accentColor: string,
+	navbarColor: string,
+	navbarIconColor?: string,
+): string {
+	const [ar, ag, ab] = hexToRgb(accentColor);
+	const accentHover = darkenHex(accentColor, 10);
+	const accentActive = darkenHex(accentColor, 18);
+	const [ahr, ahg, ahb] = hexToRgb(accentHover);
+	const btnText = getContrastColor(accentColor);
+	const btnHoverText = getContrastColor(accentHover);
+
+	const [nr, ng, nb] = hexToRgb(navbarColor);
+	const cardCap = lightenHex(navbarColor, 3);
+	const cardBg = lightenHex(navbarColor, 7);
+	const dropdownBg = lightenHex(navbarColor, 9);
+	const secondaryBg = lightenHex(navbarColor, 13);
+	const borderColor = lightenHex(navbarColor, 18);
+	const [cr, cg, cb] = hexToRgb(cardBg);
+	const [sr, sg, sb] = hexToRgb(secondaryBg);
+	const [bcr, bcg, bcb] = hexToRgb(borderColor);
+
+	const [accentH] = rgbToHsl(ar, ag, ab);
+	const hueRotate = Math.round(accentH * 360);
+
+	return `
+:root {
+  /* Primary / accent */
+  --bs-primary: ${accentColor};
+  --bs-primary-rgb: ${ar}, ${ag}, ${ab};
+
+  /* Links */
+  --bs-link-color: ${accentColor};
+  --bs-link-color-rgb: ${ar}, ${ag}, ${ab};
+  --bs-link-hover-color: ${accentHover};
+  --bs-link-hover-color-rgb: ${ahr}, ${ahg}, ${ahb};
+
+  /* Page background */
+  --bs-body-bg: ${navbarColor};
+  --bs-body-bg-rgb: ${nr}, ${ng}, ${nb};
+
+  /* Secondary / tertiary surfaces (inputs, hovers, misc) */
+  --bs-secondary-bg: ${secondaryBg};
+  --bs-secondary-bg-rgb: ${sr}, ${sg}, ${sb};
+  --bs-tertiary-bg: ${cardBg};
+  --bs-tertiary-bg-rgb: ${cr}, ${cg}, ${cb};
+
+  /* Borders */
+  --bs-border-color: ${borderColor};
+  --bs-border-color-translucent: ${borderColor}40;
+}
+
+.btn-primary {
+  --bs-btn-color: ${btnText};
+  --bs-btn-bg: ${accentColor};
+  --bs-btn-border-color: ${accentColor};
+  --bs-btn-hover-color: ${btnHoverText};
+  --bs-btn-hover-bg: ${accentHover};
+  --bs-btn-hover-border-color: ${accentHover};
+  --bs-btn-focus-shadow-rgb: ${ar}, ${ag}, ${ab};
+  --bs-btn-active-color: ${btnHoverText};
+  --bs-btn-active-bg: ${accentActive};
+  --bs-btn-active-border-color: ${accentActive};
+  --bs-btn-disabled-color: ${btnText};
+  --bs-btn-disabled-bg: ${accentColor};
+  --bs-btn-disabled-border-color: ${accentColor};
+}
+
+.btn-outline-primary {
+  --bs-btn-color: ${accentColor};
+  --bs-btn-border-color: ${accentColor};
+  --bs-btn-hover-color: ${btnText};
+  --bs-btn-hover-bg: ${accentColor};
+  --bs-btn-hover-border-color: ${accentColor};
+  --bs-btn-focus-shadow-rgb: ${ar}, ${ag}, ${ab};
+  --bs-btn-active-color: ${btnText};
+  --bs-btn-active-bg: ${accentColor};
+  --bs-btn-active-border-color: ${accentColor};
+  --bs-btn-disabled-color: ${accentColor};
+  --bs-btn-disabled-border-color: ${accentColor};
+}
+
+.card {
+  --bs-card-bg: ${cardBg};
+  --bs-card-cap-bg: ${cardCap};
+  --bs-card-border-color: ${borderColor};
+}
+
+.dropdown-menu {
+  --bs-dropdown-bg: ${dropdownBg};
+  --bs-dropdown-link-hover-bg: ${secondaryBg};
+  --bs-dropdown-link-active-bg: ${accentColor};
+}
+
+.nav-pills {
+  --bs-nav-pills-link-active-bg: ${accentColor};
+}
+
+.form-check-input:checked {
+  background-color: ${accentColor} !important;
+  border-color: ${accentColor} !important;
+}
+
+/* Utility classes */
+.bg-primary { background-color: ${accentColor} !important; }
+.text-primary { color: ${accentColor} !important; }
+.border-primary { border-color: ${accentColor} !important; }
+.badge.bg-primary { background-color: ${accentColor} !important; }
+.alert-primary { border-color: ${accentColor} !important; }
+.progress-bar { background-color: ${accentColor} !important; }
+.page-item.active .page-link {
+  background-color: ${accentColor} !important;
+  border-color: ${accentColor} !important;
+}
+
+.bg-navbar { background-color: ${navbarColor} !important; }
+
+/* --bs-dark-rgb is hardcoded to 26,26,26. It drives .bg-dark everywhere —
+   store item cards, input-group-text.bg-dark, etc. Map it to our card surface. */
+:root { --bs-dark-rgb: ${cr}, ${cg}, ${cb}; }
+
+/* .input-group-text uses var(--bs-tertiary-bg) for bg (already covered) but
+   has a hardcoded border */
+.input-group-text { border-color: ${borderColor} !important; }
+
+/* .form-select is fully hardcoded like .form-control */
+.form-select {
+  background-color: ${cardBg} !important;
+  border-color: ${borderColor} !important;
+  color: #f6f6f6 !important;
+}
+.form-select:focus {
+  border-color: ${accentColor} !important;
+  box-shadow: 0 0 0 0.25rem rgba(${ar}, ${ag}, ${ab}, 0.25) !important;
+}
+.form-select:disabled { background-color: ${secondaryBg} !important; }
+
+/* .card-inbox has a hardcoded accent-color left border */
+.card-inbox { border-left-color: ${accentColor} !important; }
+
+/* .trd-items-preview .item circles are hardcoded to #1a1a1a */
+.trd-items-preview .item {
+  background-color: ${cardBg} !important;
+  border-color: ${borderColor} !important;
+}
+
+/* .card-store-search::before uses a hardcoded #299bff gradient overlay.
+   Replace the blue with the accent color; preserve the background image. */
+.card-store-search::before {
+  background: linear-gradient(to right, ${accentColor} 35%, #0000),
+    url(https://cdn.polytoria.com/static/store-bg-DbYLmiES.png) no-repeat center !important;
+  background-size: cover !important;
+}
+
+/* .notifications-popup and items — no background defined in Polytoria's CSS */
+.notifications-popup {
+  background-color: ${cardBg} !important;
+  border: 1px solid ${borderColor} !important;
+}
+.notification-item:hover { background-color: ${secondaryBg} !important; }
+
+/* Store category + filter buttons — not in Polytoria's bundled CSS */
+.store-type-btn,
+.store-accessory-btn {
+  background-color: ${cardBg};
+  border: 1px solid ${borderColor};
+  color: #f6f6f6;
+}
+.store-type-btn:hover,
+.store-type-btn.active,
+.store-accessory-btn:hover,
+.store-accessory-btn.active {
+  background-color: ${accentColor} !important;
+  border-color: ${accentColor} !important;
+  color: ${btnText} !important;
+}
+
+/* Store advanced filters panel — not in Polytoria's bundled CSS */
+.store-advanced-panel {
+  background-color: ${cardBg};
+  border-radius: 8px;
+  padding: 12px;
+}
+.store-filter-label { color: rgba(255, 255, 255, 0.7); }
+
+/* .card-dash has a hardcoded linear-gradient(#383838 → rgba(38,38,38,0.29)).
+   The transparent tail bleeds the themed body-bg through the bottom, making
+   the top half look gray while the bottom appears as the themed color.
+   Replace with a gradient using our derived background scale. */
+.card-dash {
+  background: linear-gradient(180deg, ${cardBg}, ${cardCap}) !important;
+}
+
+/* .dash-ctitle2 is hardcoded to #757575, which is near-invisible on dark
+   themed backgrounds. Bump to a readable muted-white. */
+.dash-ctitle2 { color: rgba(255, 255, 255, 0.5) !important; }
+
+/* .form-control has fully hardcoded background-color and border — no CSS vars.
+   Override both, and style focus to use the accent color. */
+.form-control {
+  background-color: ${cardBg} !important;
+  border-color: ${borderColor} !important;
+  color: #f6f6f6 !important;
+}
+.form-control:focus {
+  background-color: ${secondaryBg} !important;
+  border-color: ${accentColor} !important;
+  box-shadow: 0 0 0 0.25rem rgba(${ar}, ${ag}, ${ab}, 0.25) !important;
+}
+
+/* .xp-card is a Polytoria component with no background defined.
+   Give it the same surface treatment as a card. */
+.xp-card {
+  background-color: ${cardBg};
+  border-radius: 15px;
+}
+
+/* --bs-secondary-rgb drives .border-secondary utility */
+:root { --bs-secondary-rgb: ${bcr}, ${bcg}, ${bcb}; }
+
+/* .progress track — hardcoded in Polytoria */
+.progress { background-color: ${secondaryBg} !important; }
+
+/* Scrollbars (webkit) — affects card-dash card-body and any overflow container */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: ${navbarColor}; }
+::-webkit-scrollbar-thumb { background-color: ${borderColor}; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background-color: ${accentColor}; }
+
+/* SweetAlert2 modals */
+.swal2-popup {
+  background-color: ${cardBg} !important;
+  color: #f6f6f6 !important;
+  border: 1px solid ${borderColor} !important;
+}
+.swal2-title,
+.swal2-html-container { color: #f6f6f6 !important; }
+.swal2-confirm {
+  background-color: ${accentColor} !important;
+  border-color: ${accentColor} !important;
+  color: ${btnText} !important;
+}
+.swal2-cancel { background-color: ${secondaryBg} !important; color: #f6f6f6 !important; }
+.swal2-input,
+.swal2-textarea {
+  background-color: ${secondaryBg} !important;
+  border-color: ${borderColor} !important;
+  color: #f6f6f6 !important;
+}
+
+/* Like/dislike rating buttons — not in Polytoria's bundled CSS */
+.thumbup-button.active,
+.thumbup-button.active i { color: ${accentColor} !important; }
+.rating-divider { background-color: ${borderColor} !important; }
+
+/* Polytoria navbar brand SVG is red (hue 0°); rotate to accent hue (or custom icon color) */
+.navbar-brand img,
+.nav-sidebar-cont a img { filter: ${navbarIconColor ? hexToIconFilter(navbarIconColor) : `hue-rotate(${hueRotate}deg) saturate(1.1)`}; }
+
+/* Form check/switch unchecked state — hardcoded in Polytoria */
+.form-check-input:not(:checked) {
+  background-color: ${secondaryBg} !important;
+  border-color: ${borderColor} !important;
+}
+
+/* .btn-secondary — all vars hardcoded to Bootstrap gray */
+.btn-secondary {
+  --bs-btn-color: #f6f6f6;
+  --bs-btn-bg: ${secondaryBg};
+  --bs-btn-border-color: ${borderColor};
+  --bs-btn-hover-color: #f6f6f6;
+  --bs-btn-hover-bg: ${cardBg};
+  --bs-btn-hover-border-color: ${borderColor};
+  --bs-btn-focus-shadow-rgb: ${bcr}, ${bcg}, ${bcb};
+  --bs-btn-active-color: #f6f6f6;
+  --bs-btn-active-bg: ${cardCap};
+  --bs-btn-active-border-color: ${borderColor};
+  --bs-btn-disabled-color: #f6f6f6;
+  --bs-btn-disabled-bg: ${secondaryBg};
+  --bs-btn-disabled-border-color: ${borderColor};
+}
+
+/* Feed post speech bubbles — not in Polytoria's bundled CSS */
+.user-post-bubble {
+  background-color: ${cardBg} !important;
+  border: 1px solid ${borderColor} !important;
+  color: #f6f6f6 !important;
+}
+.user-post-bubble-0,
+.user-post-bubble-1,
+.user-post-bubble-2 { background-color: ${cardBg} !important; }
+
+/* Kiln modal — hardcoded in extension's specific.css */
+.kiln-extension-modal {
+  background-color: ${cardBg} !important;
+  border-color: ${borderColor} !important;
+}
+
+/* Site footer hardcoded border */
+.footer-container { border-top-color: ${borderColor} !important; }
+
+/* Legacy sidebar — background and button surfaces are hardcoded to #262626 / #3c3c3c */
+.nav-sidebar-cont .nav-sidebar {
+  background-color: ${navbarColor} !important;
+  box-shadow: 5px 0 5px rgba(0, 0, 0, 0.2) !important;
+}
+.nav-sidebar-button {
+  background: ${cardBg} !important;
+  border-color: ${borderColor} !important;
+}
+.nav-sidebar-button:hover {
+  background-color: ${accentColor} !important;
+  border-color: ${accentColor} !important;
+  color: ${btnText} !important;
+}
+.nav-sidebar-upgrade-button,
+.nav-sidebar-upgrade-button:hover {
+  background: linear-gradient(180deg, ${accentColor}, ${accentActive}) !important;
+  background-origin: border-box !important;
+  border-color: rgba(0, 0, 0, 0.25) !important;
+}
+`.trim();
+}
+
+export function applyKilnTheme(
+	colors: {
+		accentColor: string;
+		navbarColor: string;
+		customCss?: string;
+		fontFamily?: string;
+		backgroundImage?: string;
+		backgroundOverlayColor?: string;
+		backgroundOverlayOpacity?: number;
+		effects?: ThemeEffect[];
+		navbarIconColor?: string;
+		cursorUrl?: string;
+		colorTokens?: Record<string, string>;
+	} | null,
+) {
+	document.getElementById("kiln-custom-theme")?.remove();
+	document.getElementById("kiln-custom-bg")?.remove();
+	document.getElementById("kiln-custom-effects")?.remove();
+	document.getElementById("kiln-custom-tokens")?.remove();
+	document.getElementById("kiln-custom-css")?.remove();
+	document.getElementById("kiln-custom-font")?.remove();
+	document.getElementById("kiln-custom-cursor")?.remove();
+	if (!colors) return;
+
+	const font =
+		colors.fontFamily && colors.fontFamily !== "default"
+			? FONTS[colors.fontFamily]
+			: null;
+
+	if (font?.googleFamily) {
+		const link = document.createElement("link");
+		link.id = "kiln-custom-font";
+		link.rel = "stylesheet";
+		link.href = `https://fonts.googleapis.com/css2?family=${font.googleFamily}&display=swap`;
+		document.head.appendChild(link);
+	}
+
+	const themeStyle = document.createElement("style");
+	themeStyle.id = "kiln-custom-theme";
+	let css = buildThemeCSS(
+		colors.accentColor,
+		colors.navbarColor,
+		colors.navbarIconColor,
+	);
+	if (font?.localFile) {
+		const fontUrl = browser.runtime.getURL(font.localFile as any);
+		const fontName = font.stack.match(/^'([^']+)'/)?.[1] ?? "KilnCustomFont";
+		css =
+			`@font-face { font-family: '${fontName}'; src: url('${fontUrl}') format('truetype'); }\n` +
+			css;
+	}
+	if (font?.stack) {
+		css += `\nbody, :root { font-family: ${font.stack} !important; --bs-body-font-family: ${font.stack}; }`;
+	}
+	themeStyle.textContent = css;
+	document.head.appendChild(themeStyle);
+
+	if (colors.backgroundImage?.trim()) {
+		const bgStyle = document.createElement("style");
+		bgStyle.id = "kiln-custom-bg";
+		const imgUrl = `url(${JSON.stringify(proxyThemeImageUrl(colors.backgroundImage))})`;
+		const opacity = colors.backgroundOverlayOpacity ?? 0;
+		const hasOverlay = opacity > 0 && colors.backgroundOverlayColor;
+		let bgImage: string;
+		if (hasOverlay) {
+			const [r, g, b] = hexToRgb(colors.backgroundOverlayColor!);
+			const a = (opacity / 100).toFixed(3);
+			bgImage = `linear-gradient(rgba(${r},${g},${b},${a}),rgba(${r},${g},${b},${a})), ${imgUrl}`;
+		} else {
+			bgImage = imgUrl;
+		}
+		bgStyle.textContent = `body { background-image: ${bgImage} !important; background-size: cover !important; background-attachment: fixed !important; background-position: center !important; background-repeat: no-repeat !important; }`;
+		document.head.appendChild(bgStyle);
+	}
+
+	if (colors.effects?.length) {
+		const effectsStyle = document.createElement("style");
+		effectsStyle.id = "kiln-custom-effects";
+		effectsStyle.textContent = buildEffectsCSS(colors.effects);
+		document.head.appendChild(effectsStyle);
+	}
+
+	if (colors.colorTokens && Object.keys(colors.colorTokens).length > 0) {
+		const tokensStyle = document.createElement("style");
+		tokensStyle.id = "kiln-custom-tokens";
+		tokensStyle.textContent = Object.entries(colors.colorTokens)
+			.filter(([, v]) => v)
+			.map(([k, v]) => COLOR_TOKENS[k]?.apply(v) ?? "")
+			.filter(Boolean)
+			.join("\n");
+		document.head.appendChild(tokensStyle);
+	}
+
+	if (colors.customCss?.trim()) {
+		const customStyle = document.createElement("style");
+		customStyle.id = "kiln-custom-css";
+		customStyle.textContent = colors.customCss;
+		document.head.appendChild(customStyle);
+	}
+
+	if (colors.cursorUrl?.trim()) {
+		const cursorStyle = document.createElement("style");
+		cursorStyle.id = "kiln-custom-cursor";
+		const safeUrl = JSON.stringify(colors.cursorUrl.trim());
+		cursorStyle.textContent = `* { cursor: url(${safeUrl}) 0 0, auto !important; }`;
+		document.head.appendChild(cursorStyle);
+	}
+}
+
+export function extractDominantColor(imageUrl: string): Promise<string> {
+	return new Promise((resolve) => {
+		const img = new Image();
+		img.crossOrigin = "anonymous";
+		img.onload = () => {
+			const SIZE = 64;
+			const canvas = document.createElement("canvas");
+			canvas.width = SIZE;
+			canvas.height = SIZE;
+			const ctx = canvas.getContext("2d")!;
+			ctx.drawImage(img, 0, 0, SIZE, SIZE);
+			const { data } = ctx.getImageData(0, 0, SIZE, SIZE);
+
+			type HSLPixel = { h: number; s: number; l: number };
+			const pixels: HSLPixel[] = [];
+
+			for (let i = 0; i < data.length; i += 4) {
+				const [r, g, b, a] = [data[i], data[i + 1], data[i + 2], data[i + 3]];
+				if (a < 128) continue;
+				const [h, s, l] = rgbToHsl(r, g, b);
+				if (l >= 0.1 && l <= 0.9 && s >= 0.25) {
+					pixels.push({ h, s, l });
+				}
+			}
+
+			if (pixels.length === 0) {
+				resolve("#2563eb");
+				return;
+			}
+
+			pixels.sort((a, b) => b.s - a.s);
+			const top = pixels.slice(0, Math.max(1, Math.floor(pixels.length * 0.3)));
+
+			let sinSum = 0;
+			let cosSum = 0;
+			for (const p of top) {
+				sinSum += Math.sin(p.h * Math.PI * 2);
+				cosSum += Math.cos(p.h * Math.PI * 2);
+			}
+			const avgHue =
+				Math.atan2(sinSum / top.length, cosSum / top.length) / (Math.PI * 2);
+			const hue = avgHue < 0 ? avgHue + 1 : avgHue;
+
+			const avgSat = top.reduce((s, p) => s + p.s, 0) / top.length;
+			const finalSat = Math.min(0.85, Math.max(0.55, avgSat));
+
+			const [r, g, b] = hslToRgb(hue, finalSat, 0.5);
+			resolve(rgbToHex(r, g, b));
+		};
+		img.onerror = () => resolve("#2563eb");
+		img.src = imageUrl;
+	});
+}

@@ -1,0 +1,2317 @@
+{
+	"categories": [
+		{
+			"id": "new",
+			"name": "New",
+			"description": "Recently added features.",
+			"icon": "fas fa-star"
+		},
+		{
+			"id": "utility",
+			"name": "Utility",
+			"description": "Quality-of-life improvements for stuff you do on Polytoria everyday.",
+			"icon": "fas fa-wrench"
+		},
+		{
+			"id": "social",
+			"name": "Social",
+			"description": "Features that improve socializing on Polytoria!",
+			"icon": "fas fa-users"
+		},
+		{
+			"id": "economy",
+			"name": "Economy",
+			"description": "Tools to assist with users interested in the economy and trading.",
+			"icon": "fas fa-coins"
+		},
+		{
+			"id": "expression",
+			"name": "Expression",
+			"description": "Features to help Polytoria feel more like you!",
+			"icon": "fas fa-palette"
+		},
+		{
+			"id": "development",
+			"name": "Development",
+			"description": "Tools to assist world developers.",
+			"icon": "fas fa-code"
+		}
+	],
+	"preferences": [
+		{
+			"name": "Pinned Worlds",
+			"desc": "Pin your favorite worlds to the top of the homepage!",
+			"id": "favoritedPlaces",
+			"defaultEnabled": true,
+			"requiresSync": true,
+			"notes": [
+				{
+					"type": "warning",
+					"text": "Limit of 25 worlds pinned at once."
+				}
+			],
+			"tags": [
+				"expression"
+			]
+		},
+		{
+			"name": "Best Friends",
+			"desc": "Show off who really matters on applicable friend lists.",
+			"id": "bestFriends",
+			"defaultEnabled": true,
+			"tags": [
+				"social"
+			],
+			"hide": true
+		},
+		{
+			"name": "Forum Mentions",
+			"desc": "Get a quick link to the popular person everyone is talking about's profile!",
+			"id": "forumMentions",
+			"defaultEnabled": true,
+			"notes": [
+				{
+					"type": "warning",
+					"text": "Forum mentions do not notify the user or show up as a notification on their account."
+				}
+			],
+			"tags": [
+				"social"
+			]
+		},
+		{
+			"name": "Improved Friend Lists",
+			"desc": "Accept or decline all friend requests with the click of a button! Located on the friend requests page.",
+			"id": "improvedFriendLists",
+			"defaultEnabled": true,
+			"tags": [
+				"social"
+			]
+		},
+		{
+			"name": "IRL Brick Price",
+			"desc": "See the real life currency value along with bricks across the site!",
+			"id": "irlBrickPrice",
+			"defaultEnabled": true,
+			"config": [
+				{
+					"type": "searchable-select",
+					"subsetting": "currency",
+					"default": "USD",
+					"options": [
+						{
+							"value": "1INCH",
+							"label": "1INCH (1INCH)"
+						},
+						{
+							"value": "AAVE",
+							"label": "Aave (AAVE)"
+						},
+						{
+							"value": "ADA",
+							"label": "Cardano (ADA)"
+						},
+						{
+							"value": "AED",
+							"label": "UAE Dirham (AED)"
+						},
+						{
+							"value": "AFN",
+							"label": "Afghan Afghani (AFN)"
+						},
+						{
+							"value": "AGIX",
+							"label": "SingularityNET (AGIX)"
+						},
+						{
+							"value": "AKT",
+							"label": "Akash Network (AKT)"
+						},
+						{
+							"value": "ALGO",
+							"label": "Algorand (ALGO)"
+						},
+						{
+							"value": "ALL",
+							"label": "Albanian Lek (ALL)"
+						},
+						{
+							"value": "AMD",
+							"label": "Armenian Dram (AMD)"
+						},
+						{
+							"value": "AMP",
+							"label": "Amp (AMP)"
+						},
+						{
+							"value": "AOA",
+							"label": "Angolan Kwanza (AOA)"
+						},
+						{
+							"value": "APE",
+							"label": "ApeCoin (APE)"
+						},
+						{
+							"value": "APT",
+							"label": "Aptos (APT)"
+						},
+						{
+							"value": "AR",
+							"label": "Arweave (AR)"
+						},
+						{
+							"value": "ARB",
+							"label": "Arbitrum (ARB)"
+						},
+						{
+							"value": "ARS",
+							"label": "Argentine Peso (ARS)"
+						},
+						{
+							"value": "ATOM",
+							"label": "Cosmos (ATOM)"
+						},
+						{
+							"value": "AUD",
+							"label": "Australian Dollar (AUD)"
+						},
+						{
+							"value": "AVAX",
+							"label": "Avalanche (AVAX)"
+						},
+						{
+							"value": "AWG",
+							"label": "Aruban Florin (AWG)"
+						},
+						{
+							"value": "AXS",
+							"label": "Axie Infinity (AXS)"
+						},
+						{
+							"value": "AZN",
+							"label": "Azerbaijani Manat (AZN)"
+						},
+						{
+							"value": "BAKE",
+							"label": "BakeryToken (BAKE)"
+						},
+						{
+							"value": "BAM",
+							"label": "Bosnia-Herzegovina Mark (BAM)"
+						},
+						{
+							"value": "BAT",
+							"label": "Basic Attention Token (BAT)"
+						},
+						{
+							"value": "BBD",
+							"label": "Barbadian Dollar (BBD)"
+						},
+						{
+							"value": "BCH",
+							"label": "Bitcoin Cash (BCH)"
+						},
+						{
+							"value": "BDT",
+							"label": "Bangladeshi Taka (BDT)"
+						},
+						{
+							"value": "BHD",
+							"label": "Bahraini Dinar (BHD)"
+						},
+						{
+							"value": "BIF",
+							"label": "Burundian Franc (BIF)"
+						},
+						{
+							"value": "BMD",
+							"label": "Bermudian Dollar (BMD)"
+						},
+						{
+							"value": "BNB",
+							"label": "BNB (BNB)"
+						},
+						{
+							"value": "BND",
+							"label": "Brunei Dollar (BND)"
+						},
+						{
+							"value": "BOB",
+							"label": "Bolivian Boliviano (BOB)"
+						},
+						{
+							"value": "BRL",
+							"label": "Brazilian Real (BRL)"
+						},
+						{
+							"value": "BSD",
+							"label": "Bahamian Dollar (BSD)"
+						},
+						{
+							"value": "BSV",
+							"label": "Bitcoin SV (BSV)"
+						},
+						{
+							"value": "BSW",
+							"label": "Biswap (BSW)"
+						},
+						{
+							"value": "BTC",
+							"label": "Bitcoin (BTC)"
+						},
+						{
+							"value": "BTG",
+							"label": "Bitcoin Gold (BTG)"
+						},
+						{
+							"value": "BTN",
+							"label": "Bhutanese Ngultrum (BTN)"
+						},
+						{
+							"value": "BTT",
+							"label": "BitTorrent (BTT)"
+						},
+						{
+							"value": "BUSD",
+							"label": "Binance USD (BUSD)"
+						},
+						{
+							"value": "BWP",
+							"label": "Botswanan Pula (BWP)"
+						},
+						{
+							"value": "BYN",
+							"label": "Belarusian Ruble (BYN)"
+						},
+						{
+							"value": "BYR",
+							"label": "Belarusian Ruble (Legacy) (BYR)"
+						},
+						{
+							"value": "BZD",
+							"label": "Belize Dollar (BZD)"
+						},
+						{
+							"value": "CAD",
+							"label": "Canadian Dollar (CAD)"
+						},
+						{
+							"value": "CAKE",
+							"label": "PancakeSwap (CAKE)"
+						},
+						{
+							"value": "CDF",
+							"label": "Congolese Franc (CDF)"
+						},
+						{
+							"value": "CELO",
+							"label": "Celo (CELO)"
+						},
+						{
+							"value": "CFX",
+							"label": "Conflux (CFX)"
+						},
+						{
+							"value": "CHF",
+							"label": "Swiss Franc (CHF)"
+						},
+						{
+							"value": "CHZ",
+							"label": "Chiliz (CHZ)"
+						},
+						{
+							"value": "CLP",
+							"label": "Chilean Peso (CLP)"
+						},
+						{
+							"value": "CNH",
+							"label": "Chinese Yuan (Offshore) (CNH)"
+						},
+						{
+							"value": "CNY",
+							"label": "Chinese Yuan (CNY)"
+						},
+						{
+							"value": "COMP",
+							"label": "Compound (COMP)"
+						},
+						{
+							"value": "COP",
+							"label": "Colombian Peso (COP)"
+						},
+						{
+							"value": "CRC",
+							"label": "Costa Rican Colón (CRC)"
+						},
+						{
+							"value": "CRO",
+							"label": "Cronos (CRO)"
+						},
+						{
+							"value": "CRV",
+							"label": "Curve DAO Token (CRV)"
+						},
+						{
+							"value": "CSPR",
+							"label": "Casper (CSPR)"
+						},
+						{
+							"value": "CUC",
+							"label": "Cuban Convertible Peso (CUC)"
+						},
+						{
+							"value": "CUP",
+							"label": "Cuban Peso (CUP)"
+						},
+						{
+							"value": "CVE",
+							"label": "Cape Verdean Escudo (CVE)"
+						},
+						{
+							"value": "CVX",
+							"label": "Convex Finance (CVX)"
+						},
+						{
+							"value": "CZK",
+							"label": "Czech Koruna (CZK)"
+						},
+						{
+							"value": "DAI",
+							"label": "Dai (DAI)"
+						},
+						{
+							"value": "DASH",
+							"label": "Dash (DASH)"
+						},
+						{
+							"value": "DCR",
+							"label": "Decred (DCR)"
+						},
+						{
+							"value": "DFI",
+							"label": "DeFiChain (DFI)"
+						},
+						{
+							"value": "DJF",
+							"label": "Djiboutian Franc (DJF)"
+						},
+						{
+							"value": "DKK",
+							"label": "Danish Krone (DKK)"
+						},
+						{
+							"value": "DOGE",
+							"label": "Dogecoin (DOGE)"
+						},
+						{
+							"value": "DOP",
+							"label": "Dominican Peso (DOP)"
+						},
+						{
+							"value": "DOT",
+							"label": "Polkadot (DOT)"
+						},
+						{
+							"value": "DYDX",
+							"label": "dYdX (DYDX)"
+						},
+						{
+							"value": "DZD",
+							"label": "Algerian Dinar (DZD)"
+						},
+						{
+							"value": "EGLD",
+							"label": "MultiversX (EGLD)"
+						},
+						{
+							"value": "EGP",
+							"label": "Egyptian Pound (EGP)"
+						},
+						{
+							"value": "ENJ",
+							"label": "Enjin Coin (ENJ)"
+						},
+						{
+							"value": "EOS",
+							"label": "EOS (EOS)"
+						},
+						{
+							"value": "ERN",
+							"label": "Eritrean Nakfa (ERN)"
+						},
+						{
+							"value": "ETB",
+							"label": "Ethiopian Birr (ETB)"
+						},
+						{
+							"value": "ETC",
+							"label": "Ethereum Classic (ETC)"
+						},
+						{
+							"value": "ETH",
+							"label": "Ethereum (ETH)"
+						},
+						{
+							"value": "EUR",
+							"label": "Euro (EUR)"
+						},
+						{
+							"value": "FEI",
+							"label": "Fei USD (FEI)"
+						},
+						{
+							"value": "FIL",
+							"label": "Filecoin (FIL)"
+						},
+						{
+							"value": "FJD",
+							"label": "Fijian Dollar (FJD)"
+						},
+						{
+							"value": "FKP",
+							"label": "Falkland Islands Pound (FKP)"
+						},
+						{
+							"value": "FLOW",
+							"label": "Flow (FLOW)"
+						},
+						{
+							"value": "FLR",
+							"label": "Flare (FLR)"
+						},
+						{
+							"value": "FRAX",
+							"label": "Frax (FRAX)"
+						},
+						{
+							"value": "FTT",
+							"label": "FTX Token (FTT)"
+						},
+						{
+							"value": "GALA",
+							"label": "Gala (GALA)"
+						},
+						{
+							"value": "GBP",
+							"label": "British Pound (GBP)"
+						},
+						{
+							"value": "GEL",
+							"label": "Georgian Lari (GEL)"
+						},
+						{
+							"value": "GGP",
+							"label": "Guernsey Pound (GGP)"
+						},
+						{
+							"value": "GHS",
+							"label": "Ghanaian Cedi (GHS)"
+						},
+						{
+							"value": "GIP",
+							"label": "Gibraltar Pound (GIP)"
+						},
+						{
+							"value": "GMD",
+							"label": "Gambian Dalasi (GMD)"
+						},
+						{
+							"value": "GMX",
+							"label": "GMX (GMX)"
+						},
+						{
+							"value": "GNF",
+							"label": "Guinean Franc (GNF)"
+						},
+						{
+							"value": "GNO",
+							"label": "Gnosis (GNO)"
+						},
+						{
+							"value": "GRT",
+							"label": "The Graph (GRT)"
+						},
+						{
+							"value": "GT",
+							"label": "GateToken (GT)"
+						},
+						{
+							"value": "GTQ",
+							"label": "Guatemalan Quetzal (GTQ)"
+						},
+						{
+							"value": "GUSD",
+							"label": "Gemini Dollar (GUSD)"
+						},
+						{
+							"value": "GYD",
+							"label": "Guyanese Dollar (GYD)"
+						},
+						{
+							"value": "HBAR",
+							"label": "Hedera (HBAR)"
+						},
+						{
+							"value": "HKD",
+							"label": "Hong Kong Dollar (HKD)"
+						},
+						{
+							"value": "HNL",
+							"label": "Honduran Lempira (HNL)"
+						},
+						{
+							"value": "HNT",
+							"label": "Helium (HNT)"
+						},
+						{
+							"value": "HOT",
+							"label": "Holo (HOT)"
+						},
+						{
+							"value": "HRK",
+							"label": "Croatian Kuna (HRK)"
+						},
+						{
+							"value": "HT",
+							"label": "Huobi Token (HT)"
+						},
+						{
+							"value": "HTG",
+							"label": "Haitian Gourde (HTG)"
+						},
+						{
+							"value": "HUF",
+							"label": "Hungarian Forint (HUF)"
+						},
+						{
+							"value": "ICP",
+							"label": "Internet Computer (ICP)"
+						},
+						{
+							"value": "IDR",
+							"label": "Indonesian Rupiah (IDR)"
+						},
+						{
+							"value": "ILS",
+							"label": "Israeli New Shekel (ILS)"
+						},
+						{
+							"value": "IMP",
+							"label": "Isle of Man Pound (IMP)"
+						},
+						{
+							"value": "IMX",
+							"label": "Immutable X (IMX)"
+						},
+						{
+							"value": "INJ",
+							"label": "Injective (INJ)"
+						},
+						{
+							"value": "INR",
+							"label": "Indian Rupee (INR)"
+						},
+						{
+							"value": "IQD",
+							"label": "Iraqi Dinar (IQD)"
+						},
+						{
+							"value": "IRR",
+							"label": "Iranian Rial (IRR)"
+						},
+						{
+							"value": "ISK",
+							"label": "Icelandic Króna (ISK)"
+						},
+						{
+							"value": "JEP",
+							"label": "Jersey Pound (JEP)"
+						},
+						{
+							"value": "JMD",
+							"label": "Jamaican Dollar (JMD)"
+						},
+						{
+							"value": "JOD",
+							"label": "Jordanian Dinar (JOD)"
+						},
+						{
+							"value": "JPY",
+							"label": "Japanese Yen (JPY)"
+						},
+						{
+							"value": "KAS",
+							"label": "Kaspa (KAS)"
+						},
+						{
+							"value": "KAVA",
+							"label": "Kava (KAVA)"
+						},
+						{
+							"value": "KCS",
+							"label": "KuCoin Token (KCS)"
+						},
+						{
+							"value": "KDA",
+							"label": "Kadena (KDA)"
+						},
+						{
+							"value": "KES",
+							"label": "Kenyan Shilling (KES)"
+						},
+						{
+							"value": "KGS",
+							"label": "Kyrgyzstani Som (KGS)"
+						},
+						{
+							"value": "KHR",
+							"label": "Cambodian Riel (KHR)"
+						},
+						{
+							"value": "KLAY",
+							"label": "Klaytn (KLAY)"
+						},
+						{
+							"value": "KMF",
+							"label": "Comorian Franc (KMF)"
+						},
+						{
+							"value": "KNC",
+							"label": "Kyber Network Crystal (KNC)"
+						},
+						{
+							"value": "KPW",
+							"label": "North Korean Won (KPW)"
+						},
+						{
+							"value": "KRW",
+							"label": "South Korean Won (KRW)"
+						},
+						{
+							"value": "KSM",
+							"label": "Kusama (KSM)"
+						},
+						{
+							"value": "KWD",
+							"label": "Kuwaiti Dinar (KWD)"
+						},
+						{
+							"value": "KYD",
+							"label": "Cayman Islands Dollar (KYD)"
+						},
+						{
+							"value": "KZT",
+							"label": "Kazakhstani Tenge (KZT)"
+						},
+						{
+							"value": "LAK",
+							"label": "Laotian Kip (LAK)"
+						},
+						{
+							"value": "LBP",
+							"label": "Lebanese Pound (LBP)"
+						},
+						{
+							"value": "LDO",
+							"label": "Lido DAO (LDO)"
+						},
+						{
+							"value": "LEO",
+							"label": "UNUS SED LEO (LEO)"
+						},
+						{
+							"value": "LINK",
+							"label": "Chainlink (LINK)"
+						},
+						{
+							"value": "LKR",
+							"label": "Sri Lankan Rupee (LKR)"
+						},
+						{
+							"value": "LRC",
+							"label": "Loopring (LRC)"
+						},
+						{
+							"value": "LRD",
+							"label": "Liberian Dollar (LRD)"
+						},
+						{
+							"value": "LSL",
+							"label": "Lesotho Loti (LSL)"
+						},
+						{
+							"value": "LTC",
+							"label": "Litecoin (LTC)"
+						},
+						{
+							"value": "LTL",
+							"label": "Lithuanian Litas (LTL)"
+						},
+						{
+							"value": "LUNA",
+							"label": "Terra Luna (LUNA)"
+						},
+						{
+							"value": "LUNC",
+							"label": "Terra Classic (LUNC)"
+						},
+						{
+							"value": "LVL",
+							"label": "Latvian Lats (LVL)"
+						},
+						{
+							"value": "LYD",
+							"label": "Libyan Dinar (LYD)"
+						},
+						{
+							"value": "MAD",
+							"label": "Moroccan Dirham (MAD)"
+						},
+						{
+							"value": "MANA",
+							"label": "Decentraland (MANA)"
+						},
+						{
+							"value": "MBX",
+							"label": "MARBLEX (MBX)"
+						},
+						{
+							"value": "MDL",
+							"label": "Moldovan Leu (MDL)"
+						},
+						{
+							"value": "MGA",
+							"label": "Malagasy Ariary (MGA)"
+						},
+						{
+							"value": "MINA",
+							"label": "Mina Protocol (MINA)"
+						},
+						{
+							"value": "MKD",
+							"label": "Macedonian Denar (MKD)"
+						},
+						{
+							"value": "MKR",
+							"label": "Maker (MKR)"
+						},
+						{
+							"value": "MMK",
+							"label": "Myanmar Kyat (MMK)"
+						},
+						{
+							"value": "MNT",
+							"label": "Mongolian Tögrög (MNT)"
+						},
+						{
+							"value": "MOP",
+							"label": "Macanese Pataca (MOP)"
+						},
+						{
+							"value": "MRU",
+							"label": "Mauritanian Ouguiya (MRU)"
+						},
+						{
+							"value": "MUR",
+							"label": "Mauritian Rupee (MUR)"
+						},
+						{
+							"value": "MVR",
+							"label": "Maldivian Rufiyaa (MVR)"
+						},
+						{
+							"value": "MWK",
+							"label": "Malawian Kwacha (MWK)"
+						},
+						{
+							"value": "MXN",
+							"label": "Mexican Peso (MXN)"
+						},
+						{
+							"value": "MYR",
+							"label": "Malaysian Ringgit (MYR)"
+						},
+						{
+							"value": "MZN",
+							"label": "Mozambican Metical (MZN)"
+						},
+						{
+							"value": "NAD",
+							"label": "Namibian Dollar (NAD)"
+						},
+						{
+							"value": "NEAR",
+							"label": "NEAR Protocol (NEAR)"
+						},
+						{
+							"value": "NEO",
+							"label": "NEO (NEO)"
+						},
+						{
+							"value": "NEXO",
+							"label": "Nexo (NEXO)"
+						},
+						{
+							"value": "NFT",
+							"label": "APENFT (NFT)"
+						},
+						{
+							"value": "NGN",
+							"label": "Nigerian Naira (NGN)"
+						},
+						{
+							"value": "NIO",
+							"label": "Nicaraguan Córdoba (NIO)"
+						},
+						{
+							"value": "NOK",
+							"label": "Norwegian Krone (NOK)"
+						},
+						{
+							"value": "NPR",
+							"label": "Nepalese Rupee (NPR)"
+						},
+						{
+							"value": "NZD",
+							"label": "New Zealand Dollar (NZD)"
+						},
+						{
+							"value": "OKB",
+							"label": "OKB (OKB)"
+						},
+						{
+							"value": "OMR",
+							"label": "Omani Rial (OMR)"
+						},
+						{
+							"value": "ONE",
+							"label": "Harmony (ONE)"
+						},
+						{
+							"value": "OP",
+							"label": "Optimism (OP)"
+						},
+						{
+							"value": "ORDI",
+							"label": "Ordinals (ORDI)"
+						},
+						{
+							"value": "PAB",
+							"label": "Panamanian Balboa (PAB)"
+						},
+						{
+							"value": "PAXG",
+							"label": "PAX Gold (PAXG)"
+						},
+						{
+							"value": "PEN",
+							"label": "Peruvian Sol (PEN)"
+						},
+						{
+							"value": "PEPE",
+							"label": "Pepe (PEPE)"
+						},
+						{
+							"value": "PGK",
+							"label": "Papua New Guinean Kina (PGK)"
+						},
+						{
+							"value": "PHP",
+							"label": "Philippine Peso (PHP)"
+						},
+						{
+							"value": "PI",
+							"label": "Pi Network (PI)"
+						},
+						{
+							"value": "PKR",
+							"label": "Pakistani Rupee (PKR)"
+						},
+						{
+							"value": "PLN",
+							"label": "Polish Złoty (PLN)"
+						},
+						{
+							"value": "POL",
+							"label": "POL (POL)"
+						},
+						{
+							"value": "PYG",
+							"label": "Paraguayan Guaraní (PYG)"
+						},
+						{
+							"value": "QAR",
+							"label": "Qatari Rial (QAR)"
+						},
+						{
+							"value": "QNT",
+							"label": "Quant (QNT)"
+						},
+						{
+							"value": "QTUM",
+							"label": "Qtum (QTUM)"
+						},
+						{
+							"value": "RON",
+							"label": "Romanian Leu (RON)"
+						},
+						{
+							"value": "RPL",
+							"label": "Rocket Pool (RPL)"
+						},
+						{
+							"value": "RSD",
+							"label": "Serbian Dinar (RSD)"
+						},
+						{
+							"value": "RUB",
+							"label": "Russian Ruble (RUB)"
+						},
+						{
+							"value": "RUNE",
+							"label": "THORChain (RUNE)"
+						},
+						{
+							"value": "RVN",
+							"label": "Ravencoin (RVN)"
+						},
+						{
+							"value": "RWF",
+							"label": "Rwandan Franc (RWF)"
+						},
+						{
+							"value": "SAND",
+							"label": "The Sandbox (SAND)"
+						},
+						{
+							"value": "SAR",
+							"label": "Saudi Riyal (SAR)"
+						},
+						{
+							"value": "SBD",
+							"label": "Solomon Islands Dollar (SBD)"
+						},
+						{
+							"value": "SCR",
+							"label": "Seychellois Rupee (SCR)"
+						},
+						{
+							"value": "SDG",
+							"label": "Sudanese Pound (SDG)"
+						},
+						{
+							"value": "SEK",
+							"label": "Swedish Krona (SEK)"
+						},
+						{
+							"value": "SGD",
+							"label": "Singapore Dollar (SGD)"
+						},
+						{
+							"value": "SHIB",
+							"label": "Shiba Inu (SHIB)"
+						},
+						{
+							"value": "SLE",
+							"label": "Sierra Leonean Leone (SLE)"
+						},
+						{
+							"value": "SNX",
+							"label": "Synthetix (SNX)"
+						},
+						{
+							"value": "SOL",
+							"label": "Solana (SOL)"
+						},
+						{
+							"value": "SOS",
+							"label": "Somali Shilling (SOS)"
+						},
+						{
+							"value": "SRD",
+							"label": "Surinamese Dollar (SRD)"
+						},
+						{
+							"value": "STD",
+							"label": "São Tomé Dobra (Legacy) (STD)"
+						},
+						{
+							"value": "STN",
+							"label": "São Tomé Dobra (STN)"
+						},
+						{
+							"value": "STX",
+							"label": "Stacks (STX)"
+						},
+						{
+							"value": "SUI",
+							"label": "Sui (SUI)"
+						},
+						{
+							"value": "SVC",
+							"label": "Salvadoran Colón (SVC)"
+						},
+						{
+							"value": "SYP",
+							"label": "Syrian Pound (SYP)"
+						},
+						{
+							"value": "SZL",
+							"label": "Swazi Lilangeni (SZL)"
+						},
+						{
+							"value": "THB",
+							"label": "Thai Baht (THB)"
+						},
+						{
+							"value": "THETA",
+							"label": "Theta Network (THETA)"
+						},
+						{
+							"value": "TJS",
+							"label": "Tajikistani Somoni (TJS)"
+						},
+						{
+							"value": "TMT",
+							"label": "Turkmenistani Manat (TMT)"
+						},
+						{
+							"value": "TND",
+							"label": "Tunisian Dinar (TND)"
+						},
+						{
+							"value": "TON",
+							"label": "Toncoin (TON)"
+						},
+						{
+							"value": "TRX",
+							"label": "TRON (TRX)"
+						},
+						{
+							"value": "TRY",
+							"label": "Turkish Lira (TRY)"
+						},
+						{
+							"value": "TTD",
+							"label": "Trinidad & Tobago Dollar (TTD)"
+						},
+						{
+							"value": "TUSD",
+							"label": "TrueUSD (TUSD)"
+						},
+						{
+							"value": "TWD",
+							"label": "New Taiwan Dollar (TWD)"
+						},
+						{
+							"value": "TWT",
+							"label": "Trust Wallet Token (TWT)"
+						},
+						{
+							"value": "TZS",
+							"label": "Tanzanian Shilling (TZS)"
+						},
+						{
+							"value": "UAH",
+							"label": "Ukrainian Hryvnia (UAH)"
+						},
+						{
+							"value": "UGX",
+							"label": "Ugandan Shilling (UGX)"
+						},
+						{
+							"value": "UNI",
+							"label": "Uniswap (UNI)"
+						},
+						{
+							"value": "USD",
+							"label": "United States Dollar (USD)"
+						},
+						{
+							"value": "USDC",
+							"label": "USD Coin (USDC)"
+						},
+						{
+							"value": "USDD",
+							"label": "USDD (USDD)"
+						},
+						{
+							"value": "USDP",
+							"label": "Pax Dollar (USDP)"
+						},
+						{
+							"value": "USDT",
+							"label": "Tether (USDT)"
+						},
+						{
+							"value": "UYU",
+							"label": "Uruguayan Peso (UYU)"
+						},
+						{
+							"value": "UZS",
+							"label": "Uzbekistani Som (UZS)"
+						},
+						{
+							"value": "VES",
+							"label": "Venezuelan Bolívar (VES)"
+						},
+						{
+							"value": "VET",
+							"label": "VeChain (VET)"
+						},
+						{
+							"value": "VND",
+							"label": "Vietnamese Đồng (VND)"
+						},
+						{
+							"value": "VUV",
+							"label": "Vanuatu Vatu (VUV)"
+						},
+						{
+							"value": "WAVES",
+							"label": "Waves (WAVES)"
+						},
+						{
+							"value": "WEMIX",
+							"label": "WEMIX (WEMIX)"
+						},
+						{
+							"value": "WOO",
+							"label": "WOO Network (WOO)"
+						},
+						{
+							"value": "WST",
+							"label": "Samoan Tālā (WST)"
+						},
+						{
+							"value": "XAF",
+							"label": "Central African CFA Franc (XAF)"
+						},
+						{
+							"value": "XAG",
+							"label": "Silver Ounce (XAG)"
+						},
+						{
+							"value": "XAU",
+							"label": "Gold Ounce (XAU)"
+						},
+						{
+							"value": "XAUT",
+							"label": "Tether Gold (XAUT)"
+						},
+						{
+							"value": "XCD",
+							"label": "East Caribbean Dollar (XCD)"
+						},
+						{
+							"value": "XCG",
+							"label": "Caribbean Guilder (XCG)"
+						},
+						{
+							"value": "XCH",
+							"label": "Chia (XCH)"
+						},
+						{
+							"value": "XDC",
+							"label": "XDC Network (XDC)"
+						},
+						{
+							"value": "XDR",
+							"label": "Special Drawing Rights (XDR)"
+						},
+						{
+							"value": "XEC",
+							"label": "eCash (XEC)"
+						},
+						{
+							"value": "XEM",
+							"label": "NEM (XEM)"
+						},
+						{
+							"value": "XLM",
+							"label": "Stellar (XLM)"
+						},
+						{
+							"value": "XMR",
+							"label": "Monero (XMR)"
+						},
+						{
+							"value": "XOF",
+							"label": "West African CFA Franc (XOF)"
+						},
+						{
+							"value": "XPF",
+							"label": "CFP Franc (XPF)"
+						},
+						{
+							"value": "XRP",
+							"label": "XRP (XRP)"
+						},
+						{
+							"value": "XTZ",
+							"label": "Tezos (XTZ)"
+						},
+						{
+							"value": "YER",
+							"label": "Yemeni Rial (YER)"
+						},
+						{
+							"value": "ZAR",
+							"label": "South African Rand (ZAR)"
+						},
+						{
+							"value": "ZEC",
+							"label": "Zcash (ZEC)"
+						},
+						{
+							"value": "ZIL",
+							"label": "Zilliqa (ZIL)"
+						},
+						{
+							"value": "ZMK",
+							"label": "Zambian Kwacha (Legacy) (ZMK)"
+						},
+						{
+							"value": "ZMW",
+							"label": "Zambian Kwacha (ZMW)"
+						},
+						{
+							"value": "ZWL",
+							"label": "Zimbabwean Dollar (ZWL)"
+						}
+					]
+				}
+			],
+			"notes": [
+				{
+					"type": "warning",
+					"text": "All prices are purely estimations and will not be 100% accurate."
+				}
+			],
+			"tags": [
+				"economy"
+			]
+		},
+		{
+			"name": "Hide Notification Badges",
+			"desc": "Hide the annoying red circles on site navigation!",
+			"id": "hideNotificationBadges",
+			"tags": [
+				"social"
+			]
+		},
+		{
+			"name": "Store \"OWNED\" Tags",
+			"desc": "Quickly see if you own the item at a glance with a little tag in the top left corner of item cards on the main store page!",
+			"id": "storeOwnedTags",
+			"defaultEnabled": true,
+			"notes": [
+				{
+					"type": "info",
+					"text": "If the star is yellow/orange, that means the item is a collectible and hovering on the star will show your serial."
+				}
+			],
+			"tags": [
+				"economy"
+			]
+		},
+		{
+			"name": "More Search Filters",
+			"desc": "Easily find what you're looking for with more search filters side-wide!",
+			"id": "searchFilters",
+			"notes": [
+				{
+					"type": "info",
+					"text": "This does not affect the main search bar located in the navbar."
+				},
+				{
+					"type": "warning",
+					"text": "This currently only has a \"Creator\" username filter on the forum search page, more search filters are yet to come."
+				}
+			],
+			"tags": [
+				"utility"
+			],
+			"hide": true
+		},
+		{
+			"name": "Free Membership Themes",
+			"desc": "Ever want the fancy membership themes for completely free? Well now you can apply them on the site-wide navigation without paying a dime!",
+			"id": "membershipThemes",
+			"config": [
+				{
+					"type": "select",
+					"subsetting": "themeId",
+					"default": "plus",
+					"options": [
+						{
+							"value": "plus",
+							"label": "Plus"
+						},
+						{
+							"value": "plusdx",
+							"label": "Plus Deluxe"
+						}
+					]
+				}
+			],
+			"tags": [
+				"expression"
+			]
+		},
+		{
+			"name": "Multi-Cancel Outbound Trades",
+			"desc": "Quickly cancel several out-bound trades (trades that you have sent) all at once!",
+			"id": "multiCancelOutTrades",
+			"notes": [
+				{
+					"type": "warning",
+					"text": "You can only cancel up to 10 trades at once."
+				}
+			],
+			"tags": [
+				"economy"
+			],
+			"hide": true
+		},
+		{
+			"name": "Modify Navbar",
+			"desc": "Customize the navbar to your liking!",
+			"id": "modifyNav",
+			"tags": [
+				"expression"
+			],
+			"hide": true
+		},
+		{
+			"name": "Show Outfit Cost on Profiles",
+			"desc": "Quickly see how many bricks a user spent on their character! Located next to the \"Avatar\" text at the top of profiles.",
+			"id": "outfitCost",
+			"defaultEnabled": true,
+			"tags": [
+				"economy"
+			]
+		},
+		{
+			"name": "Show Approximate World Revenue",
+			"desc": "Quickly see how many bricks a user has gained from one of their worlds! Located under the \"Info\" section of a world's page.",
+			"id": "placeRevenue",
+			"defaultEnabled": true,
+			"notes": [
+				{
+					"type": "warning",
+					"text": "Gamepass revenue is calculated assuming the price hasn't changed and all users that bought the gamepass, bought it at the same price that is at the time of calculating."
+				}
+			],
+			"tags": [
+				"economy"
+			]
+		},
+		{
+			"name": "Show \"Owners\" instead of \"Sales\"",
+			"desc": "Replace the \"Sales\" statistic with the \"Owners\" statistic if the item has 0 sales (most likely meaning it is an item awarded by staff).",
+			"id": "accurateOwners",
+			"defaultEnabled": true,
+			"tags": [
+				"economy"
+			]
+		},
+		{
+			"name": "Collectibles' Hoarders List",
+			"desc": "List all the users that have more than 1 copy of a collectible!",
+			"id": "hoardersList",
+			"defaultEnabled": true,
+			"notes": [
+				{
+					"type": "warning",
+					"text": "The hoarders list is limited to 2,000 number of copies to reduce the chance of ratelimiting and improve how fast the list loads."
+				}
+			],
+			"config": [
+				{
+					"type": "check",
+					"subsetting": "showAvatars",
+					"label": "Show Character Icons",
+					"default": false
+				},
+				{
+					"type": "select",
+					"subsetting": "minCopies",
+					"default": "2",
+					"options": [
+						{
+							"value": "2",
+							"label": "Min. 2+ Copies"
+						},
+						{
+							"value": "3",
+							"label": "Min. 3+ Copies"
+						},
+						{
+							"value": "5",
+							"label": "Min. 5+ Copies"
+						},
+						{
+							"value": "10",
+							"label": "Min. 10+ Copies"
+						},
+						{
+							"value": "15",
+							"label": "Min. 15+ Copies"
+						},
+						{
+							"value": "35",
+							"label": "Min. 35+ Copies"
+						}
+					]
+				}
+			],
+			"tags": [
+				"economy"
+			]
+		},
+		{
+			"name": "Improved Achievements",
+			"desc": "Quality-of-life improvements to achievements on world pages.",
+			"id": "improvedAchievements",
+			"defaultEnabled": true,
+			"config": [
+				{
+					"type": "check",
+					"subsetting": "progressBar",
+					"label": "Progress Bar",
+					"default": true
+				},
+				{
+					"type": "check",
+					"subsetting": "percentages",
+					"label": "Percentage of Players (& difficulty rating)",
+					"default": true
+				},
+				{
+					"type": "check",
+					"subsetting": "opacity",
+					"label": "Fade out unowned achievements",
+					"default": true
+				}
+			],
+			"tags": [
+				"utility"
+			]
+		},
+		{
+			"name": "Quick Library Downloads",
+			"desc": "Quickly download a model (as a .ptmd file), mesh, decal, or sound right from the page showing you details about the asset!",
+			"id": "libraryDownloads",
+			"tags": [
+				"utility"
+			],
+			"hide": true
+		},
+		{
+			"name": "Show Friend Count on Homepage",
+			"desc": "See how many friends you have on your homepage/dashboard, just scroll to the \"friends\" section and you'll see it next to the heading!",
+			"id": "homeFriendCount",
+			"tags": [
+				"social"
+			],
+			"hide": true
+		},
+		{
+			"name": "Timed-Item Owner Check",
+			"desc": "Click the shopping bags icon in the bottom left-hand corner of the timed item's item thumbnail to toggle an input and a button. Then just enter someone's username and it'll tell you whether they own it or not and if so what serial!",
+			"id": "itemOwnerCheck",
+			"tags": [
+				"economy"
+			],
+			"hide": true
+		},
+		{
+			"name": "Hide User Ads",
+			"desc": "Hide those annoying user ads!",
+			"id": "hideUserAds",
+			"notes": [
+				{
+					"type": "warning",
+					"text": "Ads that are shown to help support Polytoria are not hidden."
+				}
+			],
+			"config": [
+				{
+					"type": "check",
+					"subsetting": "banners",
+					"label": "Hide Banner User Ads",
+					"default": true
+				},
+				{
+					"type": "check",
+					"subsetting": "rectangles",
+					"label": "Hide Rectangle User Ads",
+					"default": true
+				}
+			],
+			"tags": [
+				"utility"
+			]
+		},
+		{
+			"name": "Multi-Decal Uploading",
+			"desc": "Quickly upload several decals all at once!",
+			"id": "multipleDecals",
+			"tags": [
+				"development"
+			],
+			"hide": true
+		},
+		{
+			"name": "\"Collectibles\" Inventory Category",
+			"desc": "Show all the limited-edition collectibles in a player's inventory in a neat grid!",
+			"id": "inventoryCollectibles",
+			"defaultEnabled": true,
+			"tags": [
+				"economy"
+			]
+		},
+		{
+			"name": "Polytoria.Trade Integration",
+			"desc": "Quickly see a collectible's evaluation from the creators of polytoria.trade! Credits to them for all value information provided by the extension.",
+			"id": "loveIntegration",
+			"defaultEnabled": true,
+			"config": [
+				{
+					"type": "check",
+					"subsetting": "itemView",
+					"label": "Show Value Info on Item View Page",
+					"default": true
+				},
+				{
+					"type": "check",
+					"subsetting": "tradeView",
+					"label": "Show Value Info for all items on Trade View Page",
+					"default": true,
+					"hide": true
+				}
+			],
+			"tags": [
+				"economy"
+			]
+		},
+		{
+			"name": "One-click Friend Join",
+			"desc": "Quickly join your friends' servers by clicking the play button inside the tooltip (which shows when hovering over your friend's avatar headshot) in the \"Friends\" section of the homepage.",
+			"id": "homeFriendJoins",
+			"notes": [
+				{
+					"type": "info",
+					"text": "This feature requires \"World Server Share Links\" to be enabled to work properly."
+				}
+			],
+			"tags": [
+				"social"
+			],
+			"desktopOnly": true
+		},
+		{
+			"name": "Improved World Management",
+			"desc": "Develop the next hit world easier with a few management tools!",
+			"id": "placeManagement",
+			"defaultEnabled": true,
+			"config": [
+				{
+					"type": "check",
+					"subsetting": "download",
+					"label": "Download World File Button",
+					"default": true
+				},
+				{
+					"type": "check",
+					"subsetting": "bulkWhitelist",
+					"label": "Whitelist Users by Username in Bulk",
+					"default": true
+				},
+				{
+					"type": "check",
+					"subsetting": "clearWhitelist",
+					"label": "Quick Clear Whitelist Button",
+					"default": false,
+					"hide": true
+				}
+			],
+			"tags": [
+				"development"
+			]
+		},
+		{
+			"name": "Basic Blocked Info",
+			"desc": "See someone's player ID and join date even if they have blocked you on their profile. The information is intentionally vague as to not violate their privacy.",
+			"id": "basicBlockedInfo",
+			"defaultEnabled": true,
+			"tags": [
+				"social"
+			]
+		},
+		{
+			"name": "Character Sandbox",
+			"desc": "Create a character with all the item possibilities available to your heart's content! Sandbox can be accessed from the button under the \"Body Colors\" section on the avatar customization page.",
+			"id": "avatarSandbox",
+			"defaultEnabled": true,
+			"notes": [
+				{
+					"type": "warning",
+					"text": "This feature is experimental, you will probably encounter bugs."
+				}
+			],
+			"tags": [
+				"expression",
+				"experimental",
+				"new"
+			],
+			"desktopOnly": true
+		},
+		{
+			"name": "\"The Great Divide\" Statistics",
+			"desc": "Presents all statistics available for players of \"The Great Divide\" 2024 event. Replaces the \"Historical Records\" section of the profile page.",
+			"id": "tgdStats",
+			"defaultEnabled": true,
+			"tags": [
+				"social"
+			]
+		},
+		{
+			"name": "Playtime Tracking",
+			"desc": "Track your playtime in places around Polytoria!",
+			"id": "playtimeTracking",
+			"requiresSync": true,
+			"notes": [
+				{
+					"type": "info",
+					"text": "Past playtime data (prior to extension install/prior to setting being enabled) is not tracked."
+				},
+				{
+					"type": "warning",
+					"text": "This feature is experimental, you will probably encounter bugs."
+				}
+			],
+			"tags": [
+				"utility",
+				"experimental",
+				"new"
+			],
+			"desktopOnly": true
+		},
+		{
+			"name": "Inline Editing",
+			"desc": "Quickly edit your asset's details such as name and description on the same page as viewing the asset!",
+			"id": "inlineEditing",
+			"notes": [
+				{
+					"type": "warning",
+					"text": "This feature only supports worlds at this time."
+				},
+				{
+					"type": "warning",
+					"text": "This feature is not finished or polished."
+				}
+			],
+			"tags": [
+				"development"
+			],
+			"hide": true
+		},
+		{
+			"name": "Game Profiles",
+			"desc": "Traverse a world view page that matches a world's color palette!",
+			"id": "gameProfiles",
+			"notes": [
+				{
+					"type": "warning",
+					"text": "World creators must request a game profile for one to be made. Since this is experimental, no game profiles have or will be made."
+				},
+				{
+					"type": "warning",
+					"text": "This feature will be expanded upon in the future."
+				}
+			],
+			"tags": [
+				"development"
+			],
+			"hide": true
+		},
+		{
+			"name": "Forum Unix Timestamps",
+			"desc": "See a date and time that is adjusted to everyone (who is using Kiln)'s local time.",
+			"id": "forumTimestamps",
+			"notes": [
+				{
+					"type": "warning",
+					"text": "The styling for this feature is not yet done."
+				}
+			],
+			"tags": [
+				"utility"
+			],
+			"hide": true
+		},
+		{
+			"name": "Classic Avatar Perspective",
+			"desc": "Defaults to the 2D perspective when viewing avatars on profiles.",
+			"id": "classicAvatarPerspective",
+			"tags": [
+				"utility"
+			]
+		},
+		{
+			"name": "Expanded Message Glance",
+			"desc": "Peek at the full contents of inbox messages without leaving the inbox page.",
+			"id": "messagePreviewExpand",
+			"defaultEnabled": true,
+			"tags": [
+				"utility"
+			]
+		},
+		{
+			"name": "Active Challenges Display",
+			"desc": "Quickly check the challenges currently active (and your progress!) on a world's page.",
+			"id": "activeChallengesDisplay",
+			"defaultEnabled": true,
+			"tags": [
+				"utility"
+			]
+		},
+		{
+			"name": "\"My Serial\" Display on All Items",
+			"desc": "Quickly check what serial you own of an item!",
+			"notes": [
+				{
+					"type": "info",
+					"text": "The item doesn't need to be a collectible or timed item for this to show up."
+				}
+			],
+			"id": "mySerial",
+			"defaultEnabled": true,
+			"tags": [
+				"utility"
+			]
+		},
+		{
+			"name": "Random World",
+			"desc": "Discover something new! Roll a random world from Polytoria and jump straight in. Located next to the search bar and filter options on the worlds page.",
+			"id": "randomPlace",
+			"defaultEnabled": true,
+			"tags": [
+				"utility",
+				"social"
+			]
+		},
+		{
+			"name": "Event Items",
+			"desc": "On event item pages, adds a button that opens a modal showing all other items from the same event.",
+			"id": "eventItems",
+			"defaultEnabled": true,
+			"tags": [
+				"utility",
+				"economy"
+			]
+		},
+		{
+			"name": "\"Not for Trade\" Items",
+			"desc": "Keep those items you hold dearly by auto-rejecting trades that involve items (or serials of specific items) of your choosing!",
+			"id": "nftItems",
+			"defaultEnabled": true,
+			"requiresSync": true,
+			"tags": [
+				"economy"
+			]
+		},
+		{
+			"name": "Block Users from Trades",
+			"desc": "Auto-reject any incoming trade from a user you've blocked. You can manage this from the Trade Manager",
+			"id": "blockedTraders",
+			"defaultEnabled": true,
+			"requiresSync": true,
+			"tags": [
+				"economy"
+			]
+		},
+		{
+			"name": "Quick Cancel Outbound Trades",
+			"desc": "Quickly cancel outbound (sent) trades with the click of a button from your list of trades on the outbound trades page!",
+			"id": "quickCancelOutboundTrades",
+			"defaultEnabled": true,
+			"tags": [
+				"economy"
+			]
+		},
+		{
+			"name": "One-click Counter Trades",
+			"desc": "Quickly send a counter trade for inbound (received) trades with the click of a button from your list of trades on the inbound trades page!",
+			"id": "quickCounterTrades",
+			"defaultEnabled": true,
+			"tags": [
+				"economy"
+			]
+		},
+		{
+			"name": "Trade Manager",
+			"desc": "Manage all your trades easily! Quickly cancel or counter trades, bulk cancel trades, sort trades by received date & value, etc! Manager can be accessed from the button located on the left column of the trades page.",
+			"id": "tradeManager",
+			"tags": [
+				"economy"
+			]
+		},
+		{
+			"name": "User Labels",
+			"desc": "Shows \"Inactive\" and \"OG\" badges next to the names of users across the site. Applies to the list of owners on collectible item pages, the users page, and profiles (in the \"Info\" card section).",
+			"id": "collectibleOwnerLabels",
+			"defaultEnabled": true,
+			"config": [
+				{
+					"type": "select",
+					"subsetting": "inactiveDays",
+					"default": "30",
+					"options": [
+						{
+							"value": "3",
+							"label": "Inactive for 3 days or more"
+						},
+						{
+							"value": "7",
+							"label": "Inactive for 7 days or more"
+						},
+						{
+							"value": "14",
+							"label": "Inactive for 14 days or more"
+						},
+						{
+							"value": "30",
+							"label": "Inactive for 30 days or more"
+						}
+					]
+				},
+				{
+					"type": "select",
+					"subsetting": "ogYear",
+					"default": "2023",
+					"options": [
+						{
+							"value": "2019",
+							"label": "OG: joined during 2019"
+						},
+						{
+							"value": "2020",
+							"label": "OG: joined during 2020 or earlier"
+						},
+						{
+							"value": "2021",
+							"label": "OG: joined during 2021 or earlier"
+						},
+						{
+							"value": "2022",
+							"label": "OG: joined during 2022 or earlier"
+						},
+						{
+							"value": "2023",
+							"label": "OG: joined during 2023 or earlier"
+						}
+					]
+				}
+			],
+			"tags": [
+				"economy"
+			]
+		},
+		{
+			"name": "Past Avatar Versions",
+			"desc": "Blast back to the past of someone's avatar!",
+			"id": "avatarVersions",
+			"defaultEnabled": true,
+			"notes": [
+				{
+					"type": "info",
+					"text": "Some users may or may not be tracked, that is up to PolyTrack's discretion"
+				},
+				{
+					"type": "info",
+					"text": "Avatar versions are pulled from polytrack.top. Thank you to them for allowing Kiln to pull from their data <3"
+				}
+			],
+			"tags": [
+				"utility",
+				"social"
+			]
+		},
+		{
+			"name": "World Server Share Links",
+			"desc": "Quickly link someone a specific server of a world! Copy a server share link from the \"Servers\" tab on a world page.",
+			"id": "serverShareLinks",
+			"defaultEnabled": true,
+			"tags": [
+				"utility",
+				"social"
+			]
+		},
+		{
+			"name": "Model Tree Inspector",
+			"desc": "View the hierarchy of a toolbox model on the model page before inserting it into your world(s)!",
+			"id": "modelTreeInspector",
+			"defaultEnabled": true,
+			"tags": [
+				"utility",
+				"development"
+			]
+		},
+		{
+			"name": "3D Clothing Preview",
+			"desc": "Preview a clothing item in 3D before you buy it, right from the item page!",
+			"id": "backClothingView",
+			"defaultEnabled": true,
+			"tags": [
+				"economy"
+			]
+		},
+		{
+			"name": "Custom Body Color Hex Codes",
+			"desc": "Choose that exact color shade with an input for any hex code you can dream up in the \"Custom\" tab of the body part color selector modal on the avatar editor page.",
+			"id": "customBodyColorHexCodes",
+			"defaultEnabled": true,
+			"tags": [
+				"utility"
+			]
+		},
+		{
+			"name": "AI Bot Forum Warnings",
+			"desc": "Labels AI-generated forum bots on forum posts and replies.",
+			"id": "aiBotForumWarnings",
+			"defaultEnabled": true,
+			"tags": [
+				"utility"
+			]
+		},
+		{
+			"name": "Show User ID on Profile",
+			"desc": "Shows the ID of the user in the info section of their profile under their avatar.",
+			"id": "userIdDisplay",
+			"defaultEnabled": true,
+			"tags": [
+				"utility"
+			]
+		},
+		{
+			"name": "Reduce \"2.0\" Label Clutter on Worlds Page",
+			"desc": "Shrinks the \"2.0\" label placed on every 2.0-compatible world with a more subtle version of your choosing. Applies to the worlds page.",
+			"id": "subtleV2Labels",
+			"defaultEnabled": true,
+			"config": [
+				{
+					"type": "select",
+					"subsetting": "mode",
+					"default": "minimal",
+					"options": [
+						{
+							"value": "minimal",
+							"label": "Shrink \"2.0\" labels"
+						},
+						{
+							"value": "legacy",
+							"label": "Remove \"2.0\" labels & have \"Legacy\" labels for non-2.0-compatible worlds"
+						}
+					]
+				}
+			],
+			"tags": [
+				"expression"
+			]
+		},
+		{
+			"name": "Theme Creator",
+			"desc": "Unleash your creativity and customize the Polytoria website to your liking!",
+			"id": "themeCreator",
+			"notes": [
+				{
+					"type": "warning",
+					"text": "This feature is *very* experimental, you may run into issues. For any theme rendering related issues, please submit them to this form -> "
+				}
+			],
+			"tags": [
+				"expression"
+			]
+		},
+		{
+			"name": "Creator Comment Labels",
+			"desc": "Label comments made by the creator of the world, guild, or item you're looking at.",
+			"id": "creatorCommentLabels",
+			"defaultEnabled": true,
+			"config": [
+				{
+					"type": "check",
+					"subsetting": "worlds",
+					"label": "Labels in World Comments",
+					"default": true
+				},
+				{
+					"type": "check",
+					"subsetting": "items",
+					"label": "Labels in Item Comments",
+					"default": true
+				},
+				{
+					"type": "check",
+					"subsetting": "guilds",
+					"label": "Labels in Guild Walls",
+					"default": true
+				},
+				{
+					"type": "check",
+					"subsetting": "feed",
+					"label": "Labels in Homepage Feed",
+					"default": true,
+					"hide": true
+				}
+			],
+			"tags": [
+				"utility"
+			]
+		},
+		{
+			"name": "Legacy Item View Layout",
+			"desc": "Revert the item page to be the old layout from before February 2026.",
+			"id": "legacyItemViewLayout",
+			"tags": [
+				"expression"
+			]
+		},
+		{
+			"name": "Legacy Sidebar",
+			"desc": "Replace the secondary navbar with the sidebar from before February 2026.",
+			"id": "legacySidebar",
+			"config": [
+				{
+					"type": "select",
+					"subsetting": "membershipStyle",
+					"default": "free",
+					"options": [
+						{
+							"value": "free",
+							"label": "Free"
+						},
+						{
+							"value": "plus",
+							"label": "Plus"
+						},
+						{
+							"value": "plusdx",
+							"label": "Plus Deluxe"
+						}
+					]
+				},
+				{
+					"type": "check",
+					"subsetting": "showUpgradeBtn",
+					"label": "Show Upgrade Button",
+					"default": true
+				}
+			],
+			"tags": [
+				"expression"
+			],
+			"desktopOnly": true
+		},
+		{
+			"name": "Quick Launch Creator Buttons",
+			"desc": "Quickly launch the 1.0 or 2.0 creator from your homepage!",
+			"id": "quickCreatorLaunchBtns",
+			"tags": [
+				"utility",
+				"development"
+			],
+			"desktopOnly": true
+		},
+		{
+			"name": "Pinned Achievements",
+			"desc": "Pin your favorite achievements to showcase on your profile! Located below the \"About\" section on profiles.",
+			"id": "pinnedAchievements",
+			"requiresSync": true,
+			"notes": [
+				{
+					"type": "warning",
+					"text": "Limit of 5 achievements pinned at once."
+				}
+			],
+			"tags": [
+				"expression"
+			]
+		},
+		{
+			"name": "User Aliases",
+			"desc": "Don't like a user's username? Change it by going to the 3 dots next to a user's username on their profile and clicking \"(Kiln) Set Alias\".",
+			"id": "userAliases",
+			"defaultEnabled": true,
+			"notes": [
+				{
+					"type": "info",
+					"text": "Aliases are private and do not sync, regardless of if you have a linked Kiln account."
+				}
+			],
+			"tags": [
+				"expression"
+			]
+		},
+		{
+			"name": "Friend Request Notification Quick Actions",
+			"desc": "Quickly accept or reject a friend request from the notification tray!",
+			"id": "friendReqNotifActions",
+			"defaultEnabled": true,
+			"tags": [
+				"utility"
+			]
+		},
+		{
+			"name": "Legacy World View Layout",
+			"desc": "Revert the world page to be the old layout from before February 2026.",
+			"id": "legacyWorldViewLayout",
+			"notes": [
+				{
+					"type": "warning",
+					"text": "This feature is experimental, you will probably encounter bugs."
+				}
+			],
+			"tags": [
+				"expression",
+				"experimental"
+			]
+		},
+		{
+			"name": "Recent Transactions on Collectibles",
+			"desc": "View the last 5 transactions involving a certain collectible with a tab on the item view page.",
+			"id": "recentCollectibleTransactions",
+			"defaultEnabled": true,
+			"notes": [
+				{
+					"type": "info",
+					"text": "Recent transactions are pulled from polytoria.trade. Thank you to them for allowing Kiln to pull from their data <3"
+				}
+			],
+			"tags": [
+				"economy",
+				"new"
+			]
+		},
+		{
+			"name": "User Creations Tab",
+			"desc": "View a user's creations with a tab directly on their profile.",
+			"id": "userCreationsTab",
+			"defaultEnabled": true,
+			"tags": [
+				"utility",
+				"development",
+				"new"
+			]
+		},
+		{
+			"name": "Avatar Mesh Downloader",
+			"desc": "Download a user's full avatar as a .glb mesh from their profile (in the dropdown next to their username).",
+			"id": "avatarMeshDownloader",
+			"defaultEnabled": true,
+			"tags": [
+				"utility",
+				"development",
+				"new"
+			]
+		},
+		{
+			"name": "User Notes",
+			"desc": "Hate someone? Write why in a tab on their profile.",
+			"id": "userNotes",
+			"defaultEnabled": false,
+			"notes": [
+				{
+					"type": "info",
+					"text": "Notes are private and do not sync, regardless of if you have a linked Kiln account."
+				}
+			],
+			"tags": [
+				"social",
+				"new"
+			]
+		},
+		{
+			"name": "Ranking Positions",
+			"desc": "Check what rank someone is on leaderboards on the left side of their profile.",
+			"id": "rankingPositions",
+			"defaultEnabled": true,
+			"notes": [
+				{
+					"type": "info",
+					"text": "Ranks below a certain point (as by PolyTrack's discretion) are not tracked, and are thus omitted."
+				},
+				{
+					"type": "info",
+					"text": "Ranking positions are pulled from polytrack.top. Thank you to them for allowing Kiln to pull from their data <3"
+				}
+			],
+			"tags": [
+				"utility",
+				"social",
+				"new"
+			]
+		},
+		{
+			"name": "Localized Timestamps",
+			"desc": "Automatically convert timestamps to render in the same timezone as you. Applies sitewide.",
+			"id": "localizedTimestamps",
+			"defaultEnabled": false,
+			"tags": [
+				"utility",
+				"new"
+			]
+		},
+		{
+			"name": "Auto-Refresh Data",
+			"desc": "Automatically refreshes data of the asset you're looking at so you know you have the most up-to-date information.",
+			"id": "autoRefreshData",
+			"notes": [
+				{
+					"type": "info",
+					"text": "This only applies to worlds at the moment."
+				}
+			],
+			"config": [
+				{
+					"type": "select",
+					"subsetting": "interval",
+					"default": "1m",
+					"options": [
+						{
+							"value": "30s",
+							"label": "30 seconds"
+						},
+						{
+							"value": "1m",
+							"label": "1 minute"
+						},
+						{
+							"value": "5m",
+							"label": "5 minutes"
+						}
+					]
+				}
+			],
+			"defaultEnabled": false,
+			"tags": [
+				"utility",
+				"new"
+			]
+		},
+		{
+			"name": "Sticky Navbar",
+			"desc": "Keep the navbar always at the top of the page.",
+			"id": "stickyNavbar",
+			"defaultEnabled": false,
+			"tags": [
+				"utility",
+				"expression",
+				"new"
+			]
+		}
+	]
+}

@@ -1,0 +1,29 @@
+{
+	"updateLogUrl": null,
+	"endpoints": {
+		"public": "https://api.polytoria.com/v1/",
+		"internal": "https://polytoria.com/api/",
+		"extension": "https://kiln-api.indexx.dev/v1/",
+		"proxy": "https://kiln-api.indexx.dev/v1/proxy/",
+		"currencyRates": "https://kiln-api.indexx.dev/v1/currency-rates"
+	},
+	"economy": {
+		"membershipTax": {
+			"free": 0.15,
+			"plus": 0.1,
+			"plusDeluxe": 0.05
+		},
+		"visitsPerBrick": 5,
+		"currencyPackages": {
+			"base": [
+				[0.99, 100],
+				[4.99, 550],
+				[9.99, 1150],
+				[24.99, 2750],
+				[49.99, 6000],
+				[99.99, 12500]
+			],
+			"updatedAt": "05-26-25"
+		}
+	}
+}
