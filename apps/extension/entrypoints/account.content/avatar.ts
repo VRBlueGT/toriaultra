@@ -17,7 +17,11 @@
 import sadFace from "@/assets/sad-face.webp";
 import pageContent from "@/public/avatar-sandbox.html?raw";
 import retroItemsData from "@/utils/static/retroItems.json";
-import type { AvatarIFrameState, AvatarSandboxOutfit } from "@/utils/types";
+import type {
+	AccessoryTransform,
+	AvatarIFrameState,
+	AvatarSandboxOutfit,
+} from "@/utils/types";
 import { createModal, getUserDetails } from "@/utils/utilities";
 import { AvatarRenderer } from "./avatarRenderer";
 
@@ -74,6 +78,12 @@ const DEFAULT_AVATAR: AvatarIFrameState = {
 	rightArmColor: "#e0e0e0",
 	leftLegColor: "#e0e0e0",
 	rightLegColor: "#e0e0e0",
+};
+
+const DEFAULT_TRANSFORM: AccessoryTransform = {
+	position: [0, 0, 0],
+	rotation: [0, 0, 0],
+	scale: 1,
 };
 
 export function customBodyColorHexCodes() {
@@ -162,10 +172,6 @@ export function customBodyColorHexCodes() {
 	});
 }
 
-/**
- * Adds a modified avatar editor page with all the items so you can create anything you want.
- * @param avatar The avatar to load as a default.
- */
 export function avatarSandbox(
 	avatar: AvatarIFrameState = { ...DEFAULT_AVATAR },
 ) {
@@ -230,6 +236,7 @@ export function avatarSandbox(
 	>();
 
 	container.innerHTML = pageContent;
+	sendMessage("registerBootstrapElements");
 	const viewCanvas = document.getElementById("viewCanvas") as HTMLCanvasElement;
 	const renderer = new AvatarRenderer(viewCanvas);
 
@@ -325,6 +332,122 @@ export function avatarSandbox(
 	bodyColorsModal
 		.querySelector<HTMLButtonElement>(".btn-info")!
 		.addEventListener("click", () => bodyColorsModal.close());
+
+	const repositionModal = createModal();
+	const repositionSliderIds = [
+		"pos-x",
+		"pos-y",
+		"pos-z",
+		"rot-x",
+		"rot-y",
+		"rot-z",
+		"scale",
+	] as const;
+	type RepositionSliderId = (typeof repositionSliderIds)[number];
+	const repositionSlider = (
+		id: RepositionSliderId,
+		label: string,
+		min: number,
+		max: number,
+		step: number,
+	) => `
+<div class="mb-2">
+	<label class="text-muted d-block mb-1" style="font-size: 0.75rem;">${label}: <span id="reposition-${id}-val">0</span></label>
+	<input type="range" class="form-range" id="reposition-${id}" min="${min}" max="${max}" step="${step}" value="0">
+</div>`;
+	repositionModal.innerHTML = `
+<div class="row text-muted mb-4" style="font-size: 0.8rem;">
+	<div class="col">
+		<h5 class="mb-0" style="color: #fff;">Reposition Accessory</h5>
+		Adjusting: <span class="kiln-reposition-target">none</span>
+	</div>
+	<div class="col-md-3">
+		<button type="button" class="btn btn-info w-100 mx-auto">X</button>
+	</div>
+</div>
+<div class="modal-body">
+	${repositionSlider("pos-x", "Position X", -2, 2, 0.01)}
+	${repositionSlider("pos-y", "Position Y", -2, 2, 0.01)}
+	${repositionSlider("pos-z", "Position Z", -2, 2, 0.01)}
+	${repositionSlider("rot-x", "Rotation X", -180, 180, 1)}
+	${repositionSlider("rot-y", "Rotation Y", -180, 180, 1)}
+	${repositionSlider("rot-z", "Rotation Z", -180, 180, 1)}
+	${repositionSlider("scale", "Scale", 0.1, 3, 0.01)}
+	<button type="button" class="btn btn-outline-warning btn-sm w-100 mt-2" id="reposition-reset">
+		<i class="fa-duotone fa-arrow-rotate-left"></i>
+		Reset
+	</button>
+</div>`;
+	repositionModal
+		.querySelector<HTMLButtonElement>(".btn-info")!
+		.addEventListener("click", () => repositionModal.close());
+	const repositionTargetLabel = repositionModal.querySelector<HTMLElement>(
+		".kiln-reposition-target",
+	)!;
+	let repositionTargetId: string | null = null;
+
+	const repositionInput = (id: RepositionSliderId) =>
+		repositionModal.querySelector<HTMLInputElement>(`#reposition-${id}`)!;
+	const repositionValueLabel = (id: RepositionSliderId) =>
+		repositionModal.querySelector<HTMLElement>(`#reposition-${id}-val`)!;
+
+	function readTransformFromSliders(): AccessoryTransform {
+		const value = (id: RepositionSliderId) =>
+			parseFloat(repositionInput(id).value);
+		return {
+			position: [value("pos-x"), value("pos-y"), value("pos-z")],
+			rotation: [value("rot-x"), value("rot-y"), value("rot-z")],
+			scale: value("scale"),
+		};
+	}
+
+	function writeTransformToSliders(transform: AccessoryTransform): void {
+		const values: Record<RepositionSliderId, number> = {
+			"pos-x": transform.position[0],
+			"pos-y": transform.position[1],
+			"pos-z": transform.position[2],
+			"rot-x": transform.rotation[0],
+			"rot-y": transform.rotation[1],
+			"rot-z": transform.rotation[2],
+			scale: transform.scale,
+		};
+		for (const id of repositionSliderIds) {
+			repositionInput(id).value = String(values[id]);
+			repositionValueLabel(id).innerText = String(values[id]);
+		}
+	}
+
+	function applyReposition(): void {
+		if (repositionTargetId === null) return;
+		const transform = readTransformFromSliders();
+		avatar.itemTransforms ??= {};
+		avatar.itemTransforms[repositionTargetId] = transform;
+		const url = itemCache[repositionTargetId]?.asset;
+		if (url) renderer.setAccessoryTransform(url, transform);
+	}
+
+	for (const id of repositionSliderIds) {
+		repositionInput(id).addEventListener("input", () => {
+			repositionValueLabel(id).innerText = repositionInput(id).value;
+			applyReposition();
+		});
+	}
+
+	repositionModal
+		.querySelector<HTMLButtonElement>("#reposition-reset")!
+		.addEventListener("click", () => {
+			writeTransformToSliders(DEFAULT_TRANSFORM);
+			applyReposition();
+		});
+
+	function openRepositionModal(id: number | string, name: string): void {
+		repositionTargetId = id.toString();
+		repositionTargetLabel.innerText = name;
+		writeTransformToSliders(
+			avatar.itemTransforms?.[repositionTargetId] ?? DEFAULT_TRANSFORM,
+		);
+		repositionModal.showModal();
+	}
 
 	const outfitCreateModal = createModal();
 	outfitCreateModal.innerHTML = `
@@ -597,6 +720,31 @@ export function avatarSandbox(
 		},
 	);
 
+	(document.getElementById("glbExport") as HTMLButtonElement).addEventListener(
+		"click",
+		async (e) => {
+			const btn = e.currentTarget as HTMLButtonElement;
+			const icon = btn.querySelector("i")!;
+			const originalClass = icon.className;
+			icon.className = "fa-duotone fa-spinner fa-spin";
+
+			try {
+				const glb = await renderer.exportGLB();
+				const download = document.createElement("a");
+				download.href = URL.createObjectURL(
+					new Blob([glb], { type: "model/gltf-binary" }),
+				);
+				download.setAttribute("download", "AvatarSandbox.glb");
+				document.body.appendChild(download);
+				download.click();
+				document.body.removeChild(download);
+				URL.revokeObjectURL(download.href);
+			} finally {
+				icon.className = originalClass;
+			}
+		},
+	);
+
 	(
 		document.getElementById("viewFullscreen") as HTMLButtonElement
 	).addEventListener("click", () => viewCanvas.requestFullscreen());
@@ -720,6 +868,7 @@ export function avatarSandbox(
 
 	async function updateAvatar(): Promise<void> {
 		const formattedAvatar: AvatarIFrameState = structuredClone(avatar);
+		formattedAvatar.itemTransforms = {};
 
 		if (retroItems === null && avatar.items.some((id) => (id as number) < 0)) {
 			initRetroItems();
@@ -783,6 +932,11 @@ export function avatarSandbox(
 				if (itemCache[key].asset !== undefined) {
 					if (itemCache[key].type === "hat") {
 						formattedAvatar.items[index] = itemCache[key].asset!;
+						const transform = avatar.itemTransforms?.[key.toString()];
+						if (transform) {
+							formattedAvatar.itemTransforms![itemCache[key].asset!] =
+								transform;
+						}
 					} else {
 						(formattedAvatar as Record<string, unknown>)[itemCache[key].type] =
 							itemCache[key].asset;
@@ -940,7 +1094,6 @@ export function avatarSandbox(
 			filter.disabled = isRetro;
 			filter.classList.toggle("unavailable", isRetro);
 		}
-
 
 		let items: StoreApiResponse;
 
@@ -1238,6 +1391,11 @@ export function avatarSandbox(
     <div class="p-2">
       <img src="${cached.thumbnail}" class="img-fluid" style="border-radius: 10px;">
       <button class="avatarAction btn btn-danger btn-sm position-absolute rounded-circle text-center" style="top: -10px; right: -16px; width: 32px; height: 32px; z-index: 1;"><i class="fas fa-minus"></i></button>
+      ${
+				cached.type === "hat"
+					? `<button class="avatarAction btn btn-primary btn-sm position-absolute rounded-circle text-center kiln-reposition-btn" style="bottom: -10px; right: -16px; width: 32px; height: 32px; z-index: 1;" data-bs-toggle="tooltip" data-bs-title="Reposition"><i class="fa-duotone fa-arrows-up-down-left-right"></i></button>`
+					: ""
+			}
     </div>
   </div>
   <a href="${(id as number) > 0 ? `/store/${id}` : `https://poly-archive.vercel.app/archive/${Math.abs(id as number)}`}" class="text-reset">
@@ -1261,6 +1419,14 @@ export function avatarSandbox(
 							wearAsset(cached, id);
 						});
 				}
+
+				const repositionBtn = itemColumn.getElementsByClassName(
+					"kiln-reposition-btn",
+				)[0];
+				repositionBtn?.addEventListener("click", (e) => {
+					e.stopPropagation();
+					openRepositionModal(id, cached.name);
+				});
 			});
 	}
 

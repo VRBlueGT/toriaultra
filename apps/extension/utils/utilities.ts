@@ -18,7 +18,7 @@ import type { Extension } from "@kiln/schemas";
 import fallbackConfig from "./static/fallbackConfig.json";
 import fallbackCurrencyRates from "./static/fallbackCurrencyRates.json";
 import staticMetadata from "./static/metadata.json";
-import { apiSessions, cache, dismissedNotices } from "./storage";
+import { _kilnNotifications, apiSessions, cache, dismissedNotices } from "./storage";
 import type {
 	ApiSession,
 	CacheInterface,
@@ -911,4 +911,170 @@ export function parseTrade(root: Element | Document): ParsedTrade {
 */
 export function parseFormattedNumber(value: string): number {
 	return Number(value.replace(/,/g, ""));
+}
+
+export interface FabricatedNotification {
+	message: string;
+	date: Date;
+	url: string;
+	avatarUrl: string;
+	unread?: boolean;
+}
+
+const notificationRelativeUnits: Array<[string, number]> = [
+	["year", 31_536_000_000],
+	["month", 2_592_000_000],
+	["week", 604_800_000],
+	["day", 86_400_000],
+	["hour", 3_600_000],
+	["minute", 60_000],
+	["second", 1_000],
+];
+
+export function formatNotificationRelativeTime(date: Date): string {
+	const diffMs = Date.now() - date.getTime();
+	if (diffMs < 60_000) return "Just now";
+
+	for (const [label, unitMs] of notificationRelativeUnits) {
+		const count = Math.floor(diffMs / unitMs);
+		if (count > 0) return `${count} ${label}${count > 1 ? "s" : ""} ago`;
+	}
+
+	return "Just now";
+}
+
+function parseNotificationRelativeTime(text: string): Date | null {
+	const trimmed = text.trim().toLowerCase();
+	if (trimmed === "just now") return new Date();
+
+	const match = trimmed.match(
+		/^(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago$/,
+	);
+	if (match) {
+		const amount = Number(match[1]);
+		const unitMs = notificationRelativeUnits.find(
+			([label]) => label === match[2],
+		)?.[1];
+		return unitMs ? new Date(Date.now() - amount * unitMs) : null;
+	}
+
+	const parsed = new Date(text);
+	return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/**
+ * Low-level primitive: paints a single fabricated notification into the
+ * notifications tray in the correct chronological position, inferring the
+ * position of existing entries from their displayed relative time text
+ * (there's no exact timestamp available in the DOM to compare against).
+ *
+ * This is DOM-only and forgotten on the next page load. Most callers should
+ * use `fireKilnNotification` (to persist one) and let `renderKilnNotifications`
+ * paint it instead of calling this directly.
+ */
+export function injectNotification(notification: FabricatedNotification): void {
+	const popup = document.querySelector<HTMLElement>(".notifications-popup");
+	if (!popup) return;
+
+	const existingItems = Array.from(
+		popup.querySelectorAll(":scope > a"),
+	) as HTMLAnchorElement[];
+
+	const insertBeforeItem = existingItems.find((item) => {
+		const timeText = item
+			.querySelector(".small.text-muted")
+			?.textContent?.trim();
+		if (!timeText) return false;
+
+		const itemDate = parseNotificationRelativeTime(timeText);
+		return itemDate !== null && itemDate < notification.date;
+	});
+
+	const anchor = document.createElement("a");
+	anchor.href = notification.url;
+	anchor.className = "text-reset";
+	anchor.innerHTML = `
+		<div class="notification-item ${notification.unread ? "unread" : ""}">
+			<img src="${notification.avatarUrl}" class="rounded-circle border border-2 border-secondary" height="38">
+			<div>
+				<div>${notification.message}</div>
+				<div class="small text-muted">${formatNotificationRelativeTime(notification.date)}</div>
+			</div>
+		</div>
+	`;
+
+	if (insertBeforeItem) {
+		popup.insertBefore(anchor, insertBeforeItem);
+	} else {
+		popup.appendChild(anchor);
+	}
+}
+
+export interface KilnNotificationInput {
+	/** Unique id for the thing this notification is about, e.g.
+	 *  `place-update:${placeId}`. Firing the same id again updates the
+	 *  existing notification in place rather than creating a duplicate. */
+	id: string;
+	message: string;
+	date: Date;
+	url: string;
+	avatarUrl: string;
+	/** Value identifying *this* occurrence of the event (e.g. the place's
+	 *  `updatedAt`). If it matches the last time this id was fired, the
+	 *  existing read/unread state is kept; if it differs, a fresh unread
+	 *  notification is created. Defaults to `date`'s ISO string. */
+	dedupeValue?: string;
+}
+
+/**
+ * Persists a fabricated Kiln notification so it survives across page loads
+ * and stays in the tray (marked read) after `markKilnNotificationRead` is
+ * called for it, instead of disappearing once its underlying condition
+ * clears. Call `renderKilnNotifications` to actually paint stored
+ * notifications into the tray.
+ */
+export async function fireKilnNotification(
+	input: KilnNotificationInput,
+): Promise<void> {
+	const notifications = await _kilnNotifications.getValue();
+	const existing = notifications[input.id];
+	const dedupeValue = input.dedupeValue ?? input.date.toISOString();
+
+	notifications[input.id] = {
+		message: input.message,
+		date: input.date.toISOString(),
+		url: input.url,
+		avatarUrl: input.avatarUrl,
+		dedupeValue,
+		read: existing?.dedupeValue === dedupeValue ? existing.read : false,
+	};
+
+	await _kilnNotifications.setValue(notifications);
+}
+
+/** Marks a previously-fired Kiln notification as read without removing it,
+ *  so it remains visible (without "unread" styling) on future renders. */
+export async function markKilnNotificationRead(id: string): Promise<void> {
+	const notifications = await _kilnNotifications.getValue();
+	const existing = notifications[id];
+	if (existing && !existing.read) {
+		notifications[id] = { ...existing, read: true };
+		await _kilnNotifications.setValue(notifications);
+	}
+}
+
+/** Paints every persisted Kiln notification into the notifications tray.
+ *  Safe to call unconditionally on any page — it's a no-op if the tray or
+ *  storage is empty. */
+export async function renderKilnNotifications(): Promise<void> {
+	const notifications = await _kilnNotifications.getValue();
+	for (const notification of Object.values(notifications)) {
+		injectNotification({
+			message: notification.message,
+			date: new Date(notification.date),
+			url: notification.url,
+			avatarUrl: notification.avatarUrl,
+			unread: !notification.read,
+		});
+	}
 }

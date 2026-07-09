@@ -18,7 +18,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { clone as skeletonClone } from "three/addons/utils/SkeletonUtils.js";
-import type { AvatarIFrameState } from "@/utils/types";
+import type { AccessoryTransform, AvatarIFrameState } from "@/utils/types";
 
 const BODY_GLB = "https://cdn.polytoria.com/static/Pauly-DS-yCzTt.glb";
 const RETRO_HAT_Y_OFFSET = 1.5;
@@ -38,7 +38,8 @@ const MAT_TO_COLOR: Partial<Record<string, keyof AvatarIFrameState>> = {
 };
 
 const isUrl = (v: unknown): v is string =>
-	typeof v === "string" && (v.startsWith("http") || v.startsWith("data:"));
+	typeof v === "string" &&
+	(v.startsWith("data:") || /^[a-z][a-z\d+.-]*:\/\//i.test(v));
 
 async function loadImage(url: string): Promise<HTMLImageElement> {
 	const buf = await fetch(url).then((r) => r.arrayBuffer());
@@ -96,6 +97,66 @@ function buildClothingTex(
 	return makeTexture(canvas);
 }
 
+function patchGLBNodeNames(
+	buffer: ArrayBuffer,
+	nameMap: Map<string, string>,
+): ArrayBuffer {
+	const view = new DataView(buffer);
+	if (view.getUint32(0, true) !== 0x46546c67) return buffer;
+	const jsonChunkLen = view.getUint32(12, true);
+	if (view.getUint32(16, true) !== 0x4e4f534a) return buffer;
+
+	const json = JSON.parse(
+		new TextDecoder().decode(new Uint8Array(buffer, 20, jsonChunkLen)),
+	);
+
+	let changed = false;
+	for (const node of json.nodes ?? []) {
+		const original = nameMap.get(node.name);
+		if (original && original !== node.name) {
+			node.name = original;
+			changed = true;
+		}
+	}
+	if (!changed) return buffer;
+
+	let jsonBytes = new TextEncoder().encode(JSON.stringify(json));
+	const pad = (4 - (jsonBytes.length % 4)) % 4;
+	if (pad) {
+		const padded = new Uint8Array(jsonBytes.length + pad);
+		padded.set(jsonBytes);
+		padded.fill(0x20, jsonBytes.length);
+		jsonBytes = padded;
+	}
+
+	const binStart = 20 + jsonChunkLen;
+	const hasBin = binStart + 8 <= buffer.byteLength;
+	const binLen = hasBin ? view.getUint32(binStart, true) : 0;
+	const binType = hasBin ? view.getUint32(binStart + 4, true) : 0;
+	const binData = hasBin ? new Uint8Array(buffer, binStart + 8, binLen) : null;
+
+	const totalLen = 12 + 8 + jsonBytes.length + (hasBin ? 8 + binLen : 0);
+	const out = new ArrayBuffer(totalLen);
+	const outView = new DataView(out);
+	const outBytes = new Uint8Array(out);
+
+	outView.setUint32(0, 0x46546c67, true);
+	outView.setUint32(4, 2, true);
+	outView.setUint32(8, totalLen, true);
+	outView.setUint32(12, jsonBytes.length, true);
+	outView.setUint32(16, 0x4e4f534a, true);
+	outBytes.set(jsonBytes, 20);
+
+	if (hasBin && binData) {
+		const binOffset = 20 + jsonBytes.length;
+		outView.setUint32(binOffset, binLen, true);
+		outView.setUint32(binOffset + 4, binType, true);
+		outBytes.set(binData, binOffset + 8);
+	}
+
+	return out;
+}
+
 export class AvatarRenderer {
 	private scene: THREE.Scene;
 	private camera: THREE.PerspectiveCamera;
@@ -110,6 +171,18 @@ export class AvatarRenderer {
 	private hasLoaded = false;
 	private animId: number | null = null;
 	private ro: ResizeObserver;
+	private loadGen = 0;
+	private nameRestoreMap = new Map<string, string>();
+	private accessoryObjects = new Map<string, THREE.Object3D>();
+	private accessoryBase = new Map<
+		string,
+		{
+			position: THREE.Vector3;
+			quaternion: THREE.Quaternion;
+			scale: THREE.Vector3;
+		}
+	>();
+	private accessoryPivot = new Map<string, THREE.Vector3>();
 
 	constructor(canvas: HTMLCanvasElement) {
 		this.scene = new THREE.Scene();
@@ -144,6 +217,20 @@ export class AvatarRenderer {
 
 		this.ro = new ResizeObserver(() => this.resize());
 		this.ro.observe(canvas);
+
+		this.loader.register((parser: any) => ({
+			afterRoot: () => {
+				for (const node of (parser.json.nodes ?? []) as { name?: string }[]) {
+					if (!node.name) continue;
+					const sanitized = node.name
+						.replace(/\s/g, "_")
+						.replace(/[^\w-]/g, "");
+					if (!this.nameRestoreMap.has(sanitized))
+						this.nameRestoreMap.set(sanitized, node.name);
+				}
+				return null;
+			},
+		}));
 
 		this.animate();
 	}
@@ -183,9 +270,35 @@ export class AvatarRenderer {
 		});
 		this.scene.remove(this.avatarGroup);
 		this.avatarGroup = null;
+		this.accessoryObjects.clear();
+		this.accessoryBase.clear();
+		this.accessoryPivot.clear();
+	}
+
+	private computeLocalPivot(obj: THREE.Object3D): THREE.Vector3 {
+		obj.updateMatrixWorld(true);
+		const objWorldInverse = new THREE.Matrix4().copy(obj.matrixWorld).invert();
+		const box = new THREE.Box3();
+		let found = false;
+
+		obj.traverse((child) => {
+			if (!(child instanceof THREE.Mesh) || !child.geometry) return;
+			if (!child.geometry.boundingBox) child.geometry.computeBoundingBox();
+			const geomBox = child.geometry.boundingBox!.clone();
+			const childToObj = new THREE.Matrix4().multiplyMatrices(
+				objWorldInverse,
+				child.matrixWorld,
+			);
+			geomBox.applyMatrix4(childToObj);
+			box.union(geomBox);
+			found = true;
+		});
+
+		return found ? box.getCenter(new THREE.Vector3()) : new THREE.Vector3();
 	}
 
 	async load(avatar: AvatarIFrameState): Promise<void> {
+		const gen = ++this.loadGen;
 		this.clearAvatar();
 
 		const faceUrl = isUrl(avatar.face) ? avatar.face : undefined;
@@ -256,7 +369,11 @@ export class AvatarRenderer {
 				mat.color.set(0xffffff);
 				mat.metalness = 0;
 				mat.roughness = 1;
-			} else if (clothingImages.length && skinColor && /torso|arm|leg/i.test(matName)) {
+			} else if (
+				clothingImages.length &&
+				skinColor &&
+				/torso|arm|leg/i.test(matName)
+			) {
 				mat.map = getClothingTex(skinColor);
 				mat.color.set(0xffffff);
 				mat.metalness = 0;
@@ -272,6 +389,8 @@ export class AvatarRenderer {
 
 		const group = new THREE.Group();
 		group.add(bodyScene);
+
+		let activeBodyScene: THREE.Object3D = bodyScene;
 
 		if (bodyUrl) {
 			try {
@@ -326,10 +445,20 @@ export class AvatarRenderer {
 				}
 
 				group.add(bodyGltfScene);
-
+				activeBodyScene = bodyGltfScene;
 				bodyScene.visible = false;
 			} catch {}
 		}
+
+		const headBone = activeBodyScene.getObjectByName("Head") ?? null;
+
+		let rightHandBone: THREE.Object3D | null = null;
+		activeBodyScene.traverse((obj) => {
+			if (rightHandBone) return;
+			const n = obj.name.toLowerCase();
+			if ((n.includes("right") || n.endsWith(".r")) && n.includes("hand"))
+				rightHandBone = obj;
+		});
 
 		await Promise.all(
 			[...accUrls, ...(toolUrl ? [toolUrl] : [])].map(async (url) => {
@@ -337,10 +466,25 @@ export class AvatarRenderer {
 					const gltf = await this.loader.loadAsync(url);
 					if (url.includes("poly-upd-archival.pages.dev"))
 						gltf.scene.position.y += RETRO_HAT_Y_OFFSET;
-					group.add(gltf.scene);
+					if (url === toolUrl) {
+						(rightHandBone ?? activeBodyScene).attach(gltf.scene);
+					} else {
+						(headBone ?? activeBodyScene).attach(gltf.scene);
+						this.accessoryObjects.set(url, gltf.scene);
+						this.accessoryBase.set(url, {
+							position: gltf.scene.position.clone(),
+							quaternion: gltf.scene.quaternion.clone(),
+							scale: gltf.scene.scale.clone(),
+						});
+						this.accessoryPivot.set(url, this.computeLocalPivot(gltf.scene));
+						const transform = avatar.itemTransforms?.[url];
+						if (transform) this.setAccessoryTransform(url, transform);
+					}
 				} catch {}
 			}),
 		);
+
+		if (gen !== this.loadGen) return;
 
 		this.avatarGroup = group;
 		this.scene.add(group);
@@ -367,7 +511,7 @@ export class AvatarRenderer {
 			"three/addons/exporters/GLTFExporter.js"
 		);
 		const exporter = new GLTFExporter();
-		return new Promise((resolve, reject) => {
+		const raw = await new Promise<ArrayBuffer>((resolve, reject) => {
 			exporter.parse(
 				this.avatarGroup!,
 				(result) => resolve(result as ArrayBuffer),
@@ -375,6 +519,41 @@ export class AvatarRenderer {
 				{ binary: true, animations: this.clips },
 			);
 		});
+		return patchGLBNodeNames(raw, this.nameRestoreMap);
+	}
+
+	setAccessoryTransform(url: string, transform: AccessoryTransform): void {
+		const obj = this.accessoryObjects.get(url);
+		const base = this.accessoryBase.get(url);
+		const pivot = this.accessoryPivot.get(url);
+		if (!obj || !base || !pivot) return;
+
+		const offset = new THREE.Quaternion().setFromEuler(
+			new THREE.Euler(
+				THREE.MathUtils.degToRad(transform.rotation[0]),
+				THREE.MathUtils.degToRad(transform.rotation[1]),
+				THREE.MathUtils.degToRad(transform.rotation[2]),
+			),
+		);
+		const finalQuaternion = base.quaternion.clone().multiply(offset);
+		const finalScale = base.scale.clone().multiplyScalar(transform.scale);
+
+		const pivotAtBase = pivot
+			.clone()
+			.multiply(base.scale)
+			.applyQuaternion(base.quaternion);
+		const pivotAtFinal = pivot
+			.clone()
+			.multiply(finalScale)
+			.applyQuaternion(finalQuaternion);
+
+		obj.quaternion.copy(finalQuaternion);
+		obj.scale.copy(finalScale);
+		obj.position
+			.copy(base.position)
+			.add(new THREE.Vector3(...transform.position))
+			.add(pivotAtBase)
+			.sub(pivotAtFinal);
 	}
 
 	playAnimation(name: string): void {

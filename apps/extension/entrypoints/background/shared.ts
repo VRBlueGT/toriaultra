@@ -47,10 +47,17 @@ export class NoSessionError extends Error {
 
 export class ApiHttpError extends Error {
 	readonly status: number;
-	constructor(status: number, statusText: string) {
-		super(`[Kiln] API Error: ${status} ${statusText}`);
+	readonly code?: string;
+	constructor(
+		status: number,
+		statusText: string,
+		apiCode?: string,
+		apiMessage?: string,
+	) {
+		super(apiMessage ?? `[Kiln] API Error: ${status} ${statusText}`);
 		this.name = "ApiHttpError";
 		this.status = status;
+		this.code = apiCode;
 	}
 }
 
@@ -100,7 +107,21 @@ export async function safeFetch<T>(
 	});
 
 	if (!response.ok && !allowErrorResponse) {
-		throw new ApiHttpError(response.status, response.statusText);
+		let apiCode: string | undefined;
+		let apiMessage: string | undefined;
+		try {
+			const errJson = (await response.json()) as {
+				error?: { code?: string; message?: string };
+			};
+			apiCode = errJson.error?.code;
+			apiMessage = errJson.error?.message;
+		} catch {}
+		throw new ApiHttpError(
+			response.status,
+			response.statusText,
+			apiCode,
+			apiMessage,
+		);
 	}
 
 	if (schema) {

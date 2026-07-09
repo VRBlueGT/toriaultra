@@ -309,48 +309,6 @@ export const NFTItems = z.object({
 });
 export type NFTItemsApi = z.infer<typeof NFTItems>;
 
-const PlaySession = z.object({
-	id: z.string(),
-	userId: z.number(),
-	placeId: z.number().nullable(),
-	startedAt: z.string(),
-	endedAt: z.string().nullable(),
-	lastPingedAt: z.string().nullable(),
-	pingCount: z.number(),
-	verifiedMinutes: z.number(),
-	unverifiedMinutes: z.number(),
-});
-
-export const PlaySessionApi = z.object({ data: PlaySession });
-export type PlaySessionApi = z.infer<typeof PlaySessionApi>;
-
-export const PlaySessionListApi = z.object({
-	data: z.array(PlaySession),
-	meta: z.object({
-		currentPage: z.number(),
-		perPage: z.number(),
-		totalPages: z.number(),
-		totalCount: z.number(),
-	}),
-	links: z.object({
-		self: z.string(),
-		first: z.string(),
-		last: z.string(),
-		next: z.string().optional(),
-		prev: z.string().optional(),
-	}),
-});
-export type PlaySessionListApi = z.infer<typeof PlaySessionListApi>;
-
-export const TimePlayedSummaryApi = z.object({
-	data: z.object({
-		totalVerifiedMinutes: z.number(),
-		totalUnverifiedMinutes: z.number(),
-		sessionCount: z.number(),
-	}),
-});
-export type TimePlayedSummaryApi = z.infer<typeof TimePlayedSummaryApi>;
-
 export const ItemThumbnailMap = z.object({
 	data: z.record(z.string(), z.number().nullable()),
 });
@@ -413,3 +371,55 @@ export const AvatarOutfitsApi = z.object({
 	data: z.array(AvatarOutfit),
 });
 export type AvatarOutfitsApi = z.infer<typeof AvatarOutfitsApi>;
+
+const PlaceReview = z.object({
+	id: z.string(),
+	placeId: z.number(),
+	userId: z.number(),
+	username: z.string(),
+	thumbnail: z.string().nullable(),
+	rating: z.number().min(1).max(5),
+	body: z.string().nullable(),
+	createdAt: z.string(),
+	updatedAt: z.string(),
+});
+
+export const PlaceReviewsApi = z.object({
+	data: z.object({
+		reviews: z.array(PlaceReview),
+		averageRating: z.number().nullable(),
+		totalReviews: z.number(),
+		myReview: PlaceReview.nullable(),
+	}),
+});
+export type PlaceReviewsApi = z.infer<typeof PlaceReviewsApi>;
+
+export const PlaceReviewApi = z.object({
+	data: PlaceReview,
+});
+export type PlaceReviewApi = z.infer<typeof PlaceReviewApi>;
+
+const AuthSession = z.object({
+	id: z.string(),
+	createdAt: z.string().nullable(),
+	expiresAt: z.coerce.date(),
+	lastUsedAt: z.coerce.date().nullable(),
+	os: z.string().nullable(),
+	browser: z.string().nullable(),
+});
+export const AuthSessionsApi = z.object({ data: z.array(AuthSession) });
+export type AuthSessionsApi = z.infer<typeof AuthSessionsApi>;
+
+const ActivitySearchResult = z.object({
+	userId: z.number(),
+	username: z.string(),
+	thumbnailUrl: z.string().nullable(),
+	isStaff: z.boolean(),
+	userRoleClass: z.string().nullable(),
+	registeredAt: z.string(),
+	lastSeenAt: z.string(),
+});
+export const ActivitySearchApi = z.object({
+	data: z.array(ActivitySearchResult),
+});
+export type ActivitySearchApi = z.infer<typeof ActivitySearchApi>;

@@ -134,6 +134,17 @@ onMessage("checkUserActivity", ({ data: { userIds, days } }) =>
 	}),
 );
 
+onMessage("searchUsersByActivity", ({ data: query }) =>
+	handle(async () => {
+		const config = await withApi("kiln_api", "extension");
+		const response = await safeFetch(
+			`${config.resolvedUrls.extension}activity/search?q=${encodeURIComponent(query)}`,
+			Extension.ActivitySearchApi,
+		);
+		return response.data;
+	}),
+);
+
 onMessage("getNFTItems", ({ data: userId }) =>
 	handle(async () => {
 		const config = await withApi("extension_api", "extension");

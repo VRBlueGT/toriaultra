@@ -19,6 +19,7 @@ export const ItemTypeSchema = z.enum([
 	"clothing",
 	"body",
 	"achievement",
+	"consumable",
 ]);
 export type ItemType = z.infer<typeof ItemTypeSchema>;
 
@@ -174,6 +175,9 @@ export type MeshApi = z.infer<typeof MeshApiSchema>;
 
 export const TextureApiSchema = ApiStatusSchema;
 export type TextureApi = z.infer<typeof TextureApiSchema>;
+
+export const AudioApiSchema = ApiStatusSchema;
+export type AudioApi = z.infer<typeof AudioApiSchema>;
 
 export const EditApiSchema = z.object({
 	success: z.boolean(),

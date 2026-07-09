@@ -16,11 +16,6 @@
 
 import type { CurrencyCode, ParsedTrade } from "@/utils/types";
 
-/**
- * Converts relevant currency text to real-life currency.
- * @param trade The current trade.
- * @param currency The currency to convert to.
- */
 export async function irlBrickPrice(
 	trade: ParsedTrade,
 	currency: CurrencyCode,

@@ -16,25 +16,24 @@
 
 import { PolyTrack } from "@kiln/schemas";
 import { onMessage } from "@/utils/messaging";
-import { pullKVCache } from "@/utils/utilities";
 import { handle, safeFetch } from "./shared";
 
-onMessage(
-	"getGameActivity",
-	({
-		data: { userId, gameId, page = 1, pageSize = 25, forceRefresh = false },
-	}) =>
-		handle(async () =>
-			pullKVCache(
-				"gameActivity",
-				`${userId}-${gameId}-${page}-${pageSize}`,
-				() =>
-					safeFetch(
-						`https://polytrack.top/api/users/${userId}/game-activity-kiln?page=${page}&pageSize=${pageSize}&gameId=${gameId}`,
-						PolyTrack.GameActivityApiSchema,
-					),
-				60 * 1000,
-				forceRefresh,
-			),
-		),
+onMessage("getForumSearch", ({ data: filters }) =>
+	handle(async () => {
+		const query = new URLSearchParams({ page: String(filters.page) });
+		if (filters.search) query.set("search", filters.search);
+		if (filters.sort) query.set("sort", filters.sort);
+		if (filters.type) query.set("type", filters.type);
+		if (filters.authorIds.length)
+			query.set("authorIds", filters.authorIds.join(","));
+		if (filters.categoryIds.length)
+			query.set("categoryIds", filters.categoryIds.join(","));
+		if (filters.postedAfter) query.set("postedAfter", filters.postedAfter);
+		if (filters.postedBefore) query.set("postedBefore", filters.postedBefore);
+
+		return safeFetch(
+			`https://polytrack.top/api/forums?${query.toString()}`,
+			PolyTrack.ForumSearchApiSchema,
+		);
+	}),
 );

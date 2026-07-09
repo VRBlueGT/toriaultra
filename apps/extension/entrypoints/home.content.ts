@@ -17,16 +17,22 @@
 import type { Polytoria } from "@kiln/schemas";
 import errorIcon from "@/assets/error.svg";
 import sadFace from "@/assets/sad-face.webp";
-import { _bestFriends, preferences } from "@/utils/storage";
-import type { CurrencyCode } from "@/utils/types";
-import { getUserDetails, openVerificationModal } from "@/utils/utilities";
+import { _bestFriends, _lastViewedPlaces, preferences } from "@/utils/storage";
+import type { CurrencyCode, FeedPost } from "@/utils/types";
+import {
+	fireKilnNotification,
+	formatNotificationRelativeTime,
+	getUserDetails,
+	openVerificationModal,
+} from "@/utils/utilities";
 import { sendMessage } from "../utils/messaging";
 
 export default defineContentScript({
 	matches: ["https://polytoria.com/", "https://polytoria.com/home"],
 	main() {
 		preferences.getPreferences().then((values) => {
-			if (values.enabled.includes("favoritedPlaces")) favoritedPlaces();
+			if (values.enabled.includes("favoritedPlaces"))
+				favoritedPlaces(values.config.favoritedPlaces.notifyOnUpdate);
 			if (values.enabled.includes("bestFriends")) bestFriends();
 			if (values.enabled.includes("irlBrickPrice"))
 				irlBrickPrice(values.config.irlBrickPrice.currency as CurrencyCode);
@@ -34,11 +40,20 @@ export default defineContentScript({
 
 			if (values.enabled.includes("quickCreatorLaunchBtns"))
 				quickCreatorLaunchBtns();
+
+			if (values.enabled.includes("dailyChallengesRefreshing"))
+				dailyChallengesRefreshing();
+
+			if (
+				values.enabled.includes("disableInfiniteScrolling") &&
+				values.config.disableInfiniteScrolling.feed
+			)
+				disableInfiniteScrolling();
 		});
 	},
 });
 
-async function favoritedPlaces() {
+async function favoritedPlaces(notifyOnUpdate: boolean) {
 	const container = document.createElement("div");
 	container.innerHTML = `
       <div class="row reqFadeAnim px-2 px-lg-0">
@@ -128,6 +143,8 @@ async function favoritedPlaces() {
 		return;
 	}
 
+	const lastViewed = notifyOnUpdate ? await _lastViewedPlaces.getValue() : {};
+
 	const cardElements: Array<{
 		scrollCard: HTMLAnchorElement;
 		details: Polytoria.PlaceApi;
@@ -166,6 +183,42 @@ async function favoritedPlaces() {
 			PlayerCountText.children[0].classList.value =
 				"text-warning fa-duotone fa-lock";
 			PlayerCountText.children[1].remove();
+		}
+
+		if (notifyOnUpdate) {
+			const knownUpdatedAt = lastViewed[details.id];
+			const currentUpdatedAt = details.updatedAt ?? details.createdAt;
+
+			if (knownUpdatedAt !== undefined && currentUpdatedAt !== knownUpdatedAt) {
+				const ratingsHeader = scrollCard.querySelector(".ratings-header")!;
+				const badge = document.createElement("span");
+				badge.className = "kiln-update-badge badge bg-info";
+				badge.textContent = "Updated";
+				badge.title = "This world has been updated since you last viewed it.";
+				Object.assign(badge.style, {
+					position: "absolute",
+					top: "0",
+					left: "50%",
+					translate: "-50%",
+					zIndex: "2000",
+					fontFamily: "'Varela Round'",
+					borderTopLeftRadius: "0px",
+					borderTopRightRadius: "0px",
+					marginTop: "-3px",
+					width: "50%",
+					boxShadow: "0 0 3px #00000087",
+				});
+				ratingsHeader.appendChild(badge);
+
+				await fireKilnNotification({
+					id: `place-update:${details.id}`,
+					message: `${details.name} has been updated!`,
+					date: new Date(currentUpdatedAt),
+					url: `/places/${details.id}`,
+					avatarUrl: details.thumbnail,
+					dedupeValue: currentUpdatedAt,
+				});
+			}
 		}
 
 		card.appendChild(scrollCard);
@@ -386,4 +439,188 @@ function quickCreatorLaunchBtns() {
 		sendMessage("openCreator", 2);
 	});
 	btn2.addEventListener("click", () => sendMessage("openCreator", 1));
+}
+
+function renderFeedPost(post: FeedPost): HTMLElement {
+	const card = document.createElement("div");
+	card.className = "card card-dash mcard mb-3";
+	card.id = `feed-post-${post.id}`;
+	card.innerHTML = `
+		<div class="card-body">
+			<div class="row small">
+				<div class="col-auto">
+					<a href="/users/${post.author.id}">
+						<img width="52" height="52" class="img-fluid rounded-circle border border-2 border-secondary kiln-feed-avatar">
+					</a>
+				</div>
+				<div class="col">
+					<p class="mb-1">
+						<a href="/users/${post.author.id}" class="text-reset kiln-feed-username"></a>
+						<span class="text-muted ms-2">
+							<i class="fad fa-clock me-1"></i>
+							<span class="kiln-feed-time"></span>
+							<span class="kiln-feed-place"></span>
+						</span>
+					</p>
+					<p class="mb-1 feed-post-text">
+						<a href="/feed/${post.id}" class="text-reset kiln-feed-content"></a>
+					</p>
+					<div class="kiln-feed-media"></div>
+					<div class="row">
+						<div class="col-auto">
+							<a class="text-danger text-decoration-none" onclick="toggleLike(${post.id})"><i class="${post.isLiked ? "fas" : "far"} fa-heart btn-icon me-1"></i> <span>${post.likeCount}</span></a>
+						</div>
+						<div class="col-auto">
+							<a class="text-muted text-decoration-none" href="/feed/${post.id}"><i class="far fa-comment btn-icon me-1"></i>${post.replyCount}</a>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		`;
+
+	const avatar = card.querySelector<HTMLImageElement>(".kiln-feed-avatar")!;
+	avatar.src = post.author.avatarIconUrl;
+	avatar.alt = post.author.username;
+
+	card.querySelector(".kiln-feed-username")!.textContent = post.author.username;
+	card.querySelector(".kiln-feed-time")!.textContent =
+		formatNotificationRelativeTime(new Date(post.postedAt));
+	card.querySelector(".kiln-feed-content")!.textContent = post.content;
+
+	if (post.placeID !== null) {
+		const place = card.querySelector(".kiln-feed-place")!;
+		place.innerHTML = `<span class="text-muted mx-1">&middot;</span> `;
+		const placeLink = document.createElement("a");
+		placeLink.className = "text-muted";
+		placeLink.href = `/places/${post.placeID}`;
+		placeLink.textContent = post.placeName ?? "";
+		place.appendChild(placeLink);
+	}
+
+	if (post.mediaUrl) {
+		const mediaUrl = post.mediaUrl;
+		const mediaContainer = card.querySelector(".kiln-feed-media")!;
+		const link = document.createElement("a");
+		link.href = "#!";
+		const img = document.createElement("img");
+		img.src = mediaUrl;
+		img.alt = post.content;
+		img.className = "img-fluid rounded-3 my-2";
+		link.appendChild(img);
+		link.addEventListener("click", (e) => {
+			e.preventDefault();
+			//@ts-expect-error: page-defined global
+			window.showImageModal?.(mediaUrl);
+		});
+		mediaContainer.appendChild(link);
+	}
+
+	return card;
+}
+
+function disableInfiniteScrolling() {
+	sendMessage("disableFeedAutoScroll");
+
+	const feedPosts = document.getElementById("feed-posts");
+	if (!feedPosts) return;
+
+	let page = 1;
+	let loading = false;
+	let finished = false;
+
+	const button = document.createElement("button");
+	button.type = "button";
+	button.className = "btn btn-outline-secondary w-100 mb-3";
+	button.textContent = "Load More";
+	feedPosts.insertAdjacentElement("afterend", button);
+
+	const setButtonState = (state: "idle" | "loading" | "error") => {
+		button.disabled = state !== "idle";
+		button.innerHTML =
+			state === "loading"
+				? `<span class="spinner-border spinner-border-sm"></span> Loading...`
+				: state === "error"
+					? "Failed to load more, click to retry"
+					: "Load More";
+	};
+
+	button.addEventListener("click", async () => {
+		if (loading || finished) return;
+		loading = true;
+		setButtonState("loading");
+
+		const result = await sendMessage("getFeed", page + 1);
+		loading = false;
+
+		if (!result.ok) {
+			setButtonState("error");
+			return;
+		}
+
+		page = result.data.meta.currentPage;
+		for (const post of result.data.data) {
+			feedPosts.appendChild(renderFeedPost(post));
+		}
+
+		if (result.data.meta.nextPageURL === null) {
+			finished = true;
+			button.remove();
+		} else {
+			setButtonState("idle");
+		}
+	});
+}
+
+function dailyChallengesRefreshing() {
+	const card = document.querySelector(".daily-challenge-card");
+	if (!card) return;
+
+	const header = card.querySelector<HTMLElement>(".card-body > .d-flex");
+	const challengesList = card.querySelector<HTMLElement>(".overflow-y-auto");
+	if (!header || !challengesList) return;
+
+	const refreshBtn = document.createElement("button");
+	refreshBtn.type = "button";
+	refreshBtn.className =
+		"btn btn-sm btn-outline-secondary kiln-challenges-refresh-btn";
+	refreshBtn.title = "Refresh challenges";
+	refreshBtn.innerHTML = `<i class="fas fa-sync-alt"></i>`;
+	header.appendChild(refreshBtn);
+
+	refreshBtn.addEventListener("click", async () => {
+		refreshBtn.disabled = true;
+		refreshBtn.innerHTML = `<i class="fas fa-sync-alt fa-spin"></i>`;
+
+		try {
+			const response = await fetch(window.location.href);
+			const html = await response.text();
+			const dom = new DOMParser().parseFromString(html, "text/html");
+
+			const freshCard = dom.querySelector(".daily-challenge-card");
+			if (!freshCard) return;
+
+			const freshStreakBadge = freshCard.querySelector(
+				".challenge-streak-badge",
+			);
+			const streakBadge = header.querySelector(".challenge-streak-badge");
+			if (freshStreakBadge && streakBadge) {
+				streakBadge.outerHTML = freshStreakBadge.outerHTML;
+			} else if (streakBadge) {
+				streakBadge.remove();
+			} else if (freshStreakBadge) {
+				header.appendChild(freshStreakBadge.cloneNode(true) as Element);
+			}
+
+			const freshList = freshCard.querySelector(".overflow-y-auto");
+			if (freshList) {
+				challengesList.innerHTML = freshList.innerHTML;
+			}
+
+			sendMessage("registerBootstrapElements");
+		} finally {
+			refreshBtn.disabled = false;
+			refreshBtn.innerHTML = `<i class="fas fa-sync-alt"></i>`;
+		}
+	});
 }

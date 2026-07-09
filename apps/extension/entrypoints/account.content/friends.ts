@@ -16,9 +16,6 @@
 
 import { sendMessage } from "@/utils/messaging";
 
-/**
- * Adds a quick accept all friend requests button & a decline all friend requests button to the top of the /my/friends/ page grid.
- */
 export function actions() {
 	const container = document.getElementById("friends-container")!;
 

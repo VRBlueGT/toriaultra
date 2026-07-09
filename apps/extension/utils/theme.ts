@@ -527,7 +527,6 @@ export function lightenHex(hex: string, percent: number): string {
 	return rgbToHex(nr, ng, nb);
 }
 
-/** Returns "#000" or "#fff" depending on which contrasts better against the given background. */
 export function getContrastColor(hex: string): "#000000" | "#ffffff" {
 	const [r, g, b] = hexToRgb(hex);
 	const toLinear = (c: number) => {
@@ -542,10 +541,6 @@ export function isValidHex(hex: string): boolean {
 	return /^#[0-9a-f]{6}$/i.test(hex);
 }
 
-/**
- * Converts a target hex color to a CSS filter string that tints the
- * Polytoria logo (base color: red, ~HSL 0, 1, 0.5) to approximate it.
- */
 export function hexToIconFilter(hex: string): string {
 	const [r, g, b] = hexToRgb(hex);
 	const [h, s, l] = rgbToHsl(r, g, b);

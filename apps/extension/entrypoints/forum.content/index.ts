@@ -15,13 +15,18 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import { preferences } from "@/utils/storage";
+import * as create from "./create";
+import * as search from "./search";
 import * as view from "./view";
 
 export default defineContentScript({
-	matches: ["https://polytoria.com/forum/*"],
+	matches: ["https://polytoria.com/forum", "https://polytoria.com/forum/*"],
 	main() {
 		preferences.getPreferences().then((values) => {
-			if (window.location.pathname.includes("post")) {
+			const [_, _first, second] = window.location.pathname.split("/");
+			console.log(_, _first, second);
+
+			if (second == "post") {
 				if (import.meta.env.MODE == "development") {
 					console.log("[Kiln] Running view page functions: ", view);
 				}
@@ -29,6 +34,21 @@ export default defineContentScript({
 				if (values.enabled.includes("forumMentions")) view.forumMentions();
 				if (values.enabled.includes("aiBotForumWarnings"))
 					view.aiBotForumWarnings();
+			} else if (second == "new") {
+				if (import.meta.env.MODE == "development") {
+					console.log("[Kiln] Running create page functions: ", create);
+				}
+
+				if (values.enabled.includes("improvedForumComposer"))
+					create.improvedForumComposer(
+						values.config.improvedForumComposer.showCharacterCount,
+						values.config.improvedForumComposer.showMarkdownBtns,
+						values.config.improvedForumComposer.autoShowPreview,
+					);
+			} else if (!second) {
+				if (values.enabled.includes("advancedForumSearch"))
+					search.advancedForumSearch();
+				if (values.enabled.includes("myPosts")) search.myPosts();
 			}
 		});
 	},

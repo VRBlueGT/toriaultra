@@ -84,9 +84,6 @@ export type preferencesSchema = typeof defaultPreferences & {
 interface PreferencesStorageItem
 	// biome-ignore lint/complexity/noBannedTypes: WXT
 	extends WxtStorageItem<typeof defaultPreferences, {}> {
-	/**
-	 * Wrapper for the standard `.getValue()` method that merges the user's saved preferences with the default preferences to make sure there are no unexpected errors.
-	 */
 	getPreferences: () => Promise<typeof defaultPreferences>;
 }
 
@@ -117,6 +114,35 @@ export const _favoritedPlaces = storage.defineItem<number[]>(
 
 export const _bestFriends = storage.defineItem("sync:bestFriends", {
 	fallback: [],
+	version: 1,
+});
+
+export const _lastViewedPlaces = storage.defineItem<Record<number, string>>(
+	"local:lastViewedPlaces",
+	{
+		fallback: {},
+		version: 1,
+	},
+);
+
+export interface KilnNotification {
+	message: string;
+	date: string;
+	url: string;
+	avatarUrl: string;
+	read: boolean;
+	/** Identifies which "event" this notification represents, so firing the
+	 *  same event again doesn't reset an already-read notification back to
+	 *  unread; a genuinely new value creates a fresh unread notification. */
+	dedupeValue: string;
+}
+
+/** Fabricated notifications any Kiln feature can add to the notifications
+ *  tray, keyed by a caller-chosen id (e.g. `place-update:${placeId}`). */
+export const _kilnNotifications = storage.defineItem<
+	Record<string, KilnNotification>
+>("local:kilnNotifications", {
+	fallback: {},
 	version: 1,
 });
 

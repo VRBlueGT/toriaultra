@@ -18,7 +18,13 @@ import { Extension } from "@kiln/schemas";
 import { onMessage } from "@/utils/messaging";
 import { apiSessions } from "@/utils/storage";
 import { pullKVCache } from "@/utils/utilities";
-import { handle, safeFetch, withApi, withAuthSession } from "./shared";
+import {
+	handle,
+	NoSessionError,
+	safeFetch,
+	withApi,
+	withAuthSession,
+} from "./shared";
 
 onMessage("getApiSession", ({ data: userId }) =>
 	handle(() =>
@@ -79,6 +85,52 @@ onMessage("finishKilnVerification", ({ data: userId }) =>
 			},
 		);
 	}),
+);
+
+onMessage("terminateKilnSession", ({ data: userId }) =>
+	handle(async () => {
+		const config = await withApi("kiln_api", "extension");
+		const sessionStore = await apiSessions.getValue();
+		const session = sessionStore.find((s) => s.userId == userId);
+		if (!session?.accessToken || !session?.refreshToken)
+			throw new NoSessionError();
+		await safeFetch(`${config.resolvedUrls.extension}auth/terminate`, null, {
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${session.accessToken}`,
+				"x-kiln-refresh-token": session.refreshToken,
+			},
+		});
+		await apiSessions.setValue(sessionStore.filter((s) => s.userId != userId));
+		return null;
+	}),
+);
+
+onMessage("getKilnSessions", ({ data: userId }) =>
+	handle(() =>
+		withAuthSession(userId, (token, config) =>
+			safeFetch(
+				`${config.resolvedUrls.extension}auth/sessions`,
+				Extension.AuthSessionsApi,
+				{ headers: { Authorization: `Bearer ${token}` } },
+			),
+		),
+	),
+);
+
+onMessage("terminateKilnSessionById", ({ data }) =>
+	handle(() =>
+		withAuthSession(data.userId, (token, config) =>
+			safeFetch(
+				`${config.resolvedUrls.extension}auth/sessions/${encodeURIComponent(data.sessionId)}`,
+				null,
+				{
+					method: "DELETE",
+					headers: { Authorization: `Bearer ${token}` },
+				},
+			).then(() => null),
+		),
+	),
 );
 
 onMessage("getPublishedTheme", ({ data: id }) =>

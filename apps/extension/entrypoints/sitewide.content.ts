@@ -16,6 +16,7 @@
 
 import "@/public/css/specific.css";
 
+import errorIcon from "@/assets/error.svg";
 import plusIcon from "@/assets/plus.svg";
 import plusDeluxeIcon from "@/assets/plusDx.svg";
 import _preferencesJson from "@/public/preferences.json";
@@ -34,6 +35,7 @@ import {
 	injectNoticeBanners,
 	injectPostUpdateBanner,
 	injectUpdateBanner,
+	renderKilnNotifications,
 } from "@/utils/utilities";
 
 export default defineContentScript({
@@ -62,7 +64,8 @@ export default defineContentScript({
 				const style = document.createElement("style");
 				style.textContent =
 					".navbar.navbar-expand-lg.navbar-light.bg-navbar.nav-secondary { display: none !important; }" +
-					"main { overflow-x: clip; }";
+					"#main-content { min-width: 0; }" +
+					"html, body { overflow-x: clip; }";
 				(document.head || document.documentElement).appendChild(style);
 
 				const observer = new MutationObserver(async () => {
@@ -108,6 +111,8 @@ export default defineContentScript({
 
 				if (import.meta.env.MODE == "development")
 					console.info("[Kiln] Logged in as: ", user);
+
+				renderKilnNotifications();
 
 				getApiSession(user.userId).then((state) => {
 					if (state == null) {
@@ -193,7 +198,7 @@ export default defineContentScript({
 								.querySelector('.navbar [data-bs-html="true"]')!
 								.getElementsByTagName("span")[0]!;
 
-							brickBalance.innerHTML += ` (${currency})`;
+							brickBalance.innerHTML += ` <span style="color: rgb(141 141 141);">(${currency})</span>`;
 						}
 					}
 
@@ -205,6 +210,10 @@ export default defineContentScript({
 
 					if (values.enabled.includes("friendReqNotifActions")) {
 						friendReqNotifActions();
+					}
+
+					if (values.enabled.includes("reenableSearch")) {
+						reenableSearch();
 					}
 				});
 			});
@@ -262,10 +271,6 @@ function injectKilnSettingsLink() {
 	);
 }
 
-/**
- * Applies the specified membership's theme to the sitewide navigation.
- * @param themeId The ID of the membership whose theme should be applied.
- */
 function membershipThemes(themeId: "plus" | "plusdx") {
 	const navbar = document.querySelector(
 		".navbar.navbar-expand-lg.navbar-light.bg-navbar.nav-topbar",
@@ -427,6 +432,14 @@ function legacySidebar(
 	if (!document.querySelector(".nav-sidebar-cont")) {
 		const pageContent = document.getElementById("main-content")!.parentElement;
 		pageContent!.prepend(createSidebarElement(membershipStyle, showUpgradeBtn));
+	}
+
+	if (!document.getElementById("kiln-legacy-sidebar-style")) {
+		const style = document.createElement("style");
+		style.id = "kiln-legacy-sidebar-style";
+		style.textContent =
+			"#main-content { min-width: 0; }html, body { overflow-x: clip; }";
+		(document.head || document.documentElement).appendChild(style);
 	}
 
 	copySidebarBadges();
@@ -948,6 +961,29 @@ function localizedTimestamps(): void {
 	}
 }
 
+const OPAQUE_ALPHA_THRESHOLD = 0.85;
+const STICKY_BG_ALPHA = 0.92;
+const STICKY_BG_FALLBACK: [number, number, number] = [37, 37, 37];
+
+function deTransparentize(el: HTMLElement) {
+	const match = getComputedStyle(el).backgroundColor.match(
+		/rgba?\(\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\s*\)/,
+	);
+	if (!match) return;
+
+	const alpha = match[4] === undefined ? 1 : parseFloat(match[4]);
+	if (alpha >= OPAQUE_ALPHA_THRESHOLD) return;
+
+	const [r, g, b] =
+		alpha === 0 && match[1] === "0" && match[2] === "0" && match[3] === "0"
+			? STICKY_BG_FALLBACK
+			: [match[1], match[2], match[3]];
+
+	el.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${STICKY_BG_ALPHA})`;
+	el.style.backdropFilter = "blur(18px)";
+	el.style.setProperty("-webkit-backdrop-filter", "blur(8px)");
+}
+
 function stickyNavbar() {
 	const navbar = document.querySelector(
 		".navbar.navbar-expand-lg.navbar-light.bg-navbar.nav-topbar",
@@ -956,6 +992,10 @@ function stickyNavbar() {
 	const secondaryNavbar = document.querySelector(
 		".navbar.navbar-expand-lg.navbar-light.bg-navbar.nav-secondary",
 	) as HTMLElement | null;
+
+	const siteBanners = Array.from(
+		document.querySelectorAll<HTMLElement>(".siteBannerCont"),
+	);
 
 	Object.assign(navbar.style, {
 		position: "sticky",
@@ -966,9 +1006,136 @@ function stickyNavbar() {
 	if (secondaryNavbar) {
 		Object.assign(secondaryNavbar.style, {
 			position: "sticky",
-			// * I'm not sure if there is a more consistent way to do this with multiple sticky elements other than parenting them together and making that parent element sticky
-			top: "4%",
 			zIndex: 2000,
 		});
 	}
+
+	deTransparentize(navbar);
+	if (secondaryNavbar) deTransparentize(secondaryNavbar);
+
+	const updateOffsets = () => {
+		let offset = navbar.getBoundingClientRect().height;
+
+		if (secondaryNavbar) {
+			secondaryNavbar.style.top = `${offset}px`;
+			offset += secondaryNavbar.getBoundingClientRect().height;
+		}
+
+		for (const banner of siteBanners) {
+			banner.style.top = `${offset}px`;
+			offset += banner.getBoundingClientRect().height;
+		}
+	};
+
+	updateOffsets();
+
+	const resizeObserver = new ResizeObserver(updateOffsets);
+	resizeObserver.observe(navbar);
+	if (secondaryNavbar) resizeObserver.observe(secondaryNavbar);
+	for (const banner of siteBanners) resizeObserver.observe(banner);
+}
+
+function escapeHtml(value: string): string {
+	return value
+		.replaceAll("&", "&amp;")
+		.replaceAll("<", "&lt;")
+		.replaceAll(">", "&gt;")
+		.replaceAll('"', "&quot;")
+		.replaceAll("'", "&#39;");
+}
+
+function createSearchResultItem(user: {
+	userId: number;
+	username: string;
+	thumbnailUrl: string | null;
+	isStaff: boolean;
+	userRoleClass: string | null;
+}): HTMLElement {
+	const item = document.createElement("div");
+	item.className = "search-item highlight";
+	item.tabIndex = 1;
+	item.dataset.searchurl = `/users/${user.userId}`;
+
+	const usernameClass = user.userRoleClass
+		? `userlink-${user.userRoleClass}`
+		: "";
+
+	item.innerHTML = `
+		<div class="row container">
+			<div class="col-auto p-0">
+				<img src="${escapeHtml(user.thumbnailUrl ?? errorIcon)}" class="rounded" height="48">
+			</div>
+			<div class="col">
+				<div class="mt-1 ${usernameClass}" style="line-height:1.1;">${escapeHtml(user.username)}</div>
+				<div class="text-muted"><small style="font-size:0.8em;">${user.isStaff ? "Staff" : "Player"}</small></div>
+			</div>
+		</div>
+	`;
+
+	item.addEventListener("click", () => {
+		window.location.href = item.dataset.searchurl!;
+	});
+
+	return item;
+}
+
+function reenableSearch() {
+	const input = document.getElementById("gsearch") as HTMLInputElement | null;
+	if (!input) {
+		console.warn("[Kiln] #gsearch not found");
+		return;
+	}
+
+	const highlightSection = document.getElementById("search-highlight");
+	const resultsContainer = document.getElementById("highlight-results");
+	if (!highlightSection || !resultsContainer) {
+		console.warn("[Kiln] search highlight elements not found");
+		return;
+	}
+
+	const highlightLabel = highlightSection.querySelector("small.fw-bold");
+	if (highlightLabel) {
+		highlightLabel.textContent = "Quick Results (powered by Kiln)";
+	}
+
+	let requestId = 0;
+	let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+
+	const clearResults = () => {
+		resultsContainer.innerHTML = "";
+		highlightSection.classList.add("d-none");
+	};
+
+	input.addEventListener("input", () => {
+		clearTimeout(debounceTimer);
+
+		const query = input.value.trim();
+		if (query.length < 2) {
+			requestId++;
+			clearResults();
+			return;
+		}
+
+		debounceTimer = setTimeout(async () => {
+			const thisRequest = ++requestId;
+
+			resultsContainer.innerHTML =
+				'<div class="text-center text-muted p-2"><span class="spinner-border spinner-border-sm"></span> Searching...</div>';
+			highlightSection.classList.remove("d-none");
+
+			const result = await sendMessage("searchUsersByActivity", query);
+			if (thisRequest !== requestId) return;
+
+			if (!result.ok || result.data.length === 0) {
+				clearResults();
+				return;
+			}
+
+			resultsContainer.innerHTML = "";
+			for (const user of result.data) {
+				resultsContainer.appendChild(createSearchResultItem(user));
+			}
+			highlightSection.classList.remove("d-none");
+		}, 250);
+	});
 }

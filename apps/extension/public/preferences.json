@@ -50,6 +50,14 @@
 					"text": "Limit of 25 worlds pinned at once."
 				}
 			],
+			"config": [
+				{
+					"type": "check",
+					"subsetting": "notifyOnUpdate",
+					"label": "Notify Me When a Pinned World Updates",
+					"default": true
+				}
+			],
 			"tags": [
 				"expression"
 			]
@@ -1316,25 +1324,6 @@
 			]
 		},
 		{
-			"name": "More Search Filters",
-			"desc": "Easily find what you're looking for with more search filters side-wide!",
-			"id": "searchFilters",
-			"notes": [
-				{
-					"type": "info",
-					"text": "This does not affect the main search bar located in the navbar."
-				},
-				{
-					"type": "warning",
-					"text": "This currently only has a \"Creator\" username filter on the forum search page, more search filters are yet to come."
-				}
-			],
-			"tags": [
-				"utility"
-			],
-			"hide": true
-		},
-		{
 			"name": "Free Membership Themes",
 			"desc": "Ever want the fancy membership themes for completely free? Well now you can apply them on the site-wide navigation without paying a dime!",
 			"id": "membershipThemes",
@@ -1662,9 +1651,7 @@
 				}
 			],
 			"tags": [
-				"expression",
-				"experimental",
-				"new"
+				"expression"
 			],
 			"desktopOnly": true
 		},
@@ -1681,21 +1668,18 @@
 			"name": "Playtime Tracking",
 			"desc": "Track your playtime in places around Polytoria!",
 			"id": "playtimeTracking",
-			"requiresSync": true,
 			"notes": [
 				{
 					"type": "info",
-					"text": "Past playtime data (prior to extension install/prior to setting being enabled) is not tracked."
+					"text": "Playtime tracking started June 22nd 2026. Sessions from before that date will not show up."
 				},
 				{
-					"type": "warning",
-					"text": "This feature is experimental, you will probably encounter bugs."
+					"type": "info",
+					"text": "Play sessions are pulled from polytrack.top. Thank you to them for allowing Kiln to pull from their data <3"
 				}
 			],
 			"tags": [
-				"utility",
-				"experimental",
-				"new"
+				"utility"
 			],
 			"desktopOnly": true
 		},
@@ -2192,8 +2176,7 @@
 				}
 			],
 			"tags": [
-				"economy",
-				"new"
+				"economy"
 			]
 		},
 		{
@@ -2203,8 +2186,7 @@
 			"defaultEnabled": true,
 			"tags": [
 				"utility",
-				"development",
-				"new"
+				"development"
 			]
 		},
 		{
@@ -2214,8 +2196,7 @@
 			"defaultEnabled": true,
 			"tags": [
 				"utility",
-				"development",
-				"new"
+				"development"
 			]
 		},
 		{
@@ -2230,8 +2211,7 @@
 				}
 			],
 			"tags": [
-				"social",
-				"new"
+				"social"
 			]
 		},
 		{
@@ -2251,8 +2231,7 @@
 			],
 			"tags": [
 				"utility",
-				"social",
-				"new"
+				"social"
 			]
 		},
 		{
@@ -2261,8 +2240,7 @@
 			"id": "localizedTimestamps",
 			"defaultEnabled": false,
 			"tags": [
-				"utility",
-				"new"
+				"utility"
 			]
 		},
 		{
@@ -2298,8 +2276,7 @@
 			],
 			"defaultEnabled": false,
 			"tags": [
-				"utility",
-				"new"
+				"utility"
 			]
 		},
 		{
@@ -2309,7 +2286,202 @@
 			"defaultEnabled": false,
 			"tags": [
 				"utility",
-				"expression",
+				"expression"
+			]
+		},
+		{
+			"name": "World Reviews",
+			"desc": "Rate a world out of 5 stars, and even offer a short text review. You can also view what other Kiln users think about the same world!",
+			"id": "detailedPlaceReviews",
+			"defaultEnabled": true,
+			"requiresSync": true,
+			"notes": [
+				{
+					"type": "info",
+					"text": "You need to have at least 5 minutes of playtime in a world to review it."
+				},
+				{
+					"type": "info",
+					"text": "Reviews are only visible to other Kiln users."
+				}
+			],
+			"tags": [
+				"social",
+				"new"
+			]
+		},
+		{
+			"name": "Improved Forum Composer",
+			"desc": "Postfarm with ease with an improved composer! (jk.. if you postfarm.. uh don't.. or do, I don't judge!)",
+			"id": "improvedForumComposer",
+			"defaultEnabled": true,
+			"config": [
+				{
+					"type": "check",
+					"subsetting": "showCharacterCount",
+					"label": "Show Character Count",
+					"default": true
+				},
+				{
+					"type": "check",
+					"subsetting": "showMarkdownBtns",
+					"label": "Show Markdown Buttons",
+					"default": true
+				},
+				{
+					"type": "check",
+					"subsetting": "autoShowPreview",
+					"label": "Automatically Show Preview",
+					"default": false
+				}
+			],
+			"tags": [
+				"utility",
+				"new"
+			]
+		},
+		{
+			"name": "World Consumables Tab",
+			"desc": "View the consumables of the world you're looking at with a tab on the world's page.",
+			"id": "placeConsumablesTab",
+			"defaultEnabled": true,
+			"tags": [
+				"utility",
+				"experimental",
+				"new"
+			],
+			"hide": true
+		},
+		{
+			"name": "Server Refreshing",
+			"desc": "Adds a refresh button to the servers tab so you can check for new servers without reloading the page.",
+			"id": "serverRefreshing",
+			"defaultEnabled": true,
+			"tags": [
+				"utility",
+				"new"
+			]
+		},
+		{
+			"name": "Daily Challenges Refreshing",
+			"desc": "Adds a refresh button to the daily challenges card on the homepage so you can check your progress without reloading the page.",
+			"id": "dailyChallengesRefreshing",
+			"defaultEnabled": true,
+			"tags": [
+				"utility",
+				"new"
+			]
+		},
+		{
+			"name": "Disable Infinite Scrolling",
+			"desc": "Replaces automatic load-on-scroll pages with a manual \"Load More\" button, so content only loads when you ask for it.",
+			"id": "disableInfiniteScrolling",
+			"config": [
+				{
+					"type": "check",
+					"subsetting": "places",
+					"label": "Worlds Page",
+					"default": true
+				},
+				{
+					"type": "check",
+					"subsetting": "store",
+					"label": "Store Page",
+					"default": true
+				},
+				{
+					"type": "check",
+					"subsetting": "feed",
+					"label": "Homepage Feed",
+					"default": true
+				}
+			],
+			"tags": [
+				"utility",
+				"new"
+			]
+		},
+		{
+			"name": "Advanced Forum Search",
+			"desc": "Replaces the forum search page with an advanced search powered by PolyTrack, adding sort, author, category, date, and post type filters!",
+			"id": "advancedForumSearch",
+			"defaultEnabled": true,
+			"notes": [
+				{
+					"type": "info",
+					"text": "This does not affect the main search bar located in the navbar."
+				},
+				{
+					"type": "info",
+					"text": "Results are provided by PolyTrack. Thank you to them for allowing Kiln to pull from their data <3"
+				}
+			],
+			"tags": [
+				"utility",
+				"new"
+			]
+		},
+		{
+			"name": "Re-enable Sitewide Search",
+			"desc": "Enables the search results from the search bar in the navbar that were disabled in February 2026.",
+			"id": "reenableSearch",
+			"defaultEnabled": true,
+			"notes": [
+				{
+					"type": "info",
+					"text": "Search is exclusive to users for now."
+				},
+				{
+					"type": "info",
+					"text": "Search results are powered by Kiln's own experimental search index."
+				}
+			],
+			"tags": [
+				"utility",
+				"new"
+			]
+		},
+		{
+			"name": "\"My Posts\"",
+			"desc": "Adds a \"My Posts\" button below the forum search bar that displays all of the threads and replies you've created.",
+			"id": "myPosts",
+			"defaultEnabled": true,
+			"notes": [
+				{
+					"type": "info",
+					"text": "Results are provided by PolyTrack. Thank you to them for allowing Kiln to pull from their data <3"
+				}
+			],
+			"tags": [
+				"utility",
+				"new"
+			]
+		},
+		{
+			"name": "Audio Toolbox Previews",
+			"desc": "Quickly play any audio from the \"Community Creations\" tab on the site without having to go in and out of pages!",
+			"id": "audioToolboxPreviews",
+			"defaultEnabled": true,
+			"tags": [
+				"utility",
+				"development",
+				"new"
+			]
+		},
+		{
+			"name": "World Trends",
+			"desc": "Analyze how your world is performing with a chart of unique visitors, players in-game, likes, and dislikes on the \"Stats\" section of your world management page.",
+			"id": "worldTrends",
+			"defaultEnabled": true,
+			"notes": [
+				{
+					"type": "info",
+					"text": "Trends are provided by PolyTrack. Thank you to them for allowing Kiln to pull from their data <3"
+				}
+			],
+			"tags": [
+				"utility",
+				"development",
 				"new"
 			]
 		}

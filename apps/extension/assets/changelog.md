@@ -1,3 +1,59 @@
+## v2.8.0 — 2026-07-09
+
+### Highlights
+
+### Commits
+
+- feat(extension): update rendering of preference notices
+- chore(extension): cleanup
+- feat(extension): add playtime requirement note to world reviews preference toggle
+- feat(extension): client-side playtime check on world review
+- feat: require 5 minutes minimum of playtime to review a world
+- fix(extension): make navbar background blurry to improve readability when navbar bg is mostly transparent
+- fix(extension): site banners disappearing when scrolling with "Sticky Navbar" enabled
+- fix(extension): legacy sidebar causes navbar to overflow screen horizontally
+- feat(extension): new "World Trends" feature
+- feat(extension): improve design of "Expanded Message Glance" feature
+- feat(extension): new "Audio Toolbox Previews" feature
+- feat(extension): remove announcement
+- feat(extension): new "My Posts" feature
+- feat(extension): handle missing headshot image in search index
+- chore(extension): remove "New" labels from old features
+- feat(extension): change color of IRL brick price on navbar
+- feat: scrape isStaff, userlink, and thumbnail URL on user indexing cron
+- feat(extension): new "Re-enable Sitewide Search" feature
+- feat(extension): new "Advanced Forum Search" feature
+- style(extension): polish "Disable Infinite Scrolling" feature logic
+- fix(extension): random place button squishing world search bar input
+- feat(extension): new "Disable Infinite Scrolling" feature
+- feat(extension): export avatar sandbox avatar as mesh
+- feat(extension): add accessory repositioning to avatar sandbox
+- feat(extension): rely on PolyTrack for playtime tracking
+- feat(extension): automatic verification method
+- feat(extension): add multiple body types to 3d clothing preview
+- feat(extension): update updates notice
+- feat(extension): pinned world update notifications
+- feat(extension): updates notice
+- feat(extension): theme delete confirmation modal
+- feat(extension): new "Daily Challenges Refreshing" feature
+- feat(extension): new "Server Refreshing" feature
+- fix(extension): name bones correctly with "Avatar Mesh Downloader"
+- fix(extension): attach hats and tools to the player model with "Avatar Mesh Downloader"
+- feat(extension): active linked sessions
+- feat: session management
+- feat: notify on recent users crawl erroring out
+- feat: rename "Avatar Sandbox" references to "Character Sandbox"
+- chore(extension): update mirror script
+- fix(extension): handle spamming changes in "Character Sandbox" avatar renderer
+- fix(extension): use new PolyTrack endpoint for "Ranking Positions" feature
+- feat(extension): new "World Consumables Tab" feature
+- feat(extension): ability to import and export preferences JSON
+- fix(extension): fix secondary navbar overlapping primary navbar when scrolling with "Sticky Navbar" enabled
+- feat(extension): new "Improved Forum Composer" feature (#83)
+- fix(extension): "Creator Comment Labels" failing to find creator ID when "Legacy World View Layout" is enabled
+- chore(extension): final clean up
+- feat: new "Detailed World Reviews" feature
+
 ## v2.7.0 — 2026-06-17
 
 ### Highlights

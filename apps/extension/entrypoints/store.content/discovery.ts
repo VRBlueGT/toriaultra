@@ -14,16 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import type { CurrencyCode } from "@/utils/types";
+import type { CurrencyCode, StoreListingItem } from "@/utils/types";
 import {
 	bricksToCurrency,
 	createModal,
 	parseFormattedNumber,
 } from "@/utils/utilities";
 
-/**
- * Adds the locale real-life dollar value next to the amount of bricks an item costs on the /store/ page item grid.
- */
 export function irlBrickPrice(irlCurrency: CurrencyCode) {
 	const addPrice = async (item: HTMLElement) => {
 		const brickCounterEl = item.getElementsByClassName("text-success")[0] as
@@ -98,9 +95,6 @@ type EventWithItems = {
 	items: { id: number; name: string; thumbnailUrl: string }[];
 };
 
-/**
- * Adds an "Event Items" button to see event items in a modal layout, organized by event.
- */
 export async function eventItems() {
 	const eventsResult = await sendMessage("getEvents");
 	if (!eventsResult.ok || eventsResult.data.data.length === 0) return;
@@ -276,10 +270,6 @@ export async function eventItems() {
 	}
 }
 
-/**
- * Adds a star in the corner of items the user owns on the /store/ page item grid.
- * @param userId The ID of the authenticated user.
- */
 export async function ownedTags(userId: number) {
 	const ownedResult = await sendMessage("getOwnedAssetMap", userId);
 
@@ -393,4 +383,232 @@ export async function ownedTags(userId: number) {
 	} else {
 		mutations.observe(document.body, { childList: true, subtree: true });
 	}
+}
+
+function parseStorePriceInput(value: string): number | null {
+	if (!value) return null;
+	const parsed = Number.parseInt(value, 10);
+	return Number.isNaN(parsed) ? null : parsed;
+}
+
+function readStoreFilters(page: number) {
+	const types = [
+		...document.querySelectorAll<HTMLElement>(".store-type-btn.active"),
+	].map((b) => b.dataset.type!);
+	const accessoryTypes = [
+		...document.querySelectorAll<HTMLElement>(".store-accessory-btn.active"),
+	].map((b) => b.dataset.accessoryType!);
+
+	const selected = (
+		document.getElementById("store-sort") as HTMLSelectElement | null
+	)?.selectedOptions[0];
+
+	const currency = (
+		document.getElementById("store-currency") as HTMLSelectElement | null
+	)?.value;
+	const search = (
+		(document.getElementById("storeSearch") as HTMLInputElement | null)
+			?.value ?? ""
+	).trim();
+	const showOffsale =
+		(document.getElementById("show-offsale") as HTMLInputElement | null)
+			?.checked ?? false;
+	const collectiblesOnly =
+		(document.getElementById("hide-non-collectible") as HTMLInputElement | null)
+			?.checked ?? false;
+	const minPrice = parseStorePriceInput(
+		(document.getElementById("store-min-price") as HTMLInputElement | null)
+			?.value ?? "",
+	);
+	const maxPrice = parseStorePriceInput(
+		(document.getElementById("store-max-price") as HTMLInputElement | null)
+			?.value ?? "",
+	);
+	const creatorName = (
+		(document.getElementById("store-creator-name") as HTMLInputElement | null)
+			?.value ?? ""
+	).trim();
+
+	return {
+		types,
+		accessoryTypes,
+		currency: currency || undefined,
+		page,
+		search,
+		sort: selected?.dataset.sort ?? "createdAt",
+		order: selected?.dataset.order ?? "desc",
+		showOffsale,
+		collectiblesOnly,
+		minPrice,
+		maxPrice,
+		creatorName,
+	};
+}
+
+function renderStoreItem(asset: StoreListingItem): HTMLElement {
+	const wrapper = document.createElement("div");
+	wrapper.className = "me-3 col-auto store-listing-item";
+
+	let ribbon = "";
+	if (asset.isLimited) {
+		ribbon = `<div class="ribbon ribbon-limited ribbon-top-right"><span><i class="fas fa-star d-inline"></i></span></div>`;
+	} else if (asset.freeForPlus) {
+		ribbon = `<div class="ribbon ribbon-plusdx ribbon-top-right"><span><i class="pi pi-plusdx"></i></span></div>`;
+	} else if (asset.recentlyUploaded) {
+		ribbon = `<div class="ribbon ribbon-new ribbon-top-right"><span>New</span></div>`;
+	}
+
+	let timer = "";
+	let soldOut = false;
+	if (asset.onSaleUntil !== null && !(asset.isLimited && asset.isSoldOut)) {
+		const diff = new Date(asset.onSaleUntil).getTime() - Date.now();
+		if (diff > 0) {
+			const days = Math.floor(diff / 86_400_000);
+			const hours = Math.floor((diff % 86_400_000) / 3_600_000);
+			const minutes = Math.floor((diff % 3_600_000) / 60_000);
+			const time =
+				days > 0
+					? `${days}d`
+					: hours > 0
+						? `${hours}h`
+						: minutes > 0
+							? `${minutes}m`
+							: "<1m";
+			timer = `<span class="text-danger ms-2"><i class="fas fa-clock"></i> ${time}</span>`;
+		} else if (!asset.isLimited) {
+			soldOut = true;
+		}
+	}
+
+	const priceParts: string[] = [];
+	if (asset.priceInStuds !== null) {
+		priceParts.push(
+			`<span class="text-studs"><i class="fa-sharp-duotone fa-regular fa-circle-dot me-0"></i> ${asset.priceInStuds.toLocaleString("en-US")}</span>`,
+		);
+	}
+	if (asset.displayPrice !== null) {
+		priceParts.push(
+			asset.displayPrice === 0
+				? `<span class="text-primary fw-bold">Free</span>`
+				: `<span class="text-success"><i class="pi pi-brick${asset.isLimited ? "-value" : ""} me-1"></i> ${asset.displayPrice.toLocaleString("en-US")}</span>`,
+		);
+	}
+
+	let price = soldOut
+		? ""
+		: priceParts.length === 2
+			? asset.priceInStuds !== null && asset.priceInStuds > 10000
+				? `${priceParts[0]}<br>${priceParts[1]}`
+				: `${priceParts[0]}<span class="ms-2">${priceParts[1]}</span>`
+			: (priceParts[0] ?? "");
+	if (price.length > 0 && timer.length > 0) price += ` ${timer}`;
+
+	wrapper.innerHTML = `
+		<div style="max-width: 200px;">
+			<a class="text-reset" href="/store/${asset.id}">
+				<div class="card mb-1 p-2">
+					${ribbon}
+					<img width="192" height="192" class="img-fluid rounded-3 mb-2 kiln-store-thumb">
+					<small class="text-muted d-block text-truncate kiln-store-creator" style="font-size: 0.75rem;"></small>
+					<h6 class="text-truncate mb-0 kiln-store-name"></h6>
+					<small class="d-block text-truncate">${price}</small>
+				</div>
+			</a>
+		</div>
+		`;
+
+	const img = wrapper.querySelector<HTMLImageElement>(".kiln-store-thumb")!;
+	img.src = asset.thumbnailUrl;
+	img.alt = asset.name;
+
+	const creatorEl = wrapper.querySelector(".kiln-store-creator")!;
+	if (asset.type === "hat") {
+		const label = asset.accessoryType
+			? asset.accessoryType
+					.replace("headAccessory", "headCover")
+					.replace(/\b\w/g, (l) => l.toUpperCase())
+					.replace(/([A-Z])/g, " $1")
+			: "";
+		creatorEl.innerHTML = `<i class="fas fa-hat-wizard"></i> `;
+		creatorEl.append(label);
+	} else if (asset.type === "tool") {
+		creatorEl.innerHTML = `<i class="fas fa-wrench"></i> Tool`;
+	} else if (asset.type === "face") {
+		creatorEl.innerHTML = `<i class="fas fa-face-smile"></i> Face`;
+	} else if (asset.type === "profileTheme") {
+		creatorEl.innerHTML = `<i class="fas fa-brush"></i> Profile Theme`;
+	} else {
+		creatorEl.innerHTML = `<i class="fas fa-user"></i> `;
+		const creatorLink = document.createElement("a");
+		creatorLink.className = "text-reset";
+		creatorLink.href = asset.creatorUrl;
+		creatorLink.textContent = asset.creatorName;
+		creatorEl.append(creatorLink);
+	}
+
+	wrapper.querySelector(".kiln-store-name")!.textContent = asset.name;
+
+	return wrapper;
+}
+
+export function disableInfiniteScrolling() {
+	const itemsContainer = document.getElementById("store-items");
+	if (!itemsContainer) return;
+
+	document.getElementById("store-scroll-target")?.remove();
+
+	let page = 1;
+	let loading = false;
+	let finished = false;
+
+	const button = document.createElement("button");
+	button.type = "button";
+	button.className = "btn btn-outline-secondary w-100 mb-3";
+	button.textContent = "Load More";
+	itemsContainer.insertAdjacentElement("afterend", button);
+
+	const setButtonState = (state: "idle" | "loading" | "error" | "done") => {
+		button.disabled = state !== "idle";
+		button.innerHTML =
+			state === "loading"
+				? `<span class="spinner-border spinner-border-sm"></span> Loading...`
+				: state === "error"
+					? "Failed to load more, click to retry"
+					: state === "done"
+						? "No more items"
+						: "Load More";
+	};
+
+	new MutationObserver((records) => {
+		if (records.some((record) => record.removedNodes.length > 0)) {
+			page = 1;
+			finished = false;
+			setButtonState("idle");
+		}
+	}).observe(itemsContainer, { childList: true });
+
+	button.addEventListener("click", async () => {
+		if (loading || finished) return;
+		loading = true;
+		setButtonState("loading");
+
+		const result = await sendMessage(
+			"getStoreListing",
+			readStoreFilters(page + 1),
+		);
+		loading = false;
+
+		if (!result.ok) {
+			setButtonState("error");
+			return;
+		}
+
+		page = result.data.meta.currentPage;
+		for (const asset of result.data.data) {
+			itemsContainer.appendChild(renderStoreItem(asset));
+		}
+
+		finished = result.data.meta.currentPage >= result.data.meta.lastPage;
+		setButtonState(finished ? "done" : "idle");
+	});
 }

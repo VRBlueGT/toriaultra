@@ -1,3 +1,4 @@
+#!/usr/bin/env bun
 // Copyright (C) 2026 Index
 // Kiln - a quality-of-life browser extension for Polytoria.com
 //
@@ -14,10 +15,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-#!/usr/bin/env bun
 import { $ } from "bun";
 
-const MIRROR_URL = "git@git.indexx.dev:Index/kiln-extension.git";
+const MIRROR_URL = "https://github.com/indexxing/kiln-extension.git";
 const EXTENSION_PREFIX = "apps/extension";
 
 const repoRoot = (await $`git rev-parse --show-toplevel`.text()).trim();
@@ -33,6 +33,60 @@ async function gitIn(args: string[], input: string): Promise<string> {
 	return (await new Response(proc.stdout).text()).trim();
 }
 
+const COPYRIGHT_HEADER =
+	`// Copyright (C) 2026 Index\n` +
+	`// Kiln - a quality-of-life browser extension for Polytoria.com\n` +
+	`//\n` +
+	`// This program is free software: you can redistribute it and/or modify\n` +
+	`// it under the terms of the GNU General Public License as published by\n` +
+	`// the Free Software Foundation, either version 3 of the License, or\n` +
+	`// (at your option) any later version.\n` +
+	`//\n` +
+	`// This program is distributed in the hope that it will be useful,\n` +
+	`// but WITHOUT ANY WARRANTY; without even the implied warranty of\n` +
+	`// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the\n` +
+	`// GNU General Public License for more details.\n` +
+	`//\n` +
+	`// You should have received a copy of the GNU General Public License\n` +
+	`// along with this program. If not, see <https://www.gnu.org/licenses/>.\n` +
+	`\n`;
+
+async function addCopyrightToTree(treeHash: string): Promise<string> {
+	const lines = (await $`git ls-tree ${treeHash}`.text())
+		.trim()
+		.split("\n")
+		.filter(Boolean);
+	const newEntries: string[] = [];
+
+	for (const line of lines) {
+		const tabIdx = line.indexOf("\t");
+		const [mode, type, hash] = line.slice(0, tabIdx).split(" ");
+		const name = line.slice(tabIdx + 1);
+
+		if (type === "tree") {
+			newEntries.push(
+				`040000 tree ${await addCopyrightToTree(hash)}\t${name}`,
+			);
+		} else if (
+			type === "blob" &&
+			name.endsWith(".ts") &&
+			!name.endsWith(".generated.ts")
+		) {
+			const content = await $`git cat-file blob ${hash}`.text();
+			const newContent = content.startsWith("#!")
+				? content.replace(/^(#![^\n]*\n)/, `$1${COPYRIGHT_HEADER}`)
+				: COPYRIGHT_HEADER + content;
+			newEntries.push(
+				`${mode} blob ${await gitIn(["hash-object", "-w", "--stdin"], newContent)}\t${name}`,
+			);
+		} else {
+			newEntries.push(`${mode} ${type} ${hash}\t${name}`);
+		}
+	}
+
+	return gitIn(["mktree"], `${newEntries.join("\n")}\n`);
+}
+
 const { version } = await Bun.file(
 	`${repoRoot}/${EXTENSION_PREFIX}/package.json`,
 ).json();
@@ -46,7 +100,7 @@ const schemasTree = (
 
 const appsTree = await gitIn(
 	["mktree"],
-	`040000 tree ${extensionTree}\textension\n`,
+	`040000 tree ${await addCopyrightToTree(extensionTree)}\textension\n`,
 );
 const packagesTree = await gitIn(
 	["mktree"],

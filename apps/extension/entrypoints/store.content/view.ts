@@ -19,9 +19,6 @@ import { bricksToCurrency, createModal } from "@/utils/utilities";
 
 const itemID = window.location.pathname.split("/")[2];
 
-/**
- * Adds the locale real-life dollar value next to the amount of bricks an item costs in the text of the purchase button.
- */
 export async function irlBrickPrice(irlCurrency: CurrencyCode) {
 	try {
 		const purchaseBtn = document.querySelector(
@@ -83,9 +80,6 @@ export async function irlBrickPrice(irlCurrency: CurrencyCode) {
 	}
 }
 
-/**
- * Replaces the item sales counter with the number of owners the item has, useful for items that were granted by staff or earned via an event.
- */
 export async function accurateOwnerCount() {
 	const counter = document.querySelectorAll(".col.text-center")[2]!;
 	if (!counter || counter.children[1].textContent!.trim() != "0") return;
@@ -107,11 +101,6 @@ export async function accurateOwnerCount() {
 		owners.toLocaleString();
 }
 
-/**
- * Injects a new tab on the item page that allows you to see a list of users who own more than one copy of the item.
- * @param minCopies The minimum amount of copies a user must own to be shown on the list.
- * @param showAvatars Whether each user's avatar should be shown next to their name.
- */
 export function hoardersList(minCopies: number, showAvatars: boolean) {
 	if (document.getElementById("resellers") === null) {
 		return;
@@ -393,9 +382,6 @@ export function hoardersList(minCopies: number, showAvatars: boolean) {
 	});
 }
 
-/**
- * Replaces the item sales counter with the number of owners the item has, useful for items that were granted by staff or earned via an event.
- */
 export async function mySerial(userId: number) {
 	const salesCounter = document.querySelectorAll(".col.text-center")[2]!;
 	if (!salesCounter) return;
@@ -422,10 +408,6 @@ export async function mySerial(userId: number) {
 	salesCounter.parentElement!.appendChild(counter);
 }
 
-/**
- * Adds a button to allow the user to mark an item as "not for trade".
- * @param userId The ID of the authenticated user.
- */
 export async function nftItems(userId: number) {
 	const config = await getConfig();
 
@@ -667,10 +649,6 @@ export async function nftItems(userId: number) {
 	});
 }
 
-/**
- * Adds a button to pin/unpin the achievement from the user's profile.
- * @param userId The ID of the authenticated user.
- */
 export async function pinnedAchievements(userId: number) {
 	const favoriteBtn = document.getElementById("favorite-btn");
 	if (!favoriteBtn) return;
@@ -725,9 +703,16 @@ export async function pinnedAchievements(userId: number) {
 	});
 }
 
-/**
- * Allows the user to view a clothing item on an avatar in 3D.
- */
+const CLOTHING_PREVIEW_BODIES: { id: number | null; name: string }[] = [
+	{ id: null, name: "Default" },
+	{ id: 203643, name: "Robes" },
+	{ id: 138708, name: "Athlete" },
+	{ id: 138707, name: "Action Figure (Slim)" },
+	{ id: 138706, name: "Action Figure" },
+	{ id: 137759, name: "Tubby" },
+	{ id: 137758, name: "Slim" },
+];
+
 export async function clothing3DPreview() {
 	const hero = document.querySelector<HTMLElement>(".item-hero");
 	if (!hero) return;
@@ -748,9 +733,16 @@ export async function clothing3DPreview() {
 			<h5 class="mb-0" style="color: #fff;">Clothing Preview</h5>
 			<button class="btn btn-sm btn-secondary" id="p-back-close">✕</button>
 		</div>
-		<p class="text-muted mb-3" style="font-size: 0.8rem;">
+		<p class="text-muted mb-1" style="font-size: 0.8rem;">
 			Preview this clothing item on a template avatar in 3D.
 		</p>
+		<div class="mb-2">
+			<select class="form-select form-select-sm" id="p-back-body-select">
+				${CLOTHING_PREVIEW_BODIES.map(
+					(b) => `<option value="${b.id ?? ""}">${b.name}</option>`,
+				).join("")}
+			</select>
+		</div>
 		<div id="kiln-back-clothing-preview-body">
 			<div class="text-center text-muted py-3">Loading...</div>
 		</div>
@@ -763,6 +755,10 @@ export async function clothing3DPreview() {
 		modal.showModal();
 
 		const body = document.getElementById("kiln-back-clothing-preview-body")!;
+		const bodySelect = document.getElementById(
+			"p-back-body-select",
+		) as HTMLSelectElement;
+
 		try {
 			const textureResult = await sendMessage(
 				"getItemTexture",
@@ -772,6 +768,7 @@ export async function clothing3DPreview() {
 				body.innerHTML = `<div class="text-center text-muted py-3">Texture unavailable for this item.</div>`;
 				return;
 			}
+			const clothingUrl = textureResult.data.url;
 
 			const canvas = document.createElement("canvas");
 			canvas.style.cssText =
@@ -788,29 +785,50 @@ export async function clothing3DPreview() {
 				once: true,
 			});
 
-			await avatarRenderer.load({
-				useCharacter: false,
-				face: "",
-				clothing: [textureResult.data.url],
-				body: "",
-				tool: "",
-				items: [],
-				headColor: "#dce0e8",
-				torsoColor: "#dce0e8",
-				leftArmColor: "#dce0e8",
-				rightArmColor: "#dce0e8",
-				leftLegColor: "#dce0e8",
-				rightLegColor: "#dce0e8",
+			const bodyMeshCache = new Map<number, string>();
+			const getBodyUrl = async (id: number | null): Promise<string> => {
+				if (id === null) return "";
+				const cached = bodyMeshCache.get(id);
+				if (cached !== undefined) return cached;
+				const meshResult = await sendMessage("getItemMesh", id);
+				const url =
+					meshResult.ok && meshResult.data.url ? meshResult.data.url : "";
+				bodyMeshCache.set(id, url);
+				return url;
+			};
+
+			const renderAvatar = async () => {
+				const selectedId = bodySelect.value
+					? parseInt(bodySelect.value, 10)
+					: null;
+				const bodyUrl = await getBodyUrl(selectedId);
+				await avatarRenderer.load({
+					useCharacter: false,
+					face: browser.runtime.getURL("/images/default-face.png"),
+					clothing: [clothingUrl],
+					body: bodyUrl,
+					tool: "",
+					items: [],
+					headColor: "#dce0e8",
+					torsoColor: "#dce0e8",
+					leftArmColor: "#dce0e8",
+					rightArmColor: "#dce0e8",
+					leftLegColor: "#dce0e8",
+					rightLegColor: "#dce0e8",
+				});
+			};
+
+			bodySelect.addEventListener("change", () => {
+				renderAvatar();
 			});
+
+			await renderAvatar();
 		} catch (_e) {
 			body.innerHTML = `<div class="text-center text-muted py-3">Failed to render preview.</div>`;
 		}
 	});
 }
 
-/**
- * Displays basic information pulled from LOVE for the collectible item the user is looking at.
- */
 export async function loveIntegration() {
 	const tabs = document.getElementById("store-tabs")!;
 
@@ -943,11 +961,6 @@ export async function loveIntegration() {
 	`;
 }
 
-/**
- * Displays tags such as "Inactive" and "OG" based off user preferences on collectible item owner lists.
- * @param inactiveDays The number of days to be considered inactive.
- * @param ogYear The year to be considered OG.
- */
 export async function collectibleOwnerLabels(
 	inactiveDays: number,
 	ogYear: number,
@@ -1019,9 +1032,6 @@ export async function collectibleOwnerLabels(
 	}).observe(container, { childList: true });
 }
 
-/**
- * Adds a label identifying comments made by the creator of the place.
- */
 export function creatorCommentLabels(creatorId: number) {
 	const container = document.getElementById("comments")!;
 

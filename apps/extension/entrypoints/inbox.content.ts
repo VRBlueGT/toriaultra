@@ -58,7 +58,8 @@ function expandMessages() {
 		expandBtn.addEventListener("click", () => {
 			if (div === null) {
 				div = document.createElement("div");
-				div.classList = "py-2";
+				div.classList = "card card-body bg-dark py-2 mt-3";
+				div.style.borderRadius = "0px";
 				div.innerText = fullText;
 				message.appendChild(div);
 			}

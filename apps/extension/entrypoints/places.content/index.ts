@@ -39,6 +39,12 @@ export default defineContentScript({
 					console.log("[Kiln] Running view page functions: ", view);
 				}
 
+				const creatorAnchor = document.querySelector<HTMLAnchorElement>(
+					'.place-hero-content a:has([class^="userlink-"])',
+				);
+				const creatorId =
+					creatorAnchor?.getAttribute("href")?.split("/")[2] ?? null;
+
 				if (values.enabled.includes("legacyWorldViewLayout")) {
 					view.legacyPlaceViewLayout();
 				}
@@ -48,11 +54,11 @@ export default defineContentScript({
 				if (values.enabled.includes("placeRevenue")) {
 					view.approxPlaceRevenue();
 				}
-				if (values.enabled.includes("activeChallengesDisplay")) {
-					view.activeChallenges();
-				}
 				if (values.enabled.includes("playtimeTracking")) {
 					view.playtimeTracking(user.userId);
+				}
+				if (values.enabled.includes("activeChallengesDisplay")) {
+					view.activeChallenges();
 				}
 				if (values.enabled.includes("improvedAchievements")) {
 					if (values.config.improvedAchievements.progressBar) {
@@ -68,18 +74,35 @@ export default defineContentScript({
 				if (values.enabled.includes("serverShareLinks")) {
 					view.serverShareLinks();
 				}
+				if (values.enabled.includes("serverRefreshing")) {
+					view.serverRefreshing(
+						values.enabled.includes("serverShareLinks")
+							? (serverList) => view.attachServerShareButtons(serverList)
+							: undefined,
+					);
+				}
 
 				if (
 					values.enabled.includes("creatorCommentLabels") &&
-					values.config.creatorCommentLabels.worlds
+					values.config.creatorCommentLabels.worlds &&
+					creatorId
 				) {
-					view.creatorCommentLabels();
+					view.creatorCommentLabels(creatorId);
 				}
 
 				if (values.enabled.includes("autoRefreshData")) {
 					view.autoRefreshData(
 						values.config.autoRefreshData.interval as "30s" | "1m" | "5m",
 					);
+				}
+				if (values.enabled.includes("detailedPlaceReviews")) {
+					view.detailedPlaceReviews(user.userId);
+				}
+				if (values.enabled.includes("placeConsumablesTab") && creatorId) {
+					view.placeConsumablesTab(creatorId);
+				}
+				if (values.enabled.includes("favoritedPlaces")) {
+					view.recordPlaceView();
 				}
 			} else if (first === "create") {
 				if (import.meta.env.MODE == "development") {
@@ -101,6 +124,13 @@ export default defineContentScript({
 					) {
 						manage.bulkWhitelist();
 					}
+
+					if (
+						window.location.pathname.includes("stats") &&
+						values.enabled.includes("worldTrends")
+					) {
+						manage.worldTrends();
+					}
 				}
 			} else {
 				if (import.meta.env.MODE == "development") {
@@ -113,6 +143,13 @@ export default defineContentScript({
 
 				if (values.enabled.includes("randomPlace")) {
 					discovery.randomPlace();
+				}
+
+				if (
+					values.enabled.includes("disableInfiniteScrolling") &&
+					values.config.disableInfiniteScrolling.places
+				) {
+					discovery.disableInfiniteScrolling();
 				}
 			}
 		});

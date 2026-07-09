@@ -10,6 +10,7 @@ export const PATH_FEATURES = {
 		"legacySidebar",
 		"localizedTimestamps",
 		"membershipThemes",
+		"reenableSearch",
 		"stickyNavbar",
 		"themeCreator",
 		"userAliases"
@@ -17,6 +18,8 @@ export const PATH_FEATURES = {
 	"https://polytoria.com/": [
 		"bestFriends",
 		"creatorCommentLabels",
+		"dailyChallengesRefreshing",
+		"disableInfiniteScrolling",
 		"favoritedPlaces",
 		"homeFriendJoins",
 		"irlBrickPrice",
@@ -26,25 +29,41 @@ export const PATH_FEATURES = {
 		"activeChallengesDisplay",
 		"autoRefreshData",
 		"creatorCommentLabels",
+		"detailedPlaceReviews",
+		"disableInfiniteScrolling",
 		"favoritedPlaces",
 		"improvedAchievements",
 		"legacyWorldViewLayout",
+		"placeConsumablesTab",
 		"placeManagement",
 		"placeRevenue",
 		"playtimeTracking",
 		"randomPlace",
+		"serverRefreshing",
 		"serverShareLinks",
 		"subtleV2Labels"
 	],
-	"https://polytoria.com/forum/*": [
+	"https://polytoria.com/forum": [
+		"advancedForumSearch",
 		"aiBotForumWarnings",
-		"forumMentions"
+		"forumMentions",
+		"improvedForumComposer",
+		"myPosts"
+	],
+	"https://polytoria.com/forum/*": [
+		"advancedForumSearch",
+		"aiBotForumWarnings",
+		"forumMentions",
+		"improvedForumComposer",
+		"myPosts"
 	],
 	"https://polytoria.com/guilds/*": [
 		"creatorCommentLabels"
 	],
 	"https://polytoria.com/home": [
 		"bestFriends",
+		"dailyChallengesRefreshing",
+		"disableInfiniteScrolling",
 		"favoritedPlaces",
 		"homeFriendJoins",
 		"irlBrickPrice",
@@ -53,7 +72,12 @@ export const PATH_FEATURES = {
 	"https://polytoria.com/inbox": [
 		"messagePreviewExpand"
 	],
+	"https://polytoria.com/library": [
+		"audioToolboxPreviews",
+		"modelTreeInspector"
+	],
 	"https://polytoria.com/models/*": [
+		"audioToolboxPreviews",
 		"modelTreeInspector"
 	],
 	"https://polytoria.com/my/*": [
@@ -66,13 +90,17 @@ export const PATH_FEATURES = {
 		"activeChallengesDisplay",
 		"autoRefreshData",
 		"creatorCommentLabels",
+		"detailedPlaceReviews",
+		"disableInfiniteScrolling",
 		"favoritedPlaces",
 		"improvedAchievements",
 		"legacyWorldViewLayout",
+		"placeConsumablesTab",
 		"placeManagement",
 		"placeRevenue",
 		"playtimeTracking",
 		"randomPlace",
+		"serverRefreshing",
 		"serverShareLinks",
 		"subtleV2Labels"
 	],
@@ -81,6 +109,7 @@ export const PATH_FEATURES = {
 		"backClothingView",
 		"collectibleOwnerLabels",
 		"creatorCommentLabels",
+		"disableInfiniteScrolling",
 		"eventItems",
 		"hoardersList",
 		"irlBrickPrice",

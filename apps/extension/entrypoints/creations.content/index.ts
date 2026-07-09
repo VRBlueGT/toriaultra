@@ -15,10 +15,11 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import { preferences } from "@/utils/storage";
+import * as discovery from "./discovery";
 import * as models from "./models";
 
 export default defineContentScript({
-	matches: ["https://polytoria.com/models/*"],
+	matches: ["https://polytoria.com/library", "https://polytoria.com/models/*"],
 	main() {
 		preferences.getPreferences().then((values) => {
 			getUserDetails().then((user) => {
@@ -27,8 +28,14 @@ export default defineContentScript({
 					return;
 				}
 
-				if (values.enabled.includes("modelTreeInspector")) {
-					models.modelTreeInspector();
+				if (window.location.pathname.includes("library")) {
+					if (values.enabled.includes("audioToolboxPreviews")) {
+						discovery.audioPreviews();
+					}
+				} else {
+					if (values.enabled.includes("modelTreeInspector")) {
+						models.modelTreeInspector();
+					}
 				}
 			});
 		});

@@ -16,9 +16,23 @@
 
 const placeID = +window.location.pathname.split("/")[3];
 
-/**
- * Adds a button to the manage page of places allowing users to quickly download their place files from the website.
- */
+type TrendMetric =
+	| "uniqueVisits"
+	| "visits"
+	| "likes"
+	| "dislikes"
+	| "likeRate"
+	| "inGame";
+
+type TrendPoint = { time: number; value: number };
+
+type TrendRange = {
+	id: string;
+	label: string;
+	days: number;
+	window: string;
+};
+
 export function placeFileExport() {
 	const container = document.createElement("div");
 	container.classList.add("form-group", "mt-4");
@@ -48,9 +62,6 @@ export function placeFileExport() {
 	});
 }
 
-/**
- * Adds a card with a textbox where creators can enter a list of line-separated usernames, and whitelist them all at once.
- */
 export function bulkWhitelist() {
 	const whitelistCard = document.querySelector(
 		".card:has(#whitelist-username)",
@@ -91,4 +102,316 @@ export function bulkWhitelist() {
 			}, 200 * usernames.length);
 		}
 	});
+}
+
+/*
+export async function extraStatistics() {
+	const statsCard = document.querySelector(".card:has(.fa-chart-fft)");
+	const statsRow = statsCard?.querySelector(".card-body > .row");
+	if (!statsCard || !statsRow) return;
+
+	const col = document.createElement("div");
+	col.classList.add("col-12", "col-md-4", "mb-4");
+	col.innerHTML = `
+	<div class="border border-2 border-success rounded p-3 text-success position-relative">
+		<span class="small">Total Unique Visitors</span>
+		<h1 class="mb-0 display-4">...</h1>
+		<div class="position-absolute bottom-0 end-0 py-3 me-2 opacity-25">
+			<i class="far fa-users fa-4x"></i>
+		</div>
+	</div>
+	`;
+	statsRow.appendChild(col);
+
+	const valueEl = col.querySelector("h1")!;
+
+	const placeResult = await sendMessage("getPlace", placeID);
+	valueEl.textContent = placeResult.ok
+		? placeResult.data.uniqueVisits.toLocaleString()
+		: "N/A";
+
+	worldTrendsChart(statsCard);
+}
+*/
+
+const trendMetrics: {
+	id: TrendMetric;
+	label: string;
+	format: (value: number) => string;
+}[] = [
+	{
+		id: "uniqueVisits",
+		label: "Unique Visitors",
+		format: (v) => Math.round(v).toLocaleString(),
+	},
+	{
+		id: "visits",
+		label: "Visits",
+		format: (v) => Math.round(v).toLocaleString(),
+	},
+	{
+		id: "inGame",
+		label: "Players In-Game",
+		format: (v) => Math.round(v).toLocaleString(),
+	},
+	{
+		id: "likes",
+		label: "Likes",
+		format: (v) => Math.round(v).toLocaleString(),
+	},
+	{
+		id: "dislikes",
+		label: "Dislikes",
+		format: (v) => Math.round(v).toLocaleString(),
+	},
+	{
+		id: "likeRate",
+		label: "Like Rate",
+		format: (v) => `${v.toFixed(1)}%`,
+	},
+];
+
+const trendRanges: TrendRange[] = [
+	{ id: "1d", label: "Last 24 Hours", days: 1, window: "30m" },
+	{ id: "7d", label: "Last 7 Days", days: 7, window: "2h" },
+	{ id: "30d", label: "Last 30 Days", days: 30, window: "8h" },
+	{ id: "90d", label: "Last 90 Days", days: 90, window: "1d" },
+];
+
+export function worldTrends() {
+	const statsCard = document.querySelector(".card:has(.fa-chart-fft)");
+	if (!statsCard) return;
+
+	const card = document.createElement("div");
+	card.classList.add("card", "mt-3");
+	card.innerHTML = `
+	<h6 class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+		<span><i class="fas fa-chart-line me-1"></i> World Trends (Kiln)</span>
+		<span class="d-flex gap-2">
+			<select class="form-select form-select-sm w-auto kiln-trends-metric"></select>
+			<select class="form-select form-select-sm w-auto kiln-trends-range"></select>
+		</span>
+	</h6>
+	<div class="card-body">
+		<h3 class="m-0 kiln-trends-current text-center">...</h3>
+		<div class="kiln-trends-chart-container" style="position:relative;height:220px;"></div>
+	</div>
+	`;
+
+	statsCard.insertAdjacentElement("afterend", card);
+
+	const metricSelect = card.querySelector<HTMLSelectElement>(
+		".kiln-trends-metric",
+	)!;
+	metricSelect.innerHTML = trendMetrics
+		.map((m) => `<option value="${m.id}">${m.label}</option>`)
+		.join("");
+
+	const rangeSelect =
+		card.querySelector<HTMLSelectElement>(".kiln-trends-range")!;
+	rangeSelect.innerHTML = trendRanges
+		.map((r) => `<option value="${r.id}">${r.label}</option>`)
+		.join("");
+	rangeSelect.value = "7d";
+
+	const currentEl = card.querySelector<HTMLElement>(".kiln-trends-current")!;
+	const chartContainer = card.querySelector<HTMLElement>(
+		".kiln-trends-chart-container",
+	)!;
+
+	const cache = new Map<string, TrendPoint[]>();
+
+	const fetchMetric = async (
+		metric: TrendMetric,
+		range: TrendRange,
+	): Promise<TrendPoint[]> => {
+		const cacheKey = `${metric}-${range.id}`;
+		const cached = cache.get(cacheKey);
+		if (cached) return cached;
+
+		const stop = new Date();
+		const start = new Date(stop.getTime() - range.days * 24 * 60 * 60 * 1000);
+
+		let points: TrendPoint[];
+		if (metric === "inGame") {
+			const result = await sendMessage("getWorldIngameChart", {
+				placeId: placeID,
+				start: start.toISOString(),
+				stop: stop.toISOString(),
+				window: range.window,
+			});
+			points = result.ok
+				? result.data.avg.map((p) => ({
+						time: new Date(p._time).getTime(),
+						value: p._value,
+					}))
+				: [];
+		} else {
+			const result = await sendMessage("getWorldStatsChart", {
+				placeId: placeID,
+				metric,
+				start: start.toISOString(),
+				stop: stop.toISOString(),
+				window: range.window,
+			});
+			points = result.ok
+				? result.data.value.map((p) => ({
+						time: new Date(p._time).getTime(),
+						value: p._value,
+					}))
+				: [];
+		}
+
+		cache.set(cacheKey, points);
+		return points;
+	};
+
+	const formatAxisDate = (time: number, rangeDays: number) => {
+		const date = new Date(time);
+		return rangeDays <= 1
+			? date.toLocaleTimeString(undefined, {
+					hour: "numeric",
+					minute: "2-digit",
+				})
+			: date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+	};
+
+	const renderChart = (
+		points: TrendPoint[],
+		format: (v: number) => string,
+		rangeDays: number,
+	) => {
+		if (points.length === 0) {
+			chartContainer.innerHTML = `<div class="d-flex justify-content-center align-items-center h-100 text-muted small fst-italic">No data available.</div>`;
+			currentEl.textContent = "N/A";
+			return;
+		}
+
+		const values = points.map((p) => p.value);
+		const min = Math.min(...values);
+		const max = Math.max(...values);
+		const valueRange = max - min || 1;
+
+		const width = 640;
+		const height = 220;
+		const marginLeft = 56;
+		const marginRight = 10;
+		const marginTop = 10;
+		const marginBottom = 26;
+
+		const plotWidth = width - marginLeft - marginRight;
+		const plotHeight = height - marginTop - marginBottom;
+
+		const coords = points.map((p, i) => {
+			const x = marginLeft + (i / (points.length - 1 || 1)) * plotWidth;
+			const y =
+				marginTop + plotHeight - ((p.value - min) / valueRange) * plotHeight;
+			return [x, y] as const;
+		});
+
+		const linePath = coords
+			.map(
+				([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`,
+			)
+			.join(" ");
+		const [lastX] = coords[coords.length - 1]!;
+		const [firstX] = coords[0]!;
+		const areaPath = `${linePath} L${lastX.toFixed(1)},${(marginTop + plotHeight).toFixed(1)} L${firstX.toFixed(1)},${(marginTop + plotHeight).toFixed(1)} Z`;
+
+		const yTickCount = 4;
+		const yTicks = Array.from({ length: yTickCount + 1 }, (_, i) => {
+			const value = min + (valueRange * i) / yTickCount;
+			const y = marginTop + plotHeight - (i / yTickCount) * plotHeight;
+			return { value, y };
+		});
+
+		const xTickCount = Math.min(5, points.length);
+		const xTicks = Array.from({ length: xTickCount }, (_, i) => {
+			const index = Math.round(
+				(i / (xTickCount - 1 || 1)) * (points.length - 1),
+			);
+			const point = points[index]!;
+			return {
+				x: coords[index]![0],
+				label: formatAxisDate(point.time, rangeDays),
+			};
+		});
+
+		const last = values[values.length - 1]!;
+		const first = values[0]!;
+		const delta = last - first;
+		const trendColor =
+			delta > 0 ? "#2ecc71" : delta < 0 ? "#e74c3c" : "#6c757d";
+		const trendArrow = delta === 0 ? "" : delta > 0 ? "▲" : "▼";
+
+		currentEl.innerHTML = `${format(last)} <span class="small" style="color:${trendColor};">${trendArrow} ${format(Math.abs(delta))}</span>`;
+
+		const gridLines = yTicks
+			.map(
+				(t) =>
+					`<line x1="${marginLeft}" y1="${t.y.toFixed(1)}" x2="${width - marginRight}" y2="${t.y.toFixed(1)}" stroke="#ffffff" stroke-opacity="0.08" stroke-dasharray="4 4" />`,
+			)
+			.join("");
+
+		const yLabels = yTicks
+			.map(
+				(t) =>
+					`<text x="${marginLeft - 8}" y="${t.y.toFixed(1)}" text-anchor="end" dominant-baseline="middle" font-size="11" fill="currentColor" opacity="0.65">${format(t.value)}</text>`,
+			)
+			.join("");
+
+		const xLabels = xTicks
+			.map(
+				(t) =>
+					`<text x="${t.x.toFixed(1)}" y="${height - 6}" text-anchor="middle" font-size="11" fill="currentColor" opacity="0.65">${t.label}</text>`,
+			)
+			.join("");
+
+		chartContainer.innerHTML = `
+			<svg viewBox="0 0 ${width} ${height}" style="width:100%;height:100%;color:#adb5bd;">
+				<defs>
+					<linearGradient id="kiln-trends-fill" x1="0" y1="0" x2="0" y2="1">
+						<stop offset="0%" stop-color="#198754" stop-opacity="0.35" />
+						<stop offset="100%" stop-color="#198754" stop-opacity="0" />
+					</linearGradient>
+				</defs>
+				${gridLines}
+				<line x1="${marginLeft}" y1="${marginTop}" x2="${marginLeft}" y2="${marginTop + plotHeight}" stroke="currentColor" stroke-opacity="0.25" />
+				<line x1="${marginLeft}" y1="${marginTop + plotHeight}" x2="${width - marginRight}" y2="${marginTop + plotHeight}" stroke="currentColor" stroke-opacity="0.25" />
+				<path d="${areaPath}" fill="url(#kiln-trends-fill)" stroke="none" />
+				<path d="${linePath}" fill="none" stroke="#198754" stroke-width="2" />
+				${yLabels}
+				${xLabels}
+			</svg>
+		`;
+	};
+
+	const showLoading = () => {
+		chartContainer.innerHTML = `
+			<div class="d-flex justify-content-center align-items-center h-100">
+				<div class="spinner-border spinner-border-sm text-secondary" role="status">
+					<span class="visually-hidden">Loading...</span>
+				</div>
+			</div>
+		`;
+		currentEl.textContent = "...";
+	};
+
+	const load = async () => {
+		const metric = metricSelect.value as TrendMetric;
+		const range = trendRanges.find((r) => r.id === rangeSelect.value)!;
+
+		showLoading();
+		const points = await fetchMetric(metric, range);
+		renderChart(
+			points,
+			trendMetrics.find((m) => m.id === metric)!.format,
+			range.days,
+		);
+	};
+
+	metricSelect.addEventListener("change", load);
+	rangeSelect.addEventListener("change", load);
+
+	load();
 }

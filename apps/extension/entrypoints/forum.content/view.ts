@@ -16,9 +16,6 @@
 
 import config from "@/utils/static/fallbackConfig.json";
 
-/**
- * Detects any username mentions in a forum post and turns them into clickable links.
- */
 export function forumMentions() {
 	const textBlocks = document.querySelectorAll("p:not(.text-muted):not(.mb-0)");
 	const regex = /@([\w.]+)/g;
@@ -62,9 +59,6 @@ export function forumMentions() {
 	});
 }
 
-/**
- * Adds "This content may have been generated using AI.." tags to certain users', that have been identified as AI bots, forum posts and replies
- */
 export function aiBotForumWarnings() {
 	const aiUserSet = new Set(config.users.generativeAI.map(String));
 	const cards = document.querySelectorAll(".card");

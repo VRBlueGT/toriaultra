@@ -66,6 +66,16 @@ onMessage("getItemTexture", ({ data: id }) =>
 	}),
 );
 
+onMessage("getAssetAudio", ({ data: id }) =>
+	handle(async () => {
+		const config = await withApi("public_api", "public");
+		return safeFetch(
+			`${config.resolvedUrls.public}assets/serve-audio/${id}`,
+			Polytoria.AudioApiSchema,
+		);
+	}),
+);
+
 onMessage("getItemOwners", ({ data: { itemId, limit } }) =>
 	handle(async () => {
 		const config = await withApi("public_api", "public");

@@ -17,7 +17,16 @@
 import type { Extension, LOVE, PolyTrack, Polytoria } from "@kiln/schemas";
 import { defineExtensionMessaging } from "@webext-core/messaging";
 import type { PolytoriaTradeOwnerHistory } from "../../../packages/schemas/src/apis/love";
-import type { AvatarSandboxOutfit, Result } from "./types";
+import type {
+	AvatarSandboxOutfit,
+	FeedApi,
+	ForumSearchFilters,
+	PlacesListingApi,
+	PlacesListingFilters,
+	Result,
+	StoreListingApi,
+	StoreListingFilters,
+} from "./types";
 
 export interface ProtocolMap {
 	openPreferences(): void;
@@ -25,6 +34,18 @@ export interface ProtocolMap {
 	getModelFile(id: number): string;
 	joinPlace(data: { placeId: number; serverId?: number; version: 1 | 2 }): void;
 	registerBootstrapElements(): void;
+	disableFeedAutoScroll(): void;
+	getFeed(page: number): Promise<Result<FeedApi>>;
+	getStoreListing(
+		filters: StoreListingFilters,
+	): Promise<Result<StoreListingApi>>;
+	disablePlacesAutoScroll(): void;
+	getPlacesListing(
+		filters: PlacesListingFilters,
+	): Promise<Result<PlacesListingApi>>;
+	getForumSearch(
+		filters: ForumSearchFilters,
+	): Promise<Result<PolyTrack.ForumSearchApi>>;
 	sendAnalyticEvent(data: { name: string; data?: Record<string, unknown> }): {
 		ok: boolean;
 	};
@@ -33,6 +54,9 @@ export interface ProtocolMap {
 
 	getUser(id: number): Promise<Result<Polytoria.UserApi>>;
 	findUserByUsername(username: string): Promise<Result<number>>;
+	searchUsersByActivity(
+		query: string,
+	): Promise<Result<Extension.ActivitySearchApi["data"]>>;
 	getUserAvatar(id: number): Promise<Result<Polytoria.AvatarApi>>;
 	getBestFriends(userIds: number[]): Promise<Result<Polytoria.UserApi[]>>;
 	getUserInventory(data: {
@@ -54,9 +78,23 @@ export interface ProtocolMap {
 	getUserCreations(data: {
 		userId: number;
 		page?: number;
+		limit?: number;
 	}): Promise<Result<Polytoria.UserCreationsApi>>;
 	updateBodyColor(data: { bodyPart: string; color: string }): void;
 	getUserCharts(userId: number): Promise<Result<PolyTrack.UserChartsApi>>;
+	getWorldStatsChart(data: {
+		placeId: number;
+		metric: PolyTrack.WorldStatsMetric;
+		start: string;
+		stop: string;
+		window?: string;
+	}): Promise<Result<PolyTrack.WorldStatsChartApi>>;
+	getWorldIngameChart(data: {
+		placeId: number;
+		start: string;
+		stop: string;
+		window?: string;
+	}): Promise<Result<PolyTrack.WorldIngameChartApi>>;
 
 	getStore(data: {
 		order?: string;
@@ -69,6 +107,7 @@ export interface ProtocolMap {
 	}): Promise<Result<Polytoria.StoreApi>>;
 	getItem(id: number): Promise<Result<Polytoria.ItemApi>>;
 	getItemMesh(id: number): Promise<Result<Polytoria.MeshApi>>;
+	getAssetAudio(id: number): Promise<Result<Polytoria.AudioApi>>;
 	getItemTexture(id: number): Promise<Result<Polytoria.TextureApi>>;
 	getItemOwners(data: {
 		itemId: number;
@@ -142,36 +181,25 @@ export interface ProtocolMap {
 		blockedUserId: number;
 	}): Promise<Result<{ success: boolean }>>;
 
-	startTimePlayedSession(data: {
+	getGameActivity(data: {
 		userId: number;
-		placeId?: number;
-	}): Promise<Result<Extension.PlaySessionApi>>;
-	pingTimePlayedSession(data: {
-		userId: number;
-		sessionId: string;
-	}): Promise<Result<Extension.PlaySessionApi>>;
-	endTimePlayedSession(data: {
-		userId: number;
-		sessionId: string;
-	}): Promise<Result<Extension.PlaySessionApi>>;
-	deleteTimePlayedSession(data: {
-		userId: number;
-		sessionId: string;
-	}): Promise<Result<null>>;
-	getTimePlayedSessions(data: {
-		userId: number;
+		gameId: number;
 		page?: number;
-		placeId?: number;
-	}): Promise<Result<Extension.PlaySessionListApi>>;
-	getTimePlayedSummary(
-		userId: number,
-	): Promise<Result<Extension.TimePlayedSummaryApi>>;
+		pageSize?: number;
+		forceRefresh?: boolean;
+	}): Promise<Result<PolyTrack.GameActivityApi>>;
 
 	getApiSession(userId: number): Promise<Result<Extension.CurrentSessionApi>>;
 	startKilnVerification(
 		userId: number,
 	): Promise<Result<Extension.AuthStartApi>>;
 	finishKilnVerification(userId: number): Promise<Result<Extension.AuthEndApi>>;
+	terminateKilnSession(userId: number): Promise<Result<null>>;
+	getKilnSessions(userId: number): Promise<Result<Extension.AuthSessionsApi>>;
+	terminateKilnSessionById(data: {
+		userId: number;
+		sessionId: string;
+	}): Promise<Result<null>>;
 
 	publishTheme(data: {
 		userId: number;
@@ -246,6 +274,21 @@ export interface ProtocolMap {
 		userId: number;
 		outfits: AvatarSandboxOutfit[];
 	}): Promise<Result<{ success: boolean }>>;
+
+	getPlaceReviews(data: {
+		placeId: number;
+		userId: number;
+	}): Promise<Result<Extension.PlaceReviewsApi>>;
+	submitPlaceReview(data: {
+		placeId: number;
+		userId: number;
+		rating: number;
+		body?: string;
+	}): Promise<Result<Extension.PlaceReviewApi>>;
+	deleteMyPlaceReview(data: {
+		placeId: number;
+		userId: number;
+	}): Promise<Result<null>>;
 
 	getRetroItems(page?: number): Promise<Result<Extension.RetroItemsApi>>;
 	getEventForItem(itemId: number): Promise<Result<Extension.EventForItemApi>>;

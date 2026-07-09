@@ -19,9 +19,6 @@ import { _seenTradeIds } from "@/utils/storage";
 import type { UserDetails } from "@/utils/types";
 import { createModal, parseTrade } from "@/utils/utilities";
 
-/**
- * Adds a button to quickly cancel outbound trades.
- */
 export async function quickCancelOutboundTrades() {
 	const container = document.querySelector(".col:has(.card-inbox)")!;
 	const cards = container.querySelectorAll(".card-inbox");
@@ -46,9 +43,6 @@ export async function quickCancelOutboundTrades() {
 	}
 }
 
-/**
- * Adds a button to quickly counter inbound trades.
- */
 export async function quickCounterTrades() {
 	const container = document.querySelector(".col:has(.card-inbox)")!;
 	const cards = container.querySelectorAll(".card-inbox");
@@ -78,10 +72,6 @@ export async function quickCounterTrades() {
 	}
 }
 
-/**
- * Checks trades to ensure none of them contain "not for trade" items, and if they do, auto-reject them.
- * @param user The authenticated user.
- */
 export async function nftItems(user: UserDetails) {
 	const FETCH_DELAY_MS = 500;
 
@@ -278,10 +268,6 @@ export async function nftItems(user: UserDetails) {
 	await _seenTradeIds.setValue(updated.slice(-500));
 }
 
-/**
- * Checks trades to ensure none of them are from blocked traders, and if they are, auto-reject them.
- * @param user The authenticated user.
- */
 export async function blockedTraders(user: UserDetails) {
 	const blockedResult = await sendMessage("getBlockedTraders", user.userId);
 	if (!blockedResult.ok) return;
@@ -363,10 +349,6 @@ export async function blockedTraders(user: UserDetails) {
 	}
 }
 
-/**
- * Adds a button to open a modal for trading power-users.
- * @param user The authenticated user.
- */
 export async function tradeManager(user: UserDetails) {
 	const FETCH_DELAY_MS = 300;
 	const MODAL_PAGE_SIZE = 10;

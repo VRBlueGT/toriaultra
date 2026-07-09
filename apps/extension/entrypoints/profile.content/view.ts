@@ -121,10 +121,6 @@ export async function userLabels(
 	sendMessage("registerBootstrapElements");
 }
 
-/**
- * Adds a row to the user statistics card on the profile page allowing the user to quickly view & copy another user's ID.
- * @param userId The ID of the user.
- */
 export async function displayId(userId: number, blocked: boolean = false) {
 	const card = !blocked
 		? document.getElementById("user-stats-card")
@@ -179,10 +175,6 @@ export async function displayId(userId: number, blocked: boolean = false) {
 	}
 }
 
-/**
- * Adds a button next to the "Avatar" card heading, which, on click, adds up all the items the user who owns this profile is wearing.
- * @param userId The ID of the user.
- */
 export async function outfitCost(userId: number) {
 	const calculateBtn = document.createElement("small");
 	calculateBtn.classList.add("fw-normal");
@@ -433,10 +425,6 @@ export async function greatDivideStats(userId: number) {
 	sendMessage("registerBootstrapElements");
 }
 
-/**
- * Displays basic information about the user when blocked instead of just a "you're blocked" page
- * @param userId The ID of the user
- */
 export async function basicBlockedInfo(userId: number) {
 	const formatDate = (dateStr: string) => {
 		const d = new Date(dateStr);
@@ -475,10 +463,6 @@ export async function basicBlockedInfo(userId: number) {
 	card.appendChild(creationDateRow);
 }
 
-/**
- * Adds a button to the avatar render to choose from a list of timestamps to view different avatar iterations over time (powered by PolyTrack).
- * @param userId The ID of the user.
- */
 export async function avatarVersions(userId: number) {
 	const profileVersions = await sendMessage("getProfileVersions", userId);
 	if (!profileVersions.ok) return;
@@ -887,32 +871,32 @@ export async function rankingPositions(userId: number) {
 		[
 			"fa-duotone fa-coin",
 			"Networth",
-			charts.networth.filter((x) => x._field == "rank").at(-1)?._value,
+			charts.data.networth?.filter((x) => x._field == "rank").at(-1)?._value,
 		],
 		[
 			"fa-duotone fa-eye",
 			"Profile Views",
-			charts.profileviews.filter((x) => x._field == "rank").at(-1)?._value,
+			charts.data.profileviews?.filter((x) => x._field == "rank").at(-1)?._value,
 		],
 		[
 			"fa-duotone fa-flag-checkered",
 			"Visits",
-			charts.visits.filter((x) => x._field == "rank").at(-1)?._value,
+			charts.data.visits?.filter((x) => x._field == "rank").at(-1)?._value,
 		],
 		[
 			"fa-duotone fa-messages",
 			"Forum Posts",
-			charts.forumposts.filter((x) => x._field == "rank").at(-1)?._value,
+			charts.data.forumposts?.filter((x) => x._field == "rank").at(-1)?._value,
 		],
 		[
 			"fa-duotone fa-tag",
 			"Sales",
-			charts.sales.filter((x) => x._field == "rank").at(-1)?._value,
+			charts.data.sales?.filter((x) => x._field == "rank").at(-1)?._value,
 		],
 		[
 			"fa-duotone fa-star",
 			"XP",
-			charts.xp.filter((x) => x._field == "rank").at(-1)?._value,
+			charts.data.xp?.filter((x) => x._field == "rank").at(-1)?._value,
 		],
 	];
 

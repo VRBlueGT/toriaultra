@@ -43,6 +43,12 @@ export default defineContentScript({
 					if (values.enabled.includes("eventItems")) {
 						discovery.eventItems();
 					}
+					if (
+						values.enabled.includes("disableInfiniteScrolling") &&
+						values.config.disableInfiniteScrolling.store
+					) {
+						discovery.disableInfiniteScrolling();
+					}
 				} else {
 					if (import.meta.env.MODE == "development") {
 						console.log("[Kiln] Running view page functions: ", view);

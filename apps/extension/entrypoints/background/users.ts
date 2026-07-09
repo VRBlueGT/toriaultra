@@ -372,16 +372,17 @@ onMessage("getProfileVersions", ({ data: userId }) =>
 	}),
 );
 
-onMessage("getUserCreations", ({ data: { userId, page } }) =>
+onMessage("getUserCreations", ({ data: { userId, page, limit } }) =>
 	handle(async () => {
 		const config = await withApi("public_api", "public");
 		const resolvedPage = page ?? 1;
+		const resolvedLimit = limit ?? 12;
 		return pullKVCache(
 			"userCreations",
-			`${userId}-${resolvedPage}-12`,
+			`${userId}-${resolvedPage}-${resolvedLimit}`,
 			() =>
 				safeFetch(
-					`${config.resolvedUrls.public}users/${userId}/store?page=${resolvedPage}&limit=12`,
+					`${config.resolvedUrls.public}users/${userId}/store?page=${resolvedPage}&limit=${resolvedLimit}`,
 					Polytoria.UserCreationsApiSchema,
 				),
 			5 * 60 * 1000,
@@ -528,7 +529,7 @@ onMessage("getUserCharts", ({ data: userId }) =>
 			String(userId),
 			() =>
 				safeFetch(
-					`https://polytrack.top/api/charts/user/${userId}/day?date=${new Date().toISOString()}`,
+					`https://polytrack.top/api/charts/user/${userId}/range?metric=allranks&start=${new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString()}&stop=${new Date().toISOString()}&window=raw`,
 					PolyTrack.UserChartsApiSchema,
 				),
 			60 * 1000,

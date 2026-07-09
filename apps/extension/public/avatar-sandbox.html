@@ -41,7 +41,7 @@
 </style>
 <span class="badge bg-warning mb-2" id="view-cache">Kiln</span>
 <h4 class="d-none d-lg-block">
-	Avatar Sandbox
+	Character Sandbox
 </h4>
 <div class="row">
 	<div class="col-12 col-lg-3">
@@ -59,6 +59,10 @@
 
 					<button type="button" id="jsonSave" aria-label="Save as JSON!" style="display: block;" data-bs-toggle="tooltip" data-bs-title="Download" data-bs-placement="right">
 						<i class="fa-duotone fa-download"></i>
+					</button>
+
+					<button type="button" id="glbExport" aria-label="Export as GLB!" style="display: block;" data-bs-toggle="tooltip" data-bs-title="Export GLB" data-bs-placement="right">
+						<i class="fa-duotone fa-cube"></i>
 					</button>
 
 					<button type="button" aria-label="View in full screen!" style="display: block;" id="viewFullscreen" data-bs-toggle="tooltip" data-bs-title="Full Screen" data-bs-placement="right">
@@ -134,17 +138,6 @@
 				</div>
 			</div>
 		</div>
-		<small class="text-muted text-center" style="font-size: 0.7rem;">thanks to <a href="https://polytoria.com/u/Hawli">@Hawli</a> and <a href="https://polytoria.com/u/Emir">@Emir</a> for letting me use their<br><a href="https://poly-archive.vercel.app/" target="_blank">Poly-Archive</a> website's assets!</small>
-		<hr class="mt-2 mb-1">
-		<small class="text-muted text-center" style="font-size: 0.7rem;">feature of Kiln</small>
-		<!--
-		Public API does not have an offsale parameter
-
-		<span class="form-check form-switch" style="font-size: 0.7rem;">
-			<input class="form-check-input" type="checkbox" role="switch" id="show-offsale" checked />
-			<label class="form-check-label" for="hide-user-ads-banner">Show Offsale Items</label>
-		</span>
-		-->
 	</div>
 	<div class="col-12 col-lg-9">
 		<ul class="nav nav-pills no-shrink avatar-nav-pills nav-justified row" id="tabs">

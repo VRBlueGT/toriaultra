@@ -40,6 +40,7 @@ import {
 
 const KILN_ID_REGEX =
 	/(?<![A-Za-z0-9_-])kiln:[A-Za-z0-9_-]{10}(?![A-Za-z0-9_-])/;
+const KILN_ID_REGEX_GLOBAL = new RegExp(KILN_ID_REGEX.source, "g");
 
 type Tags =
 	| "all"
@@ -88,9 +89,6 @@ function isNewerVersion(latest: string, current: string): boolean {
 	return lPat > cPat;
 }
 
-/**
- * Injects the Kiln nav link into the settings sidebar.
- */
 export function injectKilnTab() {
 	const nav = document.querySelector("nav.nav.nav-pills.flex-column");
 	if (!nav) return;
@@ -110,9 +108,6 @@ export function injectKilnTab() {
 	else nav.appendChild(link);
 }
 
-/**
- * Renders the Kiln settings page with About / Preferences / Debug tabs.
- */
 export async function kilnSettings() {
 	const content = document.getElementsByClassName(
 		"col-lg-10",
@@ -207,8 +202,11 @@ export async function kilnSettings() {
 					<p class="text-muted small mb-3">v${version} &middot; Made by <a href="https://polytoria.com/u/Index" target="_blank">Index</a></p>
 					<p class="mb-3">50+ features. Everything Polytoria should have built in.</p>
 					<div class="d-flex gap-2">
-						<a href="https://discord.gg/dczBuRDKPX" target="_blank" class="btn btn-primary btn-sm">
+						<a href="https://discord.gg/dczBuRDKPX" target="_blank" class="btn btn-primary btn-sm" data-bs-toggle="toolip" data-bs-title="Discord is 13+.">
 							<i class="fab fa-discord me-1"></i> Join the Discord
+						</a>
+						<a href="https://github.com/indexxing/kiln-extension" target="_blank" class="btn btn-outline-secondary btn-sm">
+							<i class="fab fa-github me-1"></i> Github
 						</a>
 						<a href="https://kiln.indexx.dev/privacy" target="_blank" class="btn btn-outline-secondary btn-sm">
 							Privacy Policy
@@ -266,10 +264,16 @@ export async function kilnSettings() {
 		`;
 
 		const services = [
-			{ name: "Polytoria API", url: "https://api.polytoria.com/" },
+			{ name: "Polytoria API", url: "https://api.polytoria.com/v1/users/2782" },
 			{ name: "Kiln API", url: "https://kiln-api.indexx.dev/" },
-			{ name: "Polytoria.Trade API", url: "https://polytoria.trade/api/" },
-			{ name: "Polytrack", url: "https://polytrack.top/" },
+			{
+				name: "Polytoria.Trade API",
+				url: "https://polytoria.trade/api/trpc/getItemWithTags,getItemGraph?batch=1&input=%7B%220%22%3A149925%2C%221%22%3A149925%7D",
+			},
+			{
+				name: "Polytrack",
+				url: "https://polytrack.top/users/2782?view=stats&_data=routes%2Fusers.%24id",
+			},
 		];
 
 		async function checkStatus(force = false) {
@@ -417,8 +421,10 @@ export async function kilnSettings() {
 	async function initPrefsTab() {
 		const inner = document.getElementById("kiln-prefs-inner")!;
 		inner.innerHTML = `
-			<div class="mb-2">
+			<div class="mb-2 d-flex align-items-center gap-2">
 				<input id="kiln-search" type="text" class="form-control form-control-sm" placeholder="Search preferences..." />
+				<button id="kiln-export-btn" class="btn btn-secondary btn-sm w-25">Export</button>
+				<button id="kiln-import-btn" class="btn btn-secondary btn-sm w-25">Import</button>
 			</div>
 			<div id="kiln-config-notes"></div>
 			<div id="kiln-settings-list"></div>
@@ -536,7 +542,13 @@ export async function kilnSettings() {
 							: note.type === "info"
 								? "text-info"
 								: "text-secondary";
-					return `<span class="${cls} small d-block">* ${note.text}</span>`;
+					const icon =
+						note.type === "warning"
+							? '<i class="fas fa-exclamation-triangle me-1"></i>'
+							: note.type === "info"
+								? '<i class="fas fa-info-circle me-1"></i>'
+								: "* ";
+					return `<span class="${cls} small d-block">${icon}${note.text}</span>`;
 				})
 				.join("");
 
@@ -1030,6 +1042,48 @@ export async function kilnSettings() {
 			}, 150);
 		};
 		renderCategoryList();
+
+		document
+			.getElementById("kiln-export-btn")!
+			.addEventListener("click", () => {
+				const json = JSON.stringify(values, null, 2);
+				const blob = new Blob([json], { type: "application/json" });
+				const url = URL.createObjectURL(blob);
+				const a = document.createElement("a");
+				a.href = url;
+				a.download = "kiln-preferences.json";
+				document.body.appendChild(a);
+				a.click();
+				document.body.removeChild(a);
+				URL.revokeObjectURL(url);
+			});
+
+		document
+			.getElementById("kiln-import-btn")!
+			.addEventListener("click", () => {
+				const fileInput = document.createElement("input");
+				fileInput.type = "file";
+				fileInput.accept = ".json,application/json";
+				fileInput.addEventListener("change", async () => {
+					const file = fileInput.files?.[0];
+					if (!file) return;
+					try {
+						const text = await file.text();
+						const imported = JSON.parse(text);
+						if (
+							!Array.isArray(imported?.enabled) ||
+							!Array.isArray(imported?.disabled)
+						) {
+							throw new Error("Invalid format");
+						}
+						await preferences.setValue(imported);
+						await initPrefsTab();
+					} catch {
+						alert("Failed to import: invalid or corrupted preferences file.");
+					}
+				});
+				fileInput.click();
+			});
 	}
 
 	document
@@ -1760,10 +1814,25 @@ async function initSyncTab() {
 				${user ? statusBtn : ""}
 			</div>
 		</div>
-		<div class="card">
+		<div class="card mb-2">
 			<div class="card-header small fw-semibold">${featuresHeader}</div>
 			<div class="card-body p-0">${featureListHtml}</div>
 		</div>
+		${
+			isLinked
+				? `
+		<div class="card">
+			<div class="card-header small fw-semibold d-flex justify-content-between align-items-center" id="kiln-sync-sessions-header" style="cursor:pointer;">
+				<span>Active Sessions</span>
+				<i class="fas fa-chevron-down text-muted" id="kiln-sync-sessions-chevron" style="font-size:0.75rem;transition:transform 200ms;"></i>
+			</div>
+			<div id="kiln-sync-sessions-body" style="display:none;">
+				<div class="card-body p-0" id="kiln-sync-sessions-list"></div>
+			</div>
+		</div>
+		`
+				: ""
+		}
 	`;
 
 	document
@@ -1775,6 +1844,107 @@ async function initSyncTab() {
 				openVerificationFlowModal(user.userId);
 			}
 		});
+
+	if (isLinked) {
+		let sessionsLoaded = false;
+
+		const localSession = sessions.find(
+			(s) => s.userId === user!.userId && s.state === "verified",
+		);
+		let currentSessionId: string | null = null;
+		if (localSession?.refreshToken) {
+			try {
+				const payload = JSON.parse(
+					atob(localSession.refreshToken.split(".")[1]!),
+				);
+				currentSessionId = payload.refreshId ?? null;
+			} catch {}
+		}
+
+		async function renderKilnSessions() {
+			const listEl = document.getElementById("kiln-sync-sessions-list")!;
+			listEl.innerHTML = `<div class="px-3 py-2 text-muted small">Loading…</div>`;
+
+			const result = await sendMessage("getKilnSessions", user!.userId);
+			if (!result.ok) {
+				listEl.innerHTML = `<div class="px-3 py-2 text-danger small">Failed to load sessions.</div>`;
+				return;
+			}
+
+			const serverSessions = result.data.data;
+			if (serverSessions.length === 0) {
+				listEl.innerHTML = `<div class="px-3 py-2 text-muted small">No active sessions.</div>`;
+				return;
+			}
+
+			listEl.innerHTML = serverSessions
+				.map(
+					(s, i) => `
+				<div class="d-flex align-items-center gap-2 px-3 py-2${i < serverSessions.length - 1 ? " border-bottom border-secondary" : ""}" data-session-id="${s.id}">
+					<i class="fas fa-${s.browser?.toLowerCase().includes("chrome") ? "chrome" : s.browser?.toLowerCase().includes("firefox") ? "firefox" : "globe"} text-muted" style="font-size:0.9rem;flex-shrink:0;"></i>
+					<div class="flex-grow-1 min-w-0">
+						<div class="small d-flex align-items-center gap-2">
+							${[s.browser, s.os].filter(Boolean).join(" · ") || "Unknown device"}
+							${s.id === currentSessionId ? '<span class="badge bg-primary" style="font-size:0.65rem;">This device</span>' : ""}
+						</div>
+						<div class="text-muted" style="font-size:0.72rem;">
+							${s.lastUsedAt ? `Last active ${new Date(s.lastUsedAt).toLocaleDateString()}` : `Created ${s.createdAt ? new Date(s.createdAt).toLocaleDateString() : "unknown"}`}
+						</div>
+					</div>
+					<button class="btn btn-outline-danger btn-sm py-0 kiln-session-revoke-btn" data-session-id="${s.id}" style="font-size:0.75rem;">Revoke</button>
+				</div>
+			`,
+				)
+				.join("");
+
+			for (const btn of listEl.querySelectorAll<HTMLButtonElement>(
+				".kiln-session-revoke-btn",
+			)) {
+				btn.addEventListener("click", async () => {
+					btn.disabled = true;
+					btn.textContent = "Revoking…";
+					const sessionId = btn.dataset.sessionId!;
+					const res = await sendMessage("terminateKilnSessionById", {
+						userId: user!.userId,
+						sessionId,
+					});
+					if (res.ok) {
+						await renderKilnSessions();
+					} else {
+						btn.disabled = false;
+						btn.textContent = "Revoke";
+						btn.insertAdjacentHTML(
+							"afterend",
+							`<span class="text-danger small ms-1" style="font-size:0.72rem;">Failed</span>`,
+						);
+					}
+				});
+			}
+		}
+
+		const sessionsHeader = document.getElementById(
+			"kiln-sync-sessions-header",
+		)!;
+		const sessionsBody = document.getElementById("kiln-sync-sessions-body")!;
+		const sessionsChevron = document.getElementById(
+			"kiln-sync-sessions-chevron",
+		)!;
+
+		sessionsHeader.style.borderRadius = "inherit";
+		sessionsHeader.style.borderBottom = "none";
+
+		sessionsHeader.addEventListener("click", () => {
+			const collapsed = sessionsBody.style.display === "none";
+			sessionsBody.style.display = collapsed ? "" : "none";
+			sessionsChevron.style.transform = collapsed ? "rotate(180deg)" : "";
+			sessionsHeader.style.borderRadius = collapsed ? "" : "inherit";
+			sessionsHeader.style.borderBottom = collapsed ? "" : "none";
+			if (collapsed && !sessionsLoaded) {
+				sessionsLoaded = true;
+				renderKilnSessions();
+			}
+		});
+	}
 }
 
 async function initWhatsNewTab() {
@@ -2226,7 +2396,7 @@ async function openVerificationFlowModal(userId: number) {
 			?.addEventListener("click", () => modal.close());
 		modal
 			.querySelector("#kvf-rules-next")
-			?.addEventListener("click", renderManualCode);
+			?.addEventListener("click", renderMethodSelect);
 	}
 
 	function renderMethodSelect() {
@@ -2241,10 +2411,9 @@ async function openVerificationFlowModal(userId: number) {
 					<div class="fw-semibold mb-1"><i class="fas fa-code me-2"></i>Manual Code Verification</div>
 					<div class="text-muted small">Paste a code into your Polytoria bio to prove account ownership.</div>
 				</button>
-				<button class="btn btn-outline-secondary text-start p-3" id="kvf-method-auto" disabled>
+				<button class="btn btn-outline-secondary text-start p-3" id="kvf-method-auto">
 					<div class="fw-semibold mb-1">
 						<i class="fas fa-bolt me-2"></i>Automatic Code Verification
-						<span class="badge bg-secondary ms-1" style="font-size:0.7rem;">Coming Soon</span>
 					</div>
 					<div class="text-muted small">Automatically verify using a code in your bio, but without you having to do anything.</div>
 				</button>
@@ -2265,6 +2434,55 @@ async function openVerificationFlowModal(userId: number) {
 		modal
 			.querySelector("#kvf-method-manual")
 			?.addEventListener("click", renderManualCode);
+		modal
+			.querySelector("#kvf-method-auto")
+			?.addEventListener("click", renderAutoCode);
+	}
+
+	function isJwtExpired(token: string): boolean {
+		try {
+			const payload = JSON.parse(atob(token.split(".")[1]));
+			return Date.now() >= payload.exp * 1000;
+		} catch {
+			return true;
+		}
+	}
+
+	async function getVerificationPhrase(): Promise<
+		{ ok: true; phrase: string } | { ok: false; message: string }
+	> {
+		const sessions = await apiSessions.getValue();
+		const existing = sessions.find(
+			(s) =>
+				s.userId === userId &&
+				s.state === "pending" &&
+				s.phrase &&
+				s.verificationToken,
+		);
+
+		if (existing?.phrase && !isJwtExpired(existing.verificationToken!)) {
+			return { ok: true, phrase: existing.phrase };
+		}
+
+		const startResult = await sendMessage("startKilnVerification", userId);
+		if (!startResult.ok) {
+			return {
+				ok: false,
+				message: "Failed to start verification. Please try again later.",
+			};
+		}
+		const { phrase, token } = startResult.data.data;
+
+		const fresh = await apiSessions.getValue();
+		fresh.push({
+			userId,
+			state: "pending",
+			verificationToken: token,
+			phrase,
+		});
+		await apiSessions.setValue(fresh);
+
+		return { ok: true, phrase };
 	}
 
 	async function renderManualCode() {
@@ -2291,48 +2509,12 @@ async function openVerificationFlowModal(userId: number) {
 				?.addEventListener("click", renderMethodSelect);
 		}
 
-		const sessions = await apiSessions.getValue();
-		const existing = sessions.find(
-			(s) =>
-				s.userId === userId &&
-				s.state === "pending" &&
-				s.phrase &&
-				s.verificationToken,
-		);
-
-		function isJwtExpired(token: string): boolean {
-			try {
-				const payload = JSON.parse(atob(token.split(".")[1]));
-				return Date.now() >= payload.exp * 1000;
-			} catch {
-				return true;
-			}
+		const phraseResult = await getVerificationPhrase();
+		if (!phraseResult.ok) {
+			renderManualError(phraseResult.message);
+			return;
 		}
-
-		let phrase: string;
-
-		if (existing?.phrase && !isJwtExpired(existing.verificationToken!)) {
-			phrase = existing.phrase;
-		} else {
-			const startResult = await sendMessage("startKilnVerification", userId);
-			if (!startResult.ok) {
-				renderManualError(
-					"Failed to start verification. Please try again later.",
-				);
-				return;
-			}
-			const { phrase: p, token } = startResult.data.data;
-			phrase = p;
-
-			const fresh = await apiSessions.getValue();
-			fresh.push({
-				userId,
-				state: "pending",
-				verificationToken: token,
-				phrase,
-			});
-			await apiSessions.setValue(fresh);
-		}
+		const { phrase } = phraseResult;
 
 		body.innerHTML = `
 			<p class="small text-muted mb-2">
@@ -2367,6 +2549,146 @@ async function openVerificationFlowModal(userId: number) {
 		body
 			.querySelector("#kvf-manual-done")
 			?.addEventListener("click", () => modal.close());
+	}
+
+	async function renderAutoCode() {
+		setContent(`
+			<div class="d-flex justify-content-between align-items-center mb-3">
+				<h5 class="mb-0">Automatic Code Verification</h5>
+				<button class="btn btn-sm btn-secondary" id="kvf-close">✕</button>
+			</div>
+			<div id="kvf-auto-body">
+				<p class="text-muted small"><i class="fas fa-spinner fa-spin me-1"></i>Starting verification…</p>
+			</div>
+		`);
+		addCloseBtn();
+
+		const body = modal.querySelector("#kvf-auto-body") as HTMLElement;
+
+		function setStatus(message: string) {
+			body.innerHTML = `<p class="text-muted small"><i class="fas fa-spinner fa-spin me-1"></i>${message}</p>`;
+		}
+
+		function renderAutoError(message: string) {
+			body.innerHTML = `
+				<p class="text-danger small mb-3">${message}</p>
+				<button class="btn btn-secondary btn-sm" id="kvf-err-back">← Back</button>
+			`;
+			body
+				.querySelector("#kvf-err-back")
+				?.addEventListener("click", renderMethodSelect);
+		}
+
+		async function fetchProfileForm(): Promise<{
+			form: HTMLFormElement;
+			description: HTMLTextAreaElement;
+		} | null> {
+			let res: Response;
+			try {
+				res = await fetch("https://polytoria.com/my/settings/profile", {
+					credentials: "same-origin",
+				});
+			} catch {
+				return null;
+			}
+			if (!res.ok) return null;
+
+			const doc = new DOMParser().parseFromString(
+				await res.text(),
+				"text/html",
+			);
+			const form = doc.querySelector<HTMLFormElement>(
+				'form[action="/my/settings/profile/update"]',
+			);
+			const description =
+				form?.querySelector<HTMLTextAreaElement>("#description");
+			if (!form || !description) return null;
+
+			return { form, description };
+		}
+
+		async function submitProfileForm(form: HTMLFormElement): Promise<boolean> {
+			const params = new URLSearchParams();
+			for (const [key, value] of new FormData(form)) {
+				if (typeof value === "string") params.append(key, value);
+			}
+			try {
+				const res = await fetch(
+					"https://polytoria.com/my/settings/profile/update",
+					{
+						method: "POST",
+						credentials: "same-origin",
+						headers: { "Content-Type": "application/x-www-form-urlencoded" },
+						body: params.toString(),
+					},
+				);
+				return res.ok;
+			} catch {
+				return false;
+			}
+		}
+
+		const phraseResult = await getVerificationPhrase();
+		if (!phraseResult.ok) {
+			renderAutoError(phraseResult.message);
+			return;
+		}
+		const { phrase } = phraseResult;
+
+		setStatus("Updating your bio…");
+
+		const profileForm = await fetchProfileForm();
+		if (!profileForm) {
+			renderAutoError(
+				"Couldn't find your profile bio field. Please try the manual method instead.",
+			);
+			return;
+		}
+
+		const currentBio = profileForm.description.value;
+		const cleanBio = currentBio
+			.replace(KILN_ID_REGEX_GLOBAL, "")
+			.replace(/[ \t]*\n[ \t]*\n+/g, "\n")
+			.trim();
+		profileForm.description.value = cleanBio
+			? `${cleanBio}\n${phrase}`
+			: phrase;
+
+		if (!(await submitProfileForm(profileForm.form))) {
+			renderAutoError("Failed to update your bio. Please try again later.");
+			return;
+		}
+
+		setStatus("Confirming verification…");
+
+		const verificationResult = await sendMessage(
+			"finishKilnVerification",
+			userId,
+		);
+		if (!verificationResult.ok || !verificationResult.data.data.userId) {
+			renderAutoError(
+				"Your bio was updated, but verification failed. Please try again in a moment.",
+			);
+			return;
+		}
+		const verification = verificationResult.data;
+
+		await updateApiSession(userId, (session) => {
+			session.state = "verified";
+			session.accessToken = verification.data.accessToken;
+			session.refreshToken = verification.data.refreshToken;
+			delete session.verificationToken;
+		});
+
+		setStatus("Cleaning up…");
+
+		const cleanupForm = await fetchProfileForm();
+		if (cleanupForm) {
+			cleanupForm.description.value = cleanBio;
+			await submitProfileForm(cleanupForm.form);
+		}
+
+		window.location.reload();
 	}
 
 	renderRules();
@@ -2440,9 +2762,6 @@ async function renderSessionsList() {
 	}
 }
 
-/**
- * Standalone debug page at /my/settings/kiln-debug.
- */
 export async function kilnDebug() {
 	const content = document.getElementsByClassName(
 		"col-lg-10",
@@ -2451,9 +2770,6 @@ export async function kilnDebug() {
 	initDebugTab(document.getElementById("kd-root") as HTMLElement);
 }
 
-/**
- * Checks for a Kiln verification code in the bio of the user, and if it is found, pings the API to complete the authentication flow.
- */
 export async function checkForVerificationCode(userId: number) {
 	const descriptionTextbox = document.getElementById("description")!;
 

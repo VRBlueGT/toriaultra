@@ -90,6 +90,12 @@ export type AvatarSandboxOutfit = {
 	data: AvatarIFrameState;
 };
 
+export type AccessoryTransform = {
+	position: [number, number, number];
+	rotation: [number, number, number];
+	scale: number;
+};
+
 export type AvatarIFrameState = {
 	useCharacter: boolean;
 	items: (number | string)[];
@@ -103,6 +109,7 @@ export type AvatarIFrameState = {
 	rightArmColor: string;
 	leftLegColor: string;
 	rightLegColor: string;
+	itemTransforms?: Record<string, AccessoryTransform>;
 };
 
 export type TradeItem = {
@@ -151,6 +158,100 @@ export type ThemeEffect = {
 };
 
 export type EvalProfile = "balanced" | "collector" | "flipper" | "profit";
+
+export type FeedPost = {
+	id: number;
+	content: string;
+	mediaUrl: string | null;
+	postedAt: string;
+	placeID: number | null;
+	placeName: string | null;
+	replyCount: number;
+	likeCount: number;
+	isLiked: boolean;
+	author: {
+		id: number;
+		username: string;
+		avatarIconUrl: string;
+	};
+};
+
+export type FeedApi = {
+	data: FeedPost[];
+	meta: { nextPageURL: string | null; currentPage: number };
+};
+
+export type StoreListingItem = {
+	id: number;
+	type: string;
+	accessoryType: string | null;
+	name: string;
+	thumbnailUrl: string;
+	creatorName: string;
+	creatorUrl: string;
+	isLimited: boolean;
+	freeForPlus: boolean;
+	recentlyUploaded: boolean;
+	onSaleUntil: string | null;
+	isSoldOut: boolean;
+	priceInStuds: number | null;
+	displayPrice: number | null;
+};
+
+export type StoreListingFilters = {
+	types: string[];
+	accessoryTypes: string[];
+	currency?: string;
+	page: number;
+	search: string;
+	sort: string;
+	order: string;
+	showOffsale: boolean;
+	collectiblesOnly: boolean;
+	minPrice: number | null;
+	maxPrice: number | null;
+	creatorName: string;
+};
+
+export type StoreListingApi = {
+	data: StoreListingItem[];
+	meta: { currentPage: number; lastPage: number };
+};
+
+export type PlaceListing = {
+	id: number;
+	name: string;
+	iconUrl: string;
+	rating: number | null;
+	playing: number;
+	genreIcon: string;
+	placeType: string;
+	isLegacy: boolean;
+};
+
+export type PlacesListingFilters = {
+	page: number;
+	search: string;
+	genre: string;
+	sort: string;
+	branch: string;
+};
+
+export type PlacesListingApi = {
+	data: PlaceListing[];
+	meta: { nextPageURL: string | null };
+};
+
+export type ForumSearchFilters = {
+	page: number;
+	search: string;
+	sort: string;
+	type: string;
+	authorIds: number[];
+	categoryIds: number[];
+	postedAfter: string;
+	postedBefore: string;
+};
 
 export type ParsedTrade = {
 	status: TradeStatus;

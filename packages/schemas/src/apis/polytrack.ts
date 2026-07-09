@@ -28,15 +28,112 @@ const InfluxRecord = z.object({
 	_value: z.string(),
 	_field: z.string(),
 	_measurement: z.string(),
-	playerId: z.string(),
 });
 
 export const UserChartsApiSchema = z.object({
-	networth: z.array(InfluxRecord),
-	profileviews: z.array(InfluxRecord),
-	visits: z.array(InfluxRecord),
-	forumposts: z.array(InfluxRecord),
-	sales: z.array(InfluxRecord),
-	xp: z.array(InfluxRecord),
+	data: z.object({
+		networth: z.array(InfluxRecord).optional(),
+		profileviews: z.array(InfluxRecord).optional(),
+		visits: z.array(InfluxRecord).optional(),
+		forumposts: z.array(InfluxRecord).optional(),
+		sales: z.array(InfluxRecord).optional(),
+		xp: z.array(InfluxRecord).optional(),
+	}),
+	meta: z.object({
+		metric: z.string(),
+		window: z.string(),
+		start: z.string(),
+		stop: z.string(),
+	}),
 });
 export type UserChartsApi = z.infer<typeof UserChartsApiSchema>;
+
+const ChartPointSchema = z.object({
+	_time: z.string(),
+	_value: z.number(),
+});
+
+export const WorldStatsChartApiSchema = z.object({
+	value: z.array(ChartPointSchema),
+});
+export type WorldStatsChartApi = z.infer<typeof WorldStatsChartApiSchema>;
+export const WorldStatsMetricSchema = z.enum([
+	"uniqueVisits",
+	"visits",
+	"likes",
+	"dislikes",
+	"likeRate",
+]);
+export type WorldStatsMetric = z.infer<typeof WorldStatsMetricSchema>;
+
+export const WorldIngameChartApiSchema = z.object({
+	min: z.array(ChartPointSchema),
+	avg: z.array(ChartPointSchema),
+	max: z.array(ChartPointSchema),
+});
+export type WorldIngameChartApi = z.infer<typeof WorldIngameChartApiSchema>;
+
+export const GameActivitySessionSchema = z.object({
+	id: z.string(),
+	gameId: z.number().int(),
+	gameName: z.string(),
+	startedAt: z.string(),
+	endedAt: z.string().nullable(),
+	duration: z.number(),
+	isOpen: z.boolean(),
+	serverId: z.number().int().nullable(),
+	lastServerId: z.number().int().nullable(),
+	closeReason: z.string().nullable(),
+});
+export type GameActivitySession = z.infer<typeof GameActivitySessionSchema>;
+
+export const GameActivityApiSchema = z.object({
+	totalPlaytime: z.number(),
+	totalSessions: z.number(),
+	sessions: z.array(GameActivitySessionSchema),
+});
+export type GameActivityApi = z.infer<typeof GameActivityApiSchema>;
+
+export const ForumAuthorSchema = z.object({
+	polytoriaId: z.number().int().positive(),
+	username: z.string().min(1),
+	avatarUrl: z.string(),
+});
+export type ForumAuthor = z.infer<typeof ForumAuthorSchema>;
+
+export const ForumThreadSummarySchema = z.object({
+	id: z.number().int(),
+	title: z.string(),
+	replyCount: z.number().int().nullable(),
+	viewCount: z.number().int().nullable(),
+	isPinned: z.boolean(),
+	isLocked: z.boolean(),
+	rating: z.number().nullable(),
+	bumpedAt: z.string(),
+});
+export type ForumThreadSummary = z.infer<typeof ForumThreadSummarySchema>;
+
+export const ForumEntrySchema = z.object({
+	id: z.number().int(),
+	threadId: z.number().int(),
+	kind: z.enum(["thread", "reply"]),
+	title: z.string(),
+	content: z.string(),
+	postedAt: z.string(),
+	bumpedAt: z.string(),
+	categoryId: z.number().int(),
+	author: ForumAuthorSchema,
+	thread: ForumThreadSummarySchema,
+});
+export type ForumEntry = z.infer<typeof ForumEntrySchema>;
+
+export const ForumSearchApiSchema = z.object({
+	entries: z.array(ForumEntrySchema),
+	nextPage: z
+		.number()
+		.int()
+		.nullable()
+		.optional()
+		.transform((value) => value ?? null),
+});
+export type ForumSearchApi = z.infer<typeof ForumSearchApiSchema>;

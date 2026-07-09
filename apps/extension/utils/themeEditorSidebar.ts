@@ -30,10 +30,7 @@ import {
 	THEME_PRESETS,
 } from "@/utils/theme";
 import type { ThemeEffect } from "@/utils/types";
-import {
-	createModal,
-	getConfig,
-} from "@/utils/utilities";
+import { createModal, getConfig } from "@/utils/utilities";
 
 const RANDOM_ADJECTIVES = [
 	"Solar",
@@ -117,6 +114,25 @@ function saveTeState(state: TeWindowState) {
 	try {
 		sessionStorage.setItem(TE_STATE_KEY, JSON.stringify(state));
 	} catch {}
+}
+
+function friendlyApiError(
+	message: string,
+	fallback = "Something went wrong. Please try again.",
+): string {
+	if (message.includes("401"))
+		return "Your session has expired. Reconnect your account and try again.";
+	if (message.includes("403")) return "You don't have permission to do this.";
+	if (message.includes("404")) return "The requested resource was not found.";
+	if (message.includes("409"))
+		return "A conflict occurred. This name may already be taken.";
+	if (message.includes("422"))
+		return "The theme data is invalid. Check your colors and settings.";
+	if (message.includes("429"))
+		return "Too many requests. Please wait a moment and try again.";
+	if (message.includes("500") || message.includes("503"))
+		return "Server error. Please try again later.";
+	return fallback;
 }
 
 function parseColorAlpha(value: string | number): [string, number] {
@@ -593,6 +609,19 @@ export async function openThemeEditorSidebar(): Promise<void> {
 			</div>
 		</div>
 
+		<div id="kiln-te-delete-overlay" style="display:none;position:absolute;inset:0;z-index:10;background:rgba(0,0,0,0.55);align-items:center;justify-content:center;padding:24px;">
+			<div style="background:var(--bs-body-bg,#212529);border:1px solid rgba(128,128,128,0.3);border-radius:8px;padding:16px;width:100%;">
+				<p class="fw-bold mb-2" style="font-size:0.95rem;">Delete Theme</p>
+				<p class="text-muted small mb-3" id="kiln-te-delete-message"></p>
+				<div class="d-flex gap-2 justify-content-end">
+					<button class="btn btn-sm btn-secondary" id="kiln-te-delete-cancel">Cancel</button>
+					<button class="btn btn-sm btn-danger" id="kiln-te-delete-confirm">
+						<i class="fas fa-trash me-1"></i>Delete
+					</button>
+				</div>
+			</div>
+		</div>
+
 	`;
 
 	document.body.classList.add("kiln-te-sidebar-open");
@@ -1050,38 +1079,8 @@ export async function openThemeEditorSidebar(): Promise<void> {
 			deleteBtn.className = "btn btn-sm btn-outline-danger flex-fill";
 			deleteBtn.innerHTML = '<i class="fas fa-trash me-1"></i>Delete';
 			leftActions.appendChild(deleteBtn);
-			deleteBtn.addEventListener("click", async () => {
-				const apiSlug =
-					savedTheme.publishedSlug ?? savedTheme.previousPublishedSlug;
-				if (apiSlug) {
-					const sessions = await apiSessions.getValue();
-					const verified = sessions.find(
-						(s) => s.state === "verified" && s.accessToken,
-					);
-					if (verified) {
-						await sendMessage("deletePublishedTheme", {
-							userId: verified.userId,
-							id: apiSlug,
-						});
-					}
-				}
-				const current = await _savedThemes.getValue();
-				await _savedThemes.setValue(
-					current.filter((t) => t.id !== savedTheme.id),
-				);
-				const activeId = (values.config.themeCreator as any).activeThemeId;
-				if (activeId === savedTheme.id) {
-					(values.config as any).themeCreator = { activeThemeId: "default" };
-					await preferences.setValue(values);
-					applyKilnTheme(null);
-				}
-				savedThemes = await _savedThemes.getValue();
-				applyIdToState("__default__");
-				buildSelect();
-				syncInputsToState();
-				updateNameUI();
-				refreshLeftActions();
-				refreshPreview();
+			deleteBtn.addEventListener("click", () => {
+				openDeleteOverlay(savedTheme);
 			});
 
 			if (!savedTheme.importedSlug && savedTheme.publishedSlug) {
@@ -1117,7 +1116,10 @@ export async function openThemeEditorSidebar(): Promise<void> {
 						updateNameUI();
 						refreshLeftActions();
 					} else {
-						publishStatus.textContent = `Failed: ${result.message}`;
+						publishStatus.textContent = friendlyApiError(
+							result.message,
+							"Failed to unpublish. Please try again.",
+						);
 						unpublishBtn.disabled = false;
 					}
 				});
@@ -1195,7 +1197,10 @@ export async function openThemeEditorSidebar(): Promise<void> {
 							? "A theme with that name already exists."
 							: result.message.includes("403")
 								? "You've reached your publish limit."
-								: `Failed: ${result.message}`;
+								: friendlyApiError(
+										result.message,
+										"Failed to publish. Please try again.",
+									);
 					}
 					publishBtn.disabled = false;
 				});
@@ -1369,7 +1374,10 @@ export async function openThemeEditorSidebar(): Promise<void> {
 		if (!result.ok) {
 			importStatus.textContent = result.message.includes("404")
 				? "Theme not found."
-				: `Error: ${result.message}`;
+				: friendlyApiError(
+						result.message,
+						"Failed to import theme. Please try again.",
+					);
 			importStatus.className = "small text-danger mb-2";
 			importLoadBtn.disabled = false;
 			return;
@@ -1384,6 +1392,71 @@ export async function openThemeEditorSidebar(): Promise<void> {
 		closeImportOverlay();
 		await showConfirmImport(fetched, creatorName);
 		importLoadBtn.disabled = false;
+	});
+
+	const deleteOverlay = sidebar.querySelector<HTMLElement>(
+		"#kiln-te-delete-overlay",
+	)!;
+	const deleteMessage = sidebar.querySelector<HTMLElement>(
+		"#kiln-te-delete-message",
+	)!;
+	const deleteConfirmBtn = sidebar.querySelector<HTMLButtonElement>(
+		"#kiln-te-delete-confirm",
+	)!;
+	let themeToDelete: NonNullable<
+		ReturnType<typeof getCurrentSavedTheme>
+	> | null = null;
+
+	function openDeleteOverlay(
+		savedTheme: NonNullable<ReturnType<typeof getCurrentSavedTheme>>,
+	) {
+		themeToDelete = savedTheme;
+		deleteMessage.textContent = `Are you sure you want to delete "${savedTheme.name}"? This cannot be undone.`;
+		deleteOverlay.style.display = "flex";
+	}
+	function closeDeleteOverlay() {
+		deleteOverlay.style.display = "none";
+		themeToDelete = null;
+	}
+
+	sidebar
+		.querySelector("#kiln-te-delete-cancel")!
+		.addEventListener("click", closeDeleteOverlay);
+	deleteConfirmBtn.addEventListener("click", async () => {
+		const savedTheme = themeToDelete;
+		if (!savedTheme) return;
+
+		const apiSlug =
+			savedTheme.publishedSlug ?? savedTheme.previousPublishedSlug;
+		if (apiSlug) {
+			const sessions = await apiSessions.getValue();
+			const verified = sessions.find(
+				(s) => s.state === "verified" && s.accessToken,
+			);
+			if (verified) {
+				await sendMessage("deletePublishedTheme", {
+					userId: verified.userId,
+					id: apiSlug,
+				});
+			}
+		}
+		const current = await _savedThemes.getValue();
+		await _savedThemes.setValue(current.filter((t) => t.id !== savedTheme.id));
+		const activeId = (values.config.themeCreator as any).activeThemeId;
+		if (activeId === savedTheme.id) {
+			(values.config as any).themeCreator = { activeThemeId: "default" };
+			await preferences.setValue(values);
+			applyKilnTheme(null);
+		}
+		savedThemes = await _savedThemes.getValue();
+		applyIdToState("__default__");
+		buildSelect();
+		syncInputsToState();
+		updateNameUI();
+		refreshLeftActions();
+		refreshPreview();
+
+		closeDeleteOverlay();
 	});
 
 	themeSelect.addEventListener("change", () => switchTheme(themeSelect.value));
@@ -1831,7 +1904,10 @@ export async function openThemeEditorSidebar(): Promise<void> {
 							? `<span class="text-warning"><i class="fas fa-clock me-1"></i>Submitted for re-review</span><div class="text-muted small mt-1">Changes to CSS or background require approval before going live.</div>`
 							: `<span class="text-success"><i class="fas fa-check me-1"></i>Published version updated!</span>`;
 					} else {
-						publishStatus.textContent = `Sync failed: ${result.message}`;
+						publishStatus.textContent = friendlyApiError(
+							result.message,
+							"Failed to sync published version. Please try again.",
+						);
 					}
 				}
 			}

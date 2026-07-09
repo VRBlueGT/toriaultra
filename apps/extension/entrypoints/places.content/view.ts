@@ -16,13 +16,29 @@
 
 import { sendMessage } from "@/utils/messaging";
 import metadata from "@/utils/static/metadata.json";
-import { getConfig, pullKVCache } from "@/utils/utilities";
+import { _lastViewedPlaces } from "@/utils/storage";
+import {
+	getConfig,
+	markKilnNotificationRead,
+	pullKVCache,
+} from "@/utils/utilities";
 
 const placeID = +window.location.pathname.split("/")[2];
 
-/**
- * Displays a pin button on the place page backed by the Kiln extension API.
- */
+const MIN_REVIEW_PLAYTIME_MS = 5 * 60 * 1000;
+
+export async function recordPlaceView() {
+	const placeResult = await sendMessage("getPlace", placeID);
+	if (!placeResult.ok) return;
+
+	const lastViewed = await _lastViewedPlaces.getValue();
+	lastViewed[placeID] =
+		placeResult.data.updatedAt ?? placeResult.data.createdAt;
+	await _lastViewedPlaces.setValue(lastViewed);
+
+	await markKilnNotificationRead(`place-update:${placeID}`);
+}
+
 export async function favoritedPlaces(userId: number) {
 	const config = await getConfig();
 
@@ -100,9 +116,6 @@ export async function favoritedPlaces(userId: number) {
 	});
 }
 
-/**
- * Displays the approximated amount of revenue generated from a certain place, based off the unique visits & any gamepass sales (taking into account the creator's current membership tax)
- */
 export async function approxPlaceRevenue() {
 	const isOwnedByGuild = !document.querySelector(
 		'.place-hero-content a:has([class^="userlink-"])',
@@ -178,9 +191,6 @@ export async function approxPlaceRevenue() {
 	value.innerHTML = `<i class="pi pi-brick me-2"></i> ~${revenue.toLocaleString()}`;
 }
 
-/**
- * Adds a section where users can see any active challenges (if any) for the current place they are looking at
- */
 export async function activeChallenges() {
 	const getRawTooltip = (el: Element | null) =>
 		el?.getAttribute("data-bs-original-title") ||
@@ -475,62 +485,7 @@ export async function activeChallenges() {
 	sendMessage("registerBootstrapElements");
 }
 
-/**
- * Tracks the user's playtime of the current place.
- * @param userId The ID of the authenticated user.
- */
 export async function playtimeTracking(userId: number) {
-	let port: ReturnType<typeof browser.runtime.connect> | null = null;
-	let activeSessionId: string | null = null;
-
-	const connectToSession = (sessionId: string) => {
-		if (port) return;
-		port = browser.runtime.connect({ name: "kiln-time-played" });
-		port.postMessage({ userId, sessionId, placeId: placeID });
-		port.onDisconnect.addListener(() => {
-			port = null;
-		});
-	};
-
-	const startSession = async () => {
-		if (port) return;
-		if (activeSessionId) {
-			connectToSession(activeSessionId);
-			return;
-		}
-		const result = await sendMessage("startTimePlayedSession", {
-			userId,
-			placeId: placeID,
-		});
-		if (!result.ok) return;
-		activeSessionId = result.data.data.id;
-		connectToSession(activeSessionId);
-	};
-
-	if (!(await getApiSession(userId))) {
-		const infoColumn = document.querySelector(".card:has(.fa-calendar)")!
-			.parentElement!;
-		const card = document.createElement("div");
-		card.classList.add("card", "mcard", "mt-2");
-		card.innerHTML = `
-			<div class="card-header">
-				<i class="fas fa-clock me-1"></i> Your Playtime
-			</div>
-			<div class="card-body">
-				<p class="text-muted small mb-2"><i class="fa-regular fa-lock me-1"></i> Verify your Kiln account to track playtime.</p>
-				<a href="/my/settings/kiln?tab=sync" class="btn btn-primary btn-sm">Verify Account</a>
-			</div>
-		`;
-		infoColumn.appendChild(card);
-		return;
-	}
-
-	document.getElementById("btn-play")!.addEventListener("click", startSession);
-
-	for (const btn of document.querySelectorAll('button[onclick^="joinPlace"]')) {
-		btn.addEventListener("click", startSession);
-	}
-
 	const formatMinutes = (minutes: number) => {
 		if (minutes < 60) return `${minutes}mins`;
 		const h = Math.floor(minutes / 60);
@@ -545,53 +500,53 @@ export async function playtimeTracking(userId: number) {
 			year: "numeric",
 		});
 
-	type Session = {
-		id: string;
-		startedAt: string;
-		endedAt: string | null;
-		verifiedMinutes: number;
-		unverifiedMinutes: number;
-	};
-
-	const sessions: Session[] = [];
-	let page = 1;
-
-	while (page <= 5) {
-		const result = await sendMessage("getTimePlayedSessions", {
+	const fetchActivity = (forceRefresh = false) =>
+		sendMessage("getGameActivity", {
 			userId,
-			page,
-			placeId: placeID,
+			gameId: placeID,
+			page: 1,
+			pageSize: 25,
+			forceRefresh,
 		});
-		if (!result.ok) break;
-		sessions.push(...result.data.data);
-		if (result.data.meta.currentPage >= result.data.meta.totalPages) break;
-		page++;
-	}
 
-	activeSessionId = sessions.find((s) => s.endedAt === null)?.id ?? null;
-	if (activeSessionId) connectToSession(activeSessionId);
+	const buildContent = (
+		data: Extract<
+			Awaited<ReturnType<typeof fetchActivity>>,
+			{ ok: true }
+		>["data"],
+	) => {
+		const { totalPlaytime, sessions } = data;
 
-	const totalVerified = sessions.reduce((sum, s) => sum + s.verifiedMinutes, 0);
-	const totalUnverified = sessions.reduce(
-		(sum, s) => sum + s.unverifiedMinutes,
-		0,
-	);
-	const total = totalVerified + totalUnverified;
-	const avgMinutes =
-		sessions.length > 0 ? Math.round(total / sessions.length) : 0;
+		const rowsHTML =
+			sessions.length === 0
+				? `<div class="text-muted small fst-italic">No sessions recorded for this world yet.</div>`
+				: sessions
+						.map(
+							(session) => `
+						<div class="d-flex justify-content-between align-items-center py-1 border-bottom border-secondary" style="font-size:0.85rem;">
+							<span class="text-muted">${formatDate(session.startedAt)}${session.isOpen ? ' <span class="badge bg-success ms-1" style="font-size:0.7rem;">Live</span>' : ""}</span>
+							<span>${formatMinutes(Math.round(session.duration / 60_000))}</span>
+						</div>`,
+						)
+						.join("");
 
-	const rowsHTML =
-		sessions.length === 0
-			? `<div class="text-muted small fst-italic">No sessions recorded for this world yet.</div>`
-			: sessions
-					.map(
-						(session) => `
-					<div class="d-flex justify-content-between align-items-center py-1 border-bottom border-secondary" style="font-size:0.85rem;">
-						<span class="text-muted">${formatDate(session.startedAt)}${session.endedAt === null ? ' <span class="badge bg-success ms-1" style="font-size:0.7rem;">Live</span>' : ""}</span>
-						<span>${formatMinutes(session.verifiedMinutes + session.unverifiedMinutes)}</span>
-					</div>`,
-					)
-					.join("");
+		const totalMinutes = Math.round(totalPlaytime / 60_000);
+		const avgMinutes =
+			sessions.length > 0 ? Math.round(totalMinutes / sessions.length) : 0;
+
+		const summaryHTML =
+			sessions.length > 0
+				? `<div class="small text-muted mb-2">
+					<i class="fas fa-chart-bar me-1"></i>avg ${formatMinutes(avgMinutes)}/session
+				</div>`
+				: "";
+
+		return {
+			totalBadge:
+				totalMinutes > 0 ? `${formatMinutes(totalMinutes)} total` : "0m total",
+			bodyHTML: `${summaryHTML}${rowsHTML}`,
+		};
+	};
 
 	const card = document.createElement("div");
 	card.classList.add("card", "mcard", "mt-2");
@@ -600,32 +555,66 @@ export async function playtimeTracking(userId: number) {
 			<div class="flex-grow-1">
 				<i class="fas fa-clock me-1"></i> Your Playtime
 			</div>
-			<span class="badge bg-primary ms-1">${total > 0 ? formatMinutes(total) : "0m"} total</span>
+			<div class="d-flex align-items-center gap-1">
+				<span class="badge bg-primary playtime-total-badge"></span>
+				<button class="btn btn-sm btn-outline-secondary playtime-refresh-btn" title="Refresh playtime" disabled>
+					<i class="fas fa-sync-alt"></i>
+				</button>
+			</div>
 		</div>
-		<div class="card-body" style="max-height:300px; overflow-y:auto;">
-			${
-				sessions.length > 0
-					? `<div class="small text-muted mb-2">
-						<i class="fas fa-shield-check text-success me-1"></i>${formatMinutes(totalVerified)} verified
-						· <i class="fas fa-hourglass-half text-warning me-1"></i>${formatMinutes(totalUnverified)} unverified
-						· <i class="fas fa-chart-bar me-1"></i>avg ${formatMinutes(avgMinutes)}/session
-					</div>`
-					: ""
-			}
-			${rowsHTML}
+		<div class="card-body playtime-card-body" style="max-height:300px; overflow-y:auto;">
+			<div class="d-flex justify-content-center py-2">
+				<div class="spinner-border spinner-border-sm text-secondary" role="status">
+					<span class="visually-hidden">Loading...</span>
+				</div>
+			</div>
 		</div>
 	`;
+
+	await new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 	const infoColumn = document.querySelector(".card:has(.fa-calendar)")!
 		.parentElement!;
 	infoColumn.appendChild(card);
 
+	const refreshBtn = card.querySelector<HTMLButtonElement>(
+		".playtime-refresh-btn",
+	)!;
+	const totalBadgeEl = card.querySelector<HTMLElement>(
+		".playtime-total-badge",
+	)!;
+	const cardBody = card.querySelector<HTMLElement>(".playtime-card-body")!;
+
+	refreshBtn.addEventListener("click", async () => {
+		refreshBtn.disabled = true;
+		refreshBtn.innerHTML = `<i class="fas fa-sync-alt fa-spin"></i>`;
+		try {
+			const result = await fetchActivity(true);
+			if (result.ok) {
+				const fresh = buildContent(result.data);
+				totalBadgeEl.textContent = fresh.totalBadge;
+				cardBody.innerHTML = fresh.bodyHTML;
+				sendMessage("registerBootstrapElements");
+			}
+		} finally {
+			refreshBtn.disabled = false;
+			refreshBtn.innerHTML = `<i class="fas fa-sync-alt"></i>`;
+		}
+	});
+
+	const initial = await fetchActivity();
+	if (!initial.ok) {
+		cardBody.innerHTML = `<div class="text-muted small fst-italic">Failed to load playtime.</div>`;
+		return;
+	}
+
+	const { totalBadge, bodyHTML } = buildContent(initial.data);
+	totalBadgeEl.textContent = totalBadge;
+	cardBody.innerHTML = bodyHTML;
+	refreshBtn.disabled = false;
 	sendMessage("registerBootstrapElements");
 }
 
-/**
- * Adds a progress bar to the achievements tab to show the percentage of all achievements for that place you've earned.
- */
 export function achievementsProgressBar() {
 	const tabContents = document.getElementById("achievements-tabpane")!;
 	const earned = tabContents.querySelectorAll(".fad.fa-check-circle").length;
@@ -649,9 +638,6 @@ export function achievementsProgressBar() {
 	tabContents.prepend(progressBar);
 }
 
-/**
- * Makes achievements, listed under the achievements tab of a place, that aren't earned yet slightly transparent.
- */
 export function fadedUnearnedAchievements() {
 	const tab = document.getElementById("achievements-tabpane")!;
 
@@ -662,9 +648,6 @@ export function fadedUnearnedAchievements() {
 	}
 }
 
-/**
- * Adds a percentage and difficulty rating to achievements listed under the achievements tab of a place based on how many of the unique players that visited the place have earned each achievement.
- */
 export async function achievementEarnedPercentages() {
 	const place = await sendMessage("getPlace", placeID);
 	if (!place.ok) return;
@@ -698,12 +681,7 @@ export async function achievementEarnedPercentages() {
 	sendMessage("registerBootstrapElements");
 }
 
-/**
- * Adds a button to each server under the servers tab of a place that copies a link with the server ID in the URL.
- */
-export function serverShareLinks() {
-	const tab = document.getElementById("servers-tabpane")!;
-
+export function attachServerShareButtons(tab: Element) {
 	for (const server of tab.getElementsByClassName("card")) {
 		const shareBtn = document.createElement("button");
 		shareBtn.innerText = "Share Link";
@@ -729,6 +707,12 @@ export function serverShareLinks() {
 			}, 2000);
 		});
 	}
+}
+
+export function serverShareLinks() {
+	const tab = document.getElementById("servers-tabpane")!;
+
+	attachServerShareButtons(tab);
 
 	const urlServerId = new URLSearchParams(window.location.search).get(
 		"serverId",
@@ -741,18 +725,7 @@ export function serverShareLinks() {
 	}
 }
 
-/**
- * Adds a label identifying comments made by the creator of the place.
- */
-export function creatorCommentLabels() {
-	const creatorId = (
-		document.querySelector(
-			'.place-hero-content a:has([class^="userlink-"])',
-		)! as HTMLLinkElement
-	)
-		.getAttribute("href")!
-		.split("/")[2];
-
+export function creatorCommentLabels(creatorId: string) {
 	const container = document.getElementById("comments")!;
 
 	const tag = (Card: Element): void => {
@@ -1013,6 +986,297 @@ export function legacyPlaceViewLayout(): void {
 	if (mobileNav) container.appendChild(mobileNav);
 }
 
+export async function detailedPlaceReviews(userId: number) {
+	const infoColumn = document.querySelector(".card:has(.fa-calendar)")!
+		.parentElement!;
+
+	const card = document.createElement("div");
+	card.classList.add("card", "mcard", "mt-2");
+
+	const isVerified = !!(await getApiSession(userId));
+
+	const renderStars = (rating: number, interactive = false) => {
+		let html = "";
+		for (let i = 1; i <= 5; i++) {
+			const filled = i <= rating;
+			html += `<i class="${filled ? "fas" : "far"} fa-star${interactive ? " kiln-review-star" : ""}" data-star="${i}" style="cursor:${interactive ? "pointer" : "default"};color:${filled ? "#f0b429" : "#aaa"};font-size:1.2rem;margin-right:2px;"></i>`;
+		}
+		return html;
+	};
+
+	const renderReviewRow = (review: {
+		username: string;
+		thumbnail: string | null;
+		rating: number;
+		body: string | null;
+		createdAt: string;
+	}) => {
+		const date = new Date(review.createdAt).toLocaleDateString(undefined, {
+			month: "short",
+			day: "numeric",
+			year: "numeric",
+		});
+		const avatar = review.thumbnail
+			? `<img src="${review.thumbnail}" width="28" height="28" class="rounded-circle border border-secondary me-2" style="object-fit:cover;">`
+			: `<div class="rounded-circle bg-secondary me-2 d-inline-flex align-items-center justify-content-center" style="width:28px;height:28px;font-size:0.7rem;">${review.username[0]?.toUpperCase() ?? "?"}</div>`;
+		return `
+			<div class="d-flex align-items-start py-2 border-bottom border-secondary" style="font-size:0.85rem;">
+				<div class="flex-shrink-0">${avatar}</div>
+				<div class="flex-grow-1 min-w-0">
+					<div class="d-flex justify-content-between align-items-center">
+						<span class="fw-bold">${review.username}</span>
+						<div>${renderStars(review.rating)}</div>
+					</div>
+					${review.body ? `<div class="text-muted mt-1" style="word-break:break-word;">${review.body}</div>` : ""}
+					<div class="text-muted mt-1" style="font-size:0.75rem;">${date}</div>
+				</div>
+			</div>`;
+	};
+
+	const showLoading = () => {
+		cardBody.innerHTML = `
+			<div class="d-flex justify-content-center py-2">
+				<div class="spinner-border spinner-border-sm text-secondary" role="status">
+					<span class="visually-hidden">Loading...</span>
+				</div>
+			</div>`;
+	};
+
+	card.innerHTML = `
+		<div class="card-header d-flex align-items-center">
+			<div class="flex-grow-1">
+				<i class="fas fa-star me-1"></i> World Reviews
+			</div>
+			<span class="kiln-review-avg-badge"></span>
+		</div>
+		<div class="card-body" style="max-height:350px;overflow-y:auto;"></div>
+	`;
+	infoColumn.appendChild(card);
+
+	const cardBody = card.querySelector<HTMLElement>(".card-body")!;
+	const avgBadge = card.querySelector<HTMLElement>(".kiln-review-avg-badge")!;
+
+	if (!isVerified) {
+		cardBody.innerHTML = `
+			<p class="text-muted small mb-2"><i class="fa-regular fa-lock me-1"></i> Verify your Kiln account to leave a review.</p>
+			<a href="/my/settings/kiln?tab=sync" class="btn btn-primary btn-sm">Verify Account</a>`;
+		return;
+	}
+
+	showLoading();
+
+	const [result, activityResult] = await Promise.all([
+		sendMessage("getPlaceReviews", { placeId: placeID, userId }),
+		sendMessage("getGameActivity", {
+			userId,
+			gameId: placeID,
+			page: 1,
+			pageSize: 25,
+		}),
+	]);
+	if (!result.ok) {
+		cardBody.innerHTML = `<div class="text-muted small fst-italic">Failed to load reviews.</div>`;
+		return;
+	}
+
+	const totalPlaytimeMs = activityResult.ok
+		? activityResult.data.totalPlaytime
+		: null;
+	const hasEnoughPlaytime =
+		totalPlaytimeMs === null || totalPlaytimeMs >= MIN_REVIEW_PLAYTIME_MS;
+
+	const formatMinutes = (minutes: number) => {
+		if (minutes < 60) return `${minutes}min${minutes === 1 ? "" : "s"}`;
+		const h = Math.floor(minutes / 60);
+		const m = minutes % 60;
+		return m > 0 ? `${h}hrs ${m}mins` : `${h}hrs`;
+	};
+
+	let { reviews, averageRating, totalReviews, myReview } = result.data.data;
+	let pendingRating = myReview?.rating ?? 0;
+	let isSubmitting = false;
+
+	const updateAvgBadge = () => {
+		if (averageRating === null || totalReviews === 0) {
+			avgBadge.innerHTML = "";
+			return;
+		}
+		avgBadge.innerHTML = `<span class="badge bg-warning text-dark ms-1" style="font-size:0.8rem;"><i class="fas fa-star me-1"></i>${averageRating.toFixed(1)} <span class="fw-normal opacity-75">(${totalReviews})</span></span>`;
+	};
+
+	const render = () => {
+		updateAvgBadge();
+
+		const otherReviews = reviews.filter((r) => r.userId !== userId);
+
+		const formHTML = hasEnoughPlaytime
+			? `
+			<div class="kiln-review-form border-bottom border-secondary pb-3 mb-2">
+				<div class="small text-muted mb-1 fw-bold">${myReview ? "Your Review" : "Leave a Review"}</div>
+				<div class="d-flex gap-1 mb-2 kiln-star-picker">
+					${renderStars(pendingRating, true)}
+				</div>
+				<textarea class="form-control form-control-sm bg-dark text-light border-secondary kiln-review-body" rows="2" placeholder="Optional comment..." style="resize:vertical;font-size:0.85rem;">${myReview?.body ?? ""}</textarea>
+				<div class="d-flex gap-2 mt-2">
+					<button class="btn btn-primary btn-sm kiln-review-submit" ${pendingRating === 0 ? "disabled" : ""}>
+						${myReview ? "Update" : "Submit"}
+					</button>
+					${myReview ? `<button class="btn btn-outline-danger btn-sm kiln-review-delete">Delete</button>` : ""}
+				</div>
+			</div>`
+			: `
+			<div class="kiln-review-form border-bottom border-secondary pb-3 mb-2">
+				<p class="text-muted small mb-0">
+					<i class="fa-regular fa-clock me-1"></i> You need at least 5 minutes of playtime in this world to leave a review${
+						totalPlaytimeMs !== null
+							? ` (you've played ${formatMinutes(Math.round(totalPlaytimeMs / 60_000))} so far)`
+							: ""
+					}.
+				</p>
+			</div>`;
+
+		const othersHTML =
+			otherReviews.length === 0
+				? `<div class="text-muted small fst-italic">No other reviews yet.</div>`
+				: otherReviews.map(renderReviewRow).join("");
+
+		cardBody.innerHTML = formHTML + othersHTML;
+
+		if (!hasEnoughPlaytime) return;
+
+		const starPicker =
+			cardBody.querySelector<HTMLElement>(".kiln-star-picker")!;
+		const textarea =
+			cardBody.querySelector<HTMLTextAreaElement>(".kiln-review-body")!;
+		const submitBtn = cardBody.querySelector<HTMLButtonElement>(
+			".kiln-review-submit",
+		)!;
+		const deleteBtn = cardBody.querySelector<HTMLButtonElement>(
+			".kiln-review-delete",
+		);
+
+		starPicker.addEventListener("click", (e) => {
+			const star = (e.target as HTMLElement).closest<HTMLElement>(
+				".kiln-review-star",
+			);
+			if (!star || isSubmitting) return;
+			pendingRating = parseInt(star.dataset.star ?? "0", 10);
+			starPicker.innerHTML = renderStars(pendingRating, true);
+			submitBtn.disabled = pendingRating === 0;
+
+			starPicker
+				.querySelectorAll<HTMLElement>(".kiln-review-star")
+				.forEach((s) => {
+					s.addEventListener("mouseenter", () => {
+						const hov = parseInt(s.dataset.star ?? "0", 10);
+						starPicker
+							.querySelectorAll<HTMLElement>(".kiln-review-star")
+							.forEach((st) => {
+								const n = parseInt(st.dataset.star ?? "0", 10);
+								st.className = `${n <= hov ? "fas" : "far"} fa-star kiln-review-star`;
+								(st as HTMLElement).style.color = n <= hov ? "#f0b429" : "#aaa";
+							});
+					});
+				});
+			starPicker.addEventListener("mouseleave", () => {
+				starPicker.innerHTML = renderStars(pendingRating, true);
+				attachStarHover();
+			});
+		});
+
+		const attachStarHover = () => {
+			starPicker
+				.querySelectorAll<HTMLElement>(".kiln-review-star")
+				.forEach((s) => {
+					s.addEventListener("mouseenter", () => {
+						const hov = parseInt(s.dataset.star ?? "0", 10);
+						starPicker
+							.querySelectorAll<HTMLElement>(".kiln-review-star")
+							.forEach((st) => {
+								const n = parseInt(st.dataset.star ?? "0", 10);
+								st.className = `${n <= hov ? "fas" : "far"} fa-star kiln-review-star`;
+								(st as HTMLElement).style.color = n <= hov ? "#f0b429" : "#aaa";
+							});
+					});
+				});
+			starPicker.addEventListener("mouseleave", () => {
+				starPicker.innerHTML = renderStars(pendingRating, true);
+				attachStarHover();
+			});
+		};
+		attachStarHover();
+
+		submitBtn.addEventListener("click", async () => {
+			if (isSubmitting || pendingRating === 0) return;
+			isSubmitting = true;
+			submitBtn.disabled = true;
+			submitBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>${myReview ? "Updating..." : "Submitting..."}`;
+
+			const body = textarea.value.trim() || undefined;
+			const res = await sendMessage("submitPlaceReview", {
+				placeId: placeID,
+				userId,
+				rating: pendingRating,
+				body,
+			});
+
+			isSubmitting = false;
+			if (!res.ok) {
+				submitBtn.disabled = false;
+				submitBtn.textContent = myReview ? "Update" : "Submit";
+				return;
+			}
+
+			const submitted = res.data.data;
+			if (myReview) {
+				reviews = reviews.filter((r) => r.userId !== userId);
+			}
+			myReview = submitted;
+			reviews = [submitted, ...reviews.filter((r) => r.userId !== userId)];
+
+			const prevTotal = totalReviews;
+			if (!myReview || prevTotal === 0) {
+				totalReviews = prevTotal + 1;
+			}
+			averageRating =
+				reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length || null;
+
+			render();
+		});
+
+		deleteBtn?.addEventListener("click", async () => {
+			if (isSubmitting) return;
+			isSubmitting = true;
+			deleteBtn.disabled = true;
+			deleteBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Deleting...`;
+
+			const res = await sendMessage("deleteMyPlaceReview", {
+				placeId: placeID,
+				userId,
+			});
+			isSubmitting = false;
+			if (!res.ok) {
+				deleteBtn.disabled = false;
+				deleteBtn.textContent = "Delete";
+				return;
+			}
+
+			reviews = reviews.filter((r) => r.userId !== userId);
+			myReview = null;
+			pendingRating = 0;
+			totalReviews = Math.max(0, totalReviews - 1);
+			averageRating =
+				reviews.length > 0
+					? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+					: null;
+
+			render();
+		});
+	};
+
+	render();
+}
+
 export async function autoRefreshData(interval: "30s" | "1m" | "5m") {
 	const intervalMs = { "30s": 30_000, "1m": 60_000, "5m": 300_000 }[interval];
 	const relativeTime = (iso: string | null): string => {
@@ -1067,4 +1331,158 @@ export async function autoRefreshData(interval: "30s" | "1m" | "5m") {
 
 	await refresh();
 	setInterval(refresh, intervalMs);
+}
+
+export async function placeConsumablesTab(creatorId: string) {
+	const tabList = document.getElementById("place-tabs");
+	const tabContent = document.querySelector(".card-body.tab-content");
+	if (!tabList || !tabContent) return;
+
+	const navItem = document.createElement("li");
+	navItem.className = "nav-item";
+	navItem.setAttribute("role", "presentation");
+	navItem.innerHTML = `
+		<a class="nav-link text-light" href="#!" id="consumables-tab" data-bs-toggle="tab" role="tab"
+		   data-bs-target="#consumables-tabpane" aria-controls="consumables-tabpane" aria-selected="false" tabindex="-1">
+			<i class="fad fa-flask me-1"></i>
+			Consumables
+		</a>
+	`;
+	tabList.appendChild(navItem);
+
+	const tabPane = document.createElement("div");
+	tabPane.id = "consumables-tabpane";
+	tabPane.className = "tab-pane fade";
+	tabPane.setAttribute("role", "tabpanel");
+	tabPane.setAttribute("aria-labelledby", "consumables-tab");
+	tabPane.innerHTML = `
+		<div class="d-flex justify-content-center py-3">
+			<div class="spinner-border spinner-border-sm text-secondary" role="status">
+				<span class="visually-hidden">Loading...</span>
+			</div>
+		</div>
+	`;
+	tabContent.appendChild(tabPane);
+
+	let loaded = false;
+
+	navItem.querySelector("a")!.addEventListener("click", async () => {
+		if (loaded) return;
+		loaded = true;
+
+		const consumables: {
+			id: number;
+			name: string;
+			description: string;
+			thumbnail: string;
+			price: number | null;
+		}[] = [];
+
+		let page = 1;
+		while (page <= 10) {
+			const result = await sendMessage("getUserCreations", {
+				userId: +creatorId,
+				page,
+				limit: 100,
+			});
+			if (!result.ok) break;
+			console.log(
+				result.data.assets,
+				...result.data.assets.filter((a) => a.type === "consumable"),
+			);
+			consumables.push(
+				...result.data.assets.filter((a) => a.type === "consumable"),
+			);
+			if (result.data.pages <= page) break;
+			page++;
+		}
+
+		if (consumables.length === 0) {
+			tabPane.innerHTML = `
+				<div class="text-center py-3 text-muted">
+					<h1 class="display-3"><i class="fad fa-flask"></i></h1>
+					<h6 class="mb-0">this world does not have any consumables yet!</h6>
+				</div>
+			`;
+			return;
+		}
+
+		tabPane.innerHTML = consumables
+			.map(
+				(item) => `
+				<div class="card card-highlight-transition mcard mb-2">
+					<div class="card-body">
+						<div class="row">
+							<div class="col-auto ms-2 px-0 d-flex align-items-center">
+								<div class="m-0 p-1" style="width:96px;justify-content:center">
+									<a href="/store/${item.id}">
+										<img src="${item.thumbnail}" class="img-fluid">
+									</a>
+								</div>
+							</div>
+							<div class="col-10 px-2">
+								<a href="/store/${item.id}" class="text-reset">
+									<h5 class="mb-0">${item.name}</h5>
+								</a>
+								<p class="my-0 text-truncate">${item.description}</p>
+								<p class="text-muted small my-0">
+									${item.price !== null ? `<i class="pi pi-brick me-1"></i>${item.price.toLocaleString()}` : "Free"}
+								</p>
+							</div>
+						</div>
+					</div>
+				</div>`,
+			)
+			.join("");
+	});
+}
+
+export function serverRefreshing(onRefresh?: (serverList: Element) => void) {
+	const tabPane = document.getElementById("servers-tabpane")!;
+
+	const serverList = document.createElement("div");
+	serverList.className = "kiln-server-list";
+	while (tabPane.firstChild) {
+		serverList.appendChild(tabPane.firstChild);
+	}
+
+	const refreshBar = document.createElement("div");
+	refreshBar.className = "d-flex justify-content-end mb-2";
+	Object.assign(refreshBar.style, {
+		position: "absolute",
+		top: 0,
+		margin: "8px",
+		right: 0,
+	});
+	refreshBar.innerHTML = `
+		<button class="btn btn-sm btn-outline-secondary kiln-servers-refresh-btn" type="button" title="Refresh servers">
+			<i class="fas fa-sync-alt me-1"></i>Refresh
+		</button>
+	`;
+	tabPane.append(refreshBar, serverList);
+
+	const refreshBtn = refreshBar.querySelector<HTMLButtonElement>(
+		".kiln-servers-refresh-btn",
+	)!;
+
+	refreshBtn.addEventListener("click", async () => {
+		refreshBtn.disabled = true;
+		refreshBtn.innerHTML = `<i class="fas fa-sync-alt fa-spin me-1"></i>Refresh`;
+
+		try {
+			const response = await fetch(window.location.href);
+			const html = await response.text();
+			const dom = new DOMParser().parseFromString(html, "text/html");
+
+			const freshTabPane = dom.getElementById("servers-tabpane");
+			if (!freshTabPane) return;
+
+			serverList.innerHTML = freshTabPane.innerHTML;
+			onRefresh?.(serverList);
+			sendMessage("registerBootstrapElements");
+		} finally {
+			refreshBtn.disabled = false;
+			refreshBtn.innerHTML = `<i class="fas fa-sync-alt me-1"></i>Refresh`;
+		}
+	});
 }

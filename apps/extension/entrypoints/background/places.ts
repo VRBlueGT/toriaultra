@@ -14,17 +14,19 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import { Polytoria } from "@kiln/schemas";
+import { Extension, PolyTrack, Polytoria } from "@kiln/schemas";
 import z from "zod";
 import { onMessage } from "@/utils/messaging";
 import { pullKVCache } from "@/utils/utilities";
 import {
 	ApiDisabledError,
+	ApiHttpError,
 	checkRateLimit,
 	fetchConfig,
 	handle,
 	safeFetch,
 	withApi,
+	withAuthSession,
 } from "./shared";
 
 function renameInZip(
@@ -519,3 +521,121 @@ onMessage("rollRandomPlace", () => {
 		});
 	});
 });
+
+onMessage(
+	"getWorldStatsChart",
+	({ data: { placeId, metric, start, stop, window: win = "2h" } }) =>
+		handle(() =>
+			pullKVCache(
+				"worldStatsChart",
+				`${placeId}-${metric}-${start}-${stop}-${win}`,
+				() =>
+					safeFetch(
+						`https://polytrack.top/api/charts/world/${placeId}/stats?metric=${metric}&start=${encodeURIComponent(start)}&stop=${encodeURIComponent(stop)}&window=${win}`,
+						PolyTrack.WorldStatsChartApiSchema,
+					),
+				60 * 1000,
+				false,
+			),
+		),
+);
+
+onMessage(
+	"getWorldIngameChart",
+	({ data: { placeId, start, stop, window: win = "2h" } }) =>
+		handle(() =>
+			pullKVCache(
+				"worldIngameChart",
+				`${placeId}-${start}-${stop}-${win}`,
+				() =>
+					safeFetch(
+						`https://polytrack.top/api/charts/world/${placeId}/ingame?start=${encodeURIComponent(start)}&stop=${encodeURIComponent(stop)}&window=${win}`,
+						PolyTrack.WorldIngameChartApiSchema,
+					),
+				60 * 1000,
+				false,
+			),
+		),
+);
+
+onMessage("getPlaceReviews", ({ data: { placeId, userId } }) =>
+	handle(async () =>
+		withAuthSession(userId, (token, config) =>
+			safeFetch(
+				`${config.resolvedUrls.extension}places/reviews/${placeId}`,
+				Extension.PlaceReviewsApi,
+				{
+					headers: {
+						Authorization: `Bearer ${token}`,
+						"x-kiln-version": browser.runtime.getManifest().version,
+					},
+				},
+			),
+		),
+	),
+);
+
+async function showReviewErrorAlert(message: string) {
+	const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+	if (!tabs[0]?.id) return;
+
+	await browser.scripting.executeScript({
+		target: { tabId: tabs[0].id },
+		world: "MAIN",
+		args: [message],
+		func: (message: string) => {
+			//@ts-expect-error
+			window.Swal.fire({
+				icon: "error",
+				title: "Couldn't submit review",
+				text: message,
+			});
+		},
+	});
+}
+
+onMessage("submitPlaceReview", ({ data: { placeId, userId, rating, body } }) =>
+	handle(async () => {
+		try {
+			return await withAuthSession(userId, (token, config) =>
+				safeFetch(
+					`${config.resolvedUrls.extension}places/reviews/${placeId}/me`,
+					Extension.PlaceReviewApi,
+					{
+						method: "PUT",
+						body: JSON.stringify({ rating, body: body ?? null }),
+						headers: {
+							Authorization: `Bearer ${token}`,
+							"x-kiln-version": browser.runtime.getManifest().version,
+						},
+					},
+				),
+			);
+		} catch (err) {
+			await showReviewErrorAlert(
+				err instanceof ApiHttpError
+					? err.message
+					: "Something went wrong submitting your review.",
+			);
+			throw err;
+		}
+	}),
+);
+
+onMessage("deleteMyPlaceReview", ({ data: { placeId, userId } }) =>
+	handle(() =>
+		withAuthSession(userId, (token, config) =>
+			safeFetch(
+				`${config.resolvedUrls.extension}places/reviews/${placeId}/me`,
+				null,
+				{
+					method: "DELETE",
+					headers: {
+						Authorization: `Bearer ${token}`,
+						"x-kiln-version": browser.runtime.getManifest().version,
+					},
+				},
+			),
+		),
+	),
+);

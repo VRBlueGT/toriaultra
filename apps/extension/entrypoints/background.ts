@@ -14,18 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import { Extension, Polytoria } from "@kiln/schemas";
+import { Polytoria } from "@kiln/schemas";
 import { onMessage } from "@/utils/messaging";
 import { cache, migrateThemesToLocal } from "@/utils/storage";
 import {
 	ApiDisabledError,
 	ApiHttpError,
-	fetchConfig,
-	handle,
 	NoSessionError,
 	safeFetch,
 	withApi,
-	withAuthSession,
 } from "./background/shared";
 
 import "./background/config";
@@ -37,6 +34,10 @@ import "./background/auth";
 import "./background/extension";
 import "./background/timePlayed";
 import "./background/feedback";
+import "./background/feed";
+import "./background/storeListing";
+import "./background/placesListing";
+import "./background/forumSearch";
 
 export { ApiDisabledError, ApiHttpError, NoSessionError };
 
@@ -179,145 +180,6 @@ export default defineBackground(() => {
 	});
 
 	setupContextMenus();
-
-	let timePlayedInterval: ReturnType<typeof setInterval> | null = null;
-	let timePlayedSession: {
-		userId: number;
-		sessionId: string;
-		placeId: number;
-	} | null = null;
-
-	const stopTimePlayedSession = async (reason: string) => {
-		if (timePlayedInterval) {
-			clearInterval(timePlayedInterval);
-			timePlayedInterval = null;
-		}
-		if (!timePlayedSession) return;
-		const { sessionId } = timePlayedSession;
-		const userId = timePlayedSession.userId;
-		timePlayedSession = null;
-		console.log(
-			`[Kiln] Ending time played session. sessionId=${sessionId} reason=${reason}`,
-		);
-		const result = await handle(() =>
-			withAuthSession(userId, (token, config) =>
-				safeFetch(
-					`${config.resolvedUrls.extension}places/play-sessions/${sessionId}/end`,
-					Extension.PlaySessionApi,
-					{
-						method: "POST",
-						headers: {
-							Authorization: `Bearer ${token}`,
-							"x-kiln-version": browser.runtime.getManifest().version,
-						},
-					},
-				),
-			),
-		);
-		if (result.ok) {
-			const { verifiedMinutes, unverifiedMinutes } = result.data.data;
-			console.log(
-				`[Kiln] Session ended. sessionId=${sessionId} verified=${verifiedMinutes}m unverified=${unverifiedMinutes}m`,
-			);
-		} else {
-			console.warn(
-				`[Kiln] Failed to end session. sessionId=${sessionId} code=${result.code} message=${result.message}`,
-			);
-		}
-	};
-
-	browser.runtime.onConnect.addListener((port) => {
-		if (port.name !== "kiln-time-played") return;
-
-		console.log("[Kiln] Time played port connected.");
-
-		port.onMessage.addListener(async (msg: any) => {
-			if (timePlayedSession?.sessionId === msg.sessionId) {
-				console.log(
-					`[Kiln] Reconnected to existing session. sessionId=${msg.sessionId}`,
-				);
-				return;
-			}
-
-			if (timePlayedSession) {
-				await stopTimePlayedSession("new-session");
-			}
-
-			timePlayedSession = msg;
-			console.log(
-				`[Kiln] Time played session started. userId=${msg.userId} sessionId=${msg.sessionId} placeId=${msg.placeId}`,
-			);
-
-			timePlayedInterval = setInterval(async () => {
-				if (!timePlayedSession) return;
-				const { userId, sessionId, placeId } = timePlayedSession;
-
-				console.log(
-					`[Kiln] Pinging time played session. sessionId=${sessionId}`,
-				);
-
-				const [pingResult, userResult] = await Promise.all([
-					handle(() =>
-						withAuthSession(userId, (token, config) =>
-							safeFetch(
-								`${config.resolvedUrls.extension}places/play-sessions/${sessionId}/ping`,
-								Extension.PlaySessionApi,
-								{
-									method: "POST",
-									headers: {
-										Authorization: `Bearer ${token}`,
-										"x-kiln-version": browser.runtime.getManifest().version,
-									},
-								},
-							),
-						),
-					),
-					handle(async () => {
-						const config = await fetchConfig();
-						return safeFetch(
-							`${config.resolvedUrls.public}users/${userId}`,
-							Polytoria.UserApiSchema,
-						);
-					}),
-				]);
-
-				if (!pingResult.ok) {
-					console.warn(
-						`[Kiln] Ping failed. sessionId=${sessionId} code=${pingResult.code} message=${pingResult.message}`,
-					);
-					await stopTimePlayedSession("ping-failed");
-					return;
-				}
-
-				const { verifiedMinutes, unverifiedMinutes, pingCount } =
-					pingResult.data.data;
-				console.log(
-					`[Kiln] Ping OK. sessionId=${sessionId} verified=${verifiedMinutes}m unverified=${unverifiedMinutes}m pings=${pingCount}`,
-				);
-
-				if (!userResult.ok) {
-					console.warn(
-						`[Kiln] Failed to fetch user status, skipping playing check. userId=${userId} code=${userResult.code}`,
-					);
-					return;
-				}
-
-				const playing = userResult.data.playing;
-				if (playing?.placeID !== placeId) {
-					console.log(
-						`[Kiln] User is no longer in place. userId=${userId} expected=${placeId} actual=${playing?.placeID ?? "null"}`,
-					);
-					await stopTimePlayedSession("not-playing");
-				}
-			}, 60_000);
-		});
-
-		port.onDisconnect.addListener(() => {
-			console.log(
-				"[Kiln] Time played port disconnected. Session continues in background.",
-			);
-		});
-	});
 });
 
 browser.runtime.onInstalled.addListener(async ({ reason }) => {
@@ -391,6 +253,72 @@ onMessage("registerBootstrapElements", async () => {
 			[...document.querySelectorAll('[data-bs-toggle="dropdown"]')]
 				.filter((el) => !bootstrap.Dropdown.getInstance(el))
 				.map((el) => new bootstrap.Dropdown(el));
+		},
+	});
+});
+
+onMessage("disableFeedAutoScroll", async () => {
+	const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+	if (!tabs[0]) return;
+
+	browser.scripting.executeScript({
+		target: { tabId: tabs[0].id! },
+		world: "MAIN",
+		func: () => {
+			//@ts-expect-error
+			const axios = window.axios;
+			if (!axios?.get || axios.get.__kilnPatched) return;
+
+			const originalGet = axios.get.bind(axios);
+			const patchedGet = (
+				url: string,
+				config?: { params?: { page?: number } },
+			) => {
+				if (url === "/api/feed" && (config?.params?.page ?? 1) > 1) {
+					return Promise.resolve({
+						data: {
+							data: [],
+							meta: { nextPageURL: null, currentPage: config!.params!.page },
+						},
+					});
+				}
+				return originalGet(url, config);
+			};
+			patchedGet.__kilnPatched = true;
+			axios.get = patchedGet;
+		},
+	});
+});
+
+onMessage("disablePlacesAutoScroll", async () => {
+	const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+	if (!tabs[0]) return;
+
+	browser.scripting.executeScript({
+		target: { tabId: tabs[0].id! },
+		world: "MAIN",
+		func: () => {
+			//@ts-expect-error
+			const axios = window.axios;
+			if (!axios?.get || axios.get.__kilnPatched) return;
+
+			const originalGet = axios.get.bind(axios);
+			const patchedGet = (
+				url: string,
+				config?: { params?: { page?: number } },
+			) => {
+				if (url === "/api/places" && (config?.params?.page ?? 1) > 1) {
+					return Promise.resolve({
+						data: {
+							data: [],
+							meta: { nextPageURL: null },
+						},
+					});
+				}
+				return originalGet(url, config);
+			};
+			patchedGet.__kilnPatched = true;
+			axios.get = patchedGet;
 		},
 	});
 });

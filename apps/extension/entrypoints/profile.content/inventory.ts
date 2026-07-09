@@ -24,10 +24,6 @@ type CollectibleWithCopies = CollectibleItem & {
 	serials: number[];
 };
 
-/**
- * Adds a tag to user inventories to quickly see all of the items they own that are collectibles.
- * @param userId The ID of the user.
- */
 export async function collectibleInventoryCategory(userId: number) {
 	const pageCache = new Map<number, CollectibleItem[]>();
 	let totalPages = 0;

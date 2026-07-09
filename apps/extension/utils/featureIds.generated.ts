@@ -9,7 +9,6 @@ export const ALL_FEATURE_IDS = [
 	"irlBrickPrice",
 	"hideNotificationBadges",
 	"storeOwnedTags",
-	"searchFilters",
 	"membershipThemes",
 	"multiCancelOutTrades",
 	"modifyNav",
@@ -70,7 +69,18 @@ export const ALL_FEATURE_IDS = [
 	"rankingPositions",
 	"localizedTimestamps",
 	"autoRefreshData",
-	"stickyNavbar"
+	"stickyNavbar",
+	"detailedPlaceReviews",
+	"improvedForumComposer",
+	"placeConsumablesTab",
+	"serverRefreshing",
+	"dailyChallengesRefreshing",
+	"disableInfiniteScrolling",
+	"advancedForumSearch",
+	"reenableSearch",
+	"myPosts",
+	"audioToolboxPreviews",
+	"worldTrends"
 ] as const;
 
 export type FeatureId = (typeof ALL_FEATURE_IDS)[number];
