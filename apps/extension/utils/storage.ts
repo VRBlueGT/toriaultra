@@ -125,20 +125,23 @@ export const _lastViewedPlaces = storage.defineItem<Record<number, string>>(
 	},
 );
 
+export const _viewedForumThreads = storage.defineItem<number[]>(
+	"local:viewedForumThreads",
+	{
+		fallback: [],
+		version: 1,
+	},
+);
+
 export interface KilnNotification {
 	message: string;
 	date: string;
 	url: string;
 	avatarUrl: string;
 	read: boolean;
-	/** Identifies which "event" this notification represents, so firing the
-	 *  same event again doesn't reset an already-read notification back to
-	 *  unread; a genuinely new value creates a fresh unread notification. */
 	dedupeValue: string;
 }
 
-/** Fabricated notifications any Kiln feature can add to the notifications
- *  tray, keyed by a caller-chosen id (e.g. `place-update:${placeId}`). */
 export const _kilnNotifications = storage.defineItem<
 	Record<string, KilnNotification>
 >("local:kilnNotifications", {

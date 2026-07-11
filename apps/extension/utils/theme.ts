@@ -581,27 +581,22 @@ export function buildThemeCSS(
 
 	return `
 :root {
-  /* Primary / accent */
   --bs-primary: ${accentColor};
   --bs-primary-rgb: ${ar}, ${ag}, ${ab};
 
-  /* Links */
   --bs-link-color: ${accentColor};
   --bs-link-color-rgb: ${ar}, ${ag}, ${ab};
   --bs-link-hover-color: ${accentHover};
   --bs-link-hover-color-rgb: ${ahr}, ${ahg}, ${ahb};
 
-  /* Page background */
   --bs-body-bg: ${navbarColor};
   --bs-body-bg-rgb: ${nr}, ${ng}, ${nb};
 
-  /* Secondary / tertiary surfaces (inputs, hovers, misc) */
   --bs-secondary-bg: ${secondaryBg};
   --bs-secondary-bg-rgb: ${sr}, ${sg}, ${sb};
   --bs-tertiary-bg: ${cardBg};
   --bs-tertiary-bg-rgb: ${cr}, ${cg}, ${cb};
 
-  /* Borders */
   --bs-border-color: ${borderColor};
   --bs-border-color-translucent: ${borderColor}40;
 }
@@ -657,7 +652,6 @@ export function buildThemeCSS(
   border-color: ${accentColor} !important;
 }
 
-/* Utility classes */
 .bg-primary { background-color: ${accentColor} !important; }
 .text-primary { color: ${accentColor} !important; }
 .border-primary { border-color: ${accentColor} !important; }
@@ -671,15 +665,10 @@ export function buildThemeCSS(
 
 .bg-navbar { background-color: ${navbarColor} !important; }
 
-/* --bs-dark-rgb is hardcoded to 26,26,26. It drives .bg-dark everywhere —
-   store item cards, input-group-text.bg-dark, etc. Map it to our card surface. */
 :root { --bs-dark-rgb: ${cr}, ${cg}, ${cb}; }
 
-/* .input-group-text uses var(--bs-tertiary-bg) for bg (already covered) but
-   has a hardcoded border */
 .input-group-text { border-color: ${borderColor} !important; }
 
-/* .form-select is fully hardcoded like .form-control */
 .form-select {
   background-color: ${cardBg} !important;
   border-color: ${borderColor} !important;
@@ -691,31 +680,25 @@ export function buildThemeCSS(
 }
 .form-select:disabled { background-color: ${secondaryBg} !important; }
 
-/* .card-inbox has a hardcoded accent-color left border */
 .card-inbox { border-left-color: ${accentColor} !important; }
 
-/* .trd-items-preview .item circles are hardcoded to #1a1a1a */
 .trd-items-preview .item {
   background-color: ${cardBg} !important;
   border-color: ${borderColor} !important;
 }
 
-/* .card-store-search::before uses a hardcoded #299bff gradient overlay.
-   Replace the blue with the accent color; preserve the background image. */
 .card-store-search::before {
   background: linear-gradient(to right, ${accentColor} 35%, #0000),
     url(https://cdn.polytoria.com/static/store-bg-DbYLmiES.png) no-repeat center !important;
   background-size: cover !important;
 }
 
-/* .notifications-popup and items — no background defined in Polytoria's CSS */
 .notifications-popup {
   background-color: ${cardBg} !important;
   border: 1px solid ${borderColor} !important;
 }
 .notification-item:hover { background-color: ${secondaryBg} !important; }
 
-/* Store category + filter buttons — not in Polytoria's bundled CSS */
 .store-type-btn,
 .store-accessory-btn {
   background-color: ${cardBg};
@@ -731,7 +714,6 @@ export function buildThemeCSS(
   color: ${btnText} !important;
 }
 
-/* Store advanced filters panel — not in Polytoria's bundled CSS */
 .store-advanced-panel {
   background-color: ${cardBg};
   border-radius: 8px;
@@ -739,20 +721,12 @@ export function buildThemeCSS(
 }
 .store-filter-label { color: rgba(255, 255, 255, 0.7); }
 
-/* .card-dash has a hardcoded linear-gradient(#383838 → rgba(38,38,38,0.29)).
-   The transparent tail bleeds the themed body-bg through the bottom, making
-   the top half look gray while the bottom appears as the themed color.
-   Replace with a gradient using our derived background scale. */
 .card-dash {
   background: linear-gradient(180deg, ${cardBg}, ${cardCap}) !important;
 }
 
-/* .dash-ctitle2 is hardcoded to #757575, which is near-invisible on dark
-   themed backgrounds. Bump to a readable muted-white. */
 .dash-ctitle2 { color: rgba(255, 255, 255, 0.5) !important; }
 
-/* .form-control has fully hardcoded background-color and border — no CSS vars.
-   Override both, and style focus to use the accent color. */
 .form-control {
   background-color: ${cardBg} !important;
   border-color: ${borderColor} !important;
@@ -764,26 +738,20 @@ export function buildThemeCSS(
   box-shadow: 0 0 0 0.25rem rgba(${ar}, ${ag}, ${ab}, 0.25) !important;
 }
 
-/* .xp-card is a Polytoria component with no background defined.
-   Give it the same surface treatment as a card. */
 .xp-card {
   background-color: ${cardBg};
   border-radius: 15px;
 }
 
-/* --bs-secondary-rgb drives .border-secondary utility */
 :root { --bs-secondary-rgb: ${bcr}, ${bcg}, ${bcb}; }
 
-/* .progress track — hardcoded in Polytoria */
 .progress { background-color: ${secondaryBg} !important; }
 
-/* Scrollbars (webkit) — affects card-dash card-body and any overflow container */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: ${navbarColor}; }
 ::-webkit-scrollbar-thumb { background-color: ${borderColor}; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background-color: ${accentColor}; }
 
-/* SweetAlert2 modals */
 .swal2-popup {
   background-color: ${cardBg} !important;
   color: #f6f6f6 !important;
@@ -804,22 +772,18 @@ export function buildThemeCSS(
   color: #f6f6f6 !important;
 }
 
-/* Like/dislike rating buttons — not in Polytoria's bundled CSS */
 .thumbup-button.active,
 .thumbup-button.active i { color: ${accentColor} !important; }
 .rating-divider { background-color: ${borderColor} !important; }
 
-/* Polytoria navbar brand SVG is red (hue 0°); rotate to accent hue (or custom icon color) */
 .navbar-brand img,
 .nav-sidebar-cont a img { filter: ${navbarIconColor ? hexToIconFilter(navbarIconColor) : `hue-rotate(${hueRotate}deg) saturate(1.1)`}; }
 
-/* Form check/switch unchecked state — hardcoded in Polytoria */
 .form-check-input:not(:checked) {
   background-color: ${secondaryBg} !important;
   border-color: ${borderColor} !important;
 }
 
-/* .btn-secondary — all vars hardcoded to Bootstrap gray */
 .btn-secondary {
   --bs-btn-color: #f6f6f6;
   --bs-btn-bg: ${secondaryBg};
@@ -836,7 +800,6 @@ export function buildThemeCSS(
   --bs-btn-disabled-border-color: ${borderColor};
 }
 
-/* Feed post speech bubbles — not in Polytoria's bundled CSS */
 .user-post-bubble {
   background-color: ${cardBg} !important;
   border: 1px solid ${borderColor} !important;
@@ -846,16 +809,13 @@ export function buildThemeCSS(
 .user-post-bubble-1,
 .user-post-bubble-2 { background-color: ${cardBg} !important; }
 
-/* Kiln modal — hardcoded in extension's specific.css */
 .kiln-extension-modal {
   background-color: ${cardBg} !important;
   border-color: ${borderColor} !important;
 }
 
-/* Site footer hardcoded border */
 .footer-container { border-top-color: ${borderColor} !important; }
 
-/* Legacy sidebar — background and button surfaces are hardcoded to #262626 / #3c3c3c */
 .nav-sidebar-cont .nav-sidebar {
   background-color: ${navbarColor} !important;
   box-shadow: 5px 0 5px rgba(0, 0, 0, 0.2) !important;

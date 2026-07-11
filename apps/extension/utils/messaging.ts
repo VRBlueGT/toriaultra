@@ -46,9 +46,7 @@ export interface ProtocolMap {
 	getForumSearch(
 		filters: ForumSearchFilters,
 	): Promise<Result<PolyTrack.ForumSearchApi>>;
-	sendAnalyticEvent(data: { name: string; data?: Record<string, unknown> }): {
-		ok: boolean;
-	};
+	getForumReplyRedirect(replyId: number): Promise<Result<string>>;
 	openCreator(version: 1 | 2): void;
 	changeUserAlias(data: { userId: number; currentAlias?: string }): void;
 

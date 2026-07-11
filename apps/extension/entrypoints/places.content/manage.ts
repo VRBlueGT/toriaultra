@@ -104,36 +104,6 @@ export function bulkWhitelist() {
 	});
 }
 
-/*
-export async function extraStatistics() {
-	const statsCard = document.querySelector(".card:has(.fa-chart-fft)");
-	const statsRow = statsCard?.querySelector(".card-body > .row");
-	if (!statsCard || !statsRow) return;
-
-	const col = document.createElement("div");
-	col.classList.add("col-12", "col-md-4", "mb-4");
-	col.innerHTML = `
-	<div class="border border-2 border-success rounded p-3 text-success position-relative">
-		<span class="small">Total Unique Visitors</span>
-		<h1 class="mb-0 display-4">...</h1>
-		<div class="position-absolute bottom-0 end-0 py-3 me-2 opacity-25">
-			<i class="far fa-users fa-4x"></i>
-		</div>
-	</div>
-	`;
-	statsRow.appendChild(col);
-
-	const valueEl = col.querySelector("h1")!;
-
-	const placeResult = await sendMessage("getPlace", placeID);
-	valueEl.textContent = placeResult.ok
-		? placeResult.data.uniqueVisits.toLocaleString()
-		: "N/A";
-
-	worldTrendsChart(statsCard);
-}
-*/
-
 const trendMetrics: {
 	id: TrendMetric;
 	label: string;
@@ -254,12 +224,18 @@ export function worldTrends() {
 				stop: stop.toISOString(),
 				window: range.window,
 			});
-			points = result.ok
-				? result.data.value.map((p) => ({
-						time: new Date(p._time).getTime(),
-						value: p._value,
-					}))
-				: [];
+			points =
+				result.ok && "value" in result.data
+					? result.data.value.map((p) => ({
+							time: new Date(p._time).getTime(),
+							value: p._value,
+						}))
+					: result.ok && "avg" in result.data
+						? result.data.avg.map((p) => ({
+								time: new Date(p._time).getTime(),
+								value: p._value * 100,
+							}))
+						: [];
 		}
 
 		cache.set(cacheKey, points);

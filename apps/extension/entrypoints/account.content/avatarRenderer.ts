@@ -58,6 +58,21 @@ async function loadImage(url: string): Promise<HTMLImageElement> {
 	});
 }
 
+// GLTFLoader.loadAsync() fetches via THREE's FileLoader, which wraps
+// response.body.getReader() in a manually constructed ReadableStream for
+// progress events. In Firefox, content scripts hit a Xray-wrapper bug where
+// touching that stream throws "Permission denied to access property
+// autoAllocateChunkSize". Fetching the bytes ourselves and using parse()
+// skips FileLoader's streaming path entirely.
+function loadGLB(loader: GLTFLoader, url: string): Promise<any> {
+	return fetch(url)
+		.then((r) => r.arrayBuffer())
+		.then(
+			(buf) =>
+				new Promise((resolve, reject) => loader.parse(buf, "", resolve, reject)),
+		);
+}
+
 function makeTexture(canvas: HTMLCanvasElement): THREE.CanvasTexture {
 	const tex = new THREE.CanvasTexture(canvas);
 	tex.flipY = false;
@@ -310,7 +325,7 @@ export class AvatarRenderer {
 		) as string[];
 
 		if (!this.cachedBodyGltf) {
-			this.cachedBodyGltf = await this.loader.loadAsync(BODY_GLB);
+			this.cachedBodyGltf = await loadGLB(this.loader, BODY_GLB);
 		}
 
 		const clothingImages: HTMLImageElement[] = [];
@@ -394,7 +409,7 @@ export class AvatarRenderer {
 
 		if (bodyUrl) {
 			try {
-				const bodyGltf = await this.loader.loadAsync(bodyUrl);
+				const bodyGltf = await loadGLB(this.loader, bodyUrl);
 				const bodyGltfScene = bodyGltf.scene;
 
 				bodyGltfScene.traverse((node: THREE.Object3D) => {
@@ -463,7 +478,7 @@ export class AvatarRenderer {
 		await Promise.all(
 			[...accUrls, ...(toolUrl ? [toolUrl] : [])].map(async (url) => {
 				try {
-					const gltf = await this.loader.loadAsync(url);
+					const gltf = await loadGLB(this.loader, url);
 					if (url.includes("poly-upd-archival.pages.dev"))
 						gltf.scene.position.y += RETRO_HAT_Y_OFFSET;
 					if (url === toolUrl) {

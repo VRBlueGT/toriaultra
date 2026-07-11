@@ -37,3 +37,17 @@ onMessage("getForumSearch", ({ data: filters }) =>
 		);
 	}),
 );
+
+onMessage("getForumReplyRedirect", ({ data: replyId }) =>
+	handle(async () => {
+		const response = await fetch(
+			`https://polytrack.top/forums/${replyId}?_data=routes%2Fforums.%24threadId`,
+			{ credentials: "include" },
+		);
+
+		const redirect = response.headers.get("x-remix-redirect");
+		if (!redirect) throw new Error("No redirect found for this reply");
+
+		return redirect;
+	}),
+);

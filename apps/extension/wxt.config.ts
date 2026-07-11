@@ -17,7 +17,6 @@
 import { defineConfig } from "wxt";
 
 export default defineConfig({
-	manifestVersion: 3,
 	browser: "chrome",
 	manifest: {
 		name: "Kiln for Polytoria",
@@ -35,6 +34,8 @@ export default defineConfig({
 			"https://kiln.indexx.dev/*",
 			"https://polytoria.trade/api/*",
 			"https://polytrack.top/*",
+			"https://cdn.polytoria.com/*",
+			"https://poly-upd-archival.pages.dev/*",
 		],
 		browser_specific_settings: {
 			gecko: {
@@ -69,6 +70,9 @@ export default defineConfig({
 		],
 		binaries: {
 			chrome: "/Applications/Helium.app/Contents/MacOS/Helium",
+			firefox: "/Applications/Zen.app/Contents/MacOS/zen",
 		},
+		firefoxProfile: "./.wxt/firefox-data",
+		keepProfileChanges: true,
 	},
 });

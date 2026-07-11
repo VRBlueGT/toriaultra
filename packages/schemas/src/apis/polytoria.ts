@@ -5,7 +5,6 @@ export type ApiTypes =
 	| "internal"
 	| "extension"
 	| "proxy"
-	| "analytics"
 	| "currencyRates";
 
 export const ItemTypeSchema = z.enum([

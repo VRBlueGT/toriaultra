@@ -23,13 +23,17 @@ export default defineContentScript({
 	matches: ["https://polytoria.com/forum", "https://polytoria.com/forum/*"],
 	main() {
 		preferences.getPreferences().then((values) => {
-			const [_, _first, second] = window.location.pathname.split("/");
-			console.log(_, _first, second);
+			const [_, _first, second, third] = window.location.pathname.split("/");
 
 			if (second == "post") {
 				if (import.meta.env.MODE == "development") {
 					console.log("[Kiln] Running view page functions: ", view);
 				}
+
+				console.log("thread id: ", third);
+				_viewedForumThreads.getValue().then((threads) => {
+					_viewedForumThreads.setValue([...threads, +third]);
+				});
 
 				if (values.enabled.includes("forumMentions")) view.forumMentions();
 				if (values.enabled.includes("aiBotForumWarnings"))
@@ -45,9 +49,12 @@ export default defineContentScript({
 						values.config.improvedForumComposer.showMarkdownBtns,
 						values.config.improvedForumComposer.autoShowPreview,
 					);
-			} else if (!second) {
-				if (values.enabled.includes("advancedForumSearch"))
-					search.advancedForumSearch();
+			} else if (!second || second == "category") {
+				if (values.enabled.includes("advancedForumSearch")) {
+					_viewedForumThreads.getValue().then((threads) => {
+						search.advancedForumSearch(threads);
+					});
+				}
 				if (values.enabled.includes("myPosts")) search.myPosts();
 			}
 		});

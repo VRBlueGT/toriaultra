@@ -999,7 +999,7 @@ export async function detailedPlaceReviews(userId: number) {
 		let html = "";
 		for (let i = 1; i <= 5; i++) {
 			const filled = i <= rating;
-			html += `<i class="${filled ? "fas" : "far"} fa-star${interactive ? " kiln-review-star" : ""}" data-star="${i}" style="cursor:${interactive ? "pointer" : "default"};color:${filled ? "#f0b429" : "#aaa"};font-size:1.2rem;margin-right:2px;"></i>`;
+			html += `<i class="${filled ? "fas" : "far"} fa-star${interactive ? " kiln-review-star" : ""}" data-star="${i}" style="cursor:${interactive ? "pointer" : "default"};color:${filled ? "#f0b429" : "#aaa"};margin-right:2px;"></i>`;
 		}
 		return html;
 	};
@@ -1016,21 +1016,65 @@ export async function detailedPlaceReviews(userId: number) {
 			day: "numeric",
 			year: "numeric",
 		});
-		const avatar = review.thumbnail
-			? `<img src="${review.thumbnail}" width="28" height="28" class="rounded-circle border border-secondary me-2" style="object-fit:cover;">`
-			: `<div class="rounded-circle bg-secondary me-2 d-inline-flex align-items-center justify-content-center" style="width:28px;height:28px;font-size:0.7rem;">${review.username[0]?.toUpperCase() ?? "?"}</div>`;
+
 		return `
-			<div class="d-flex align-items-start py-2 border-bottom border-secondary" style="font-size:0.85rem;">
-				<div class="flex-shrink-0">${avatar}</div>
-				<div class="flex-grow-1 min-w-0">
-					<div class="d-flex justify-content-between align-items-center">
-						<span class="fw-bold">${review.username}</span>
-						<div>${renderStars(review.rating)}</div>
+			<div class="row small">
+				<div class="col-lg-1">
+					<div class="d-none d-lg-block">
+						<a href="/u/${review.username}">
+							<img src="${review.thumbnail}" alt="${review.username}" class="rounded-circle border border-2 border-secondary" width="50px" height="50px">
+						</a>
 					</div>
-					${review.body ? `<div class="text-muted mt-1" style="word-break:break-word;">${review.body}</div>` : ""}
-					<div class="text-muted mt-1" style="font-size:0.75rem;">${date}</div>
+					<div class="d-lg-none mb-2">
+						<div class="row">
+							<div class="col-2">
+								<a href="/u/${review.username}">
+									<img src="${review.thumbnail}" alt="${review.username}" class="rounded-circle border border-2 border-secondary" width="50px" height="50px">
+								</a>
+							</div>
+							<div class="col">
+								<a href="/u/${review.username}" class="text-reset"><span class="userlink-default">${review.username}</span></a><br>
+								<span class="text-muted">
+									<i class="fad fa-clock me-1"></i>
+									${date}
+								</span>
+							</div>
+							<!--
+							<div class="col-auto">
+								<a href="#" class="text-muted" data-bs-toggle="tooltip" data-bs-placement="top" title="Report">
+									<i class="fad fa-flag"></i>
+								</a>
+							</div>
+							-->
+						</div>
+					</div>
 				</div>
-			</div>`;
+				<div class="col-lg-11">
+					<div class="row d-none d-lg-flex small">
+						<div class="col">
+							<p class="mb-1">
+								<a href="/u/${review.username}" class="text-reset"><span class="userlink-default">${review.username}</span></a>
+								<span class="text-muted ms-2">
+									<i class="fad fa-clock me-1"></i>
+									${date}
+								</span>
+							</p>
+						</div>
+						<!--
+						<div class="col-auto">
+							<a href="#" class="text-muted" data-bs-toggle="tooltip" data-bs-placement="top" title="Report">
+								<i class="fad fa-flag"></i>
+							</a>
+						</div>
+						-->
+					</div>
+					<p class="mb-1 feed-post-text">
+						${review.body}
+					</p>
+					<div>${renderStars(review.rating)}</div>
+				</div>
+			</div>
+			`;
 	};
 
 	const showLoading = () => {
@@ -1065,7 +1109,7 @@ export async function detailedPlaceReviews(userId: number) {
 
 	showLoading();
 
-	const [result, activityResult] = await Promise.all([
+	const [result, activityResult, placeResult] = await Promise.all([
 		sendMessage("getPlaceReviews", { placeId: placeID, userId }),
 		sendMessage("getGameActivity", {
 			userId,
@@ -1073,6 +1117,7 @@ export async function detailedPlaceReviews(userId: number) {
 			page: 1,
 			pageSize: 25,
 		}),
+		sendMessage("getPlace", placeID),
 	]);
 	if (!result.ok) {
 		cardBody.innerHTML = `<div class="text-muted small fst-italic">Failed to load reviews.</div>`;
@@ -1084,6 +1129,7 @@ export async function detailedPlaceReviews(userId: number) {
 		: null;
 	const hasEnoughPlaytime =
 		totalPlaytimeMs === null || totalPlaytimeMs >= MIN_REVIEW_PLAYTIME_MS;
+	const isCreator = placeResult.ok && placeResult.data.creator.id === userId;
 
 	const formatMinutes = (minutes: number) => {
 		if (minutes < 60) return `${minutes}min${minutes === 1 ? "" : "s"}`;
@@ -1109,8 +1155,15 @@ export async function detailedPlaceReviews(userId: number) {
 
 		const otherReviews = reviews.filter((r) => r.userId !== userId);
 
-		const formHTML = hasEnoughPlaytime
+		const formHTML = isCreator
 			? `
+			<div class="kiln-review-form border-bottom border-secondary pb-3 mb-3">
+				<p class="text-muted small mb-0">
+					<i class="fa-regular fa-ban me-1"></i> You cannot review your own world.
+				</p>
+			</div>`
+			: hasEnoughPlaytime
+				? `
 			<div class="kiln-review-form border-bottom border-secondary pb-3 mb-2">
 				<div class="small text-muted mb-1 fw-bold">${myReview ? "Your Review" : "Leave a Review"}</div>
 				<div class="d-flex gap-1 mb-2 kiln-star-picker">
@@ -1124,8 +1177,8 @@ export async function detailedPlaceReviews(userId: number) {
 					${myReview ? `<button class="btn btn-outline-danger btn-sm kiln-review-delete">Delete</button>` : ""}
 				</div>
 			</div>`
-			: `
-			<div class="kiln-review-form border-bottom border-secondary pb-3 mb-2">
+				: `
+			<div class="kiln-review-form border-bottom border-secondary pb-3 mb-3">
 				<p class="text-muted small mb-0">
 					<i class="fa-regular fa-clock me-1"></i> You need at least 5 minutes of playtime in this world to leave a review${
 						totalPlaytimeMs !== null
@@ -1138,11 +1191,11 @@ export async function detailedPlaceReviews(userId: number) {
 		const othersHTML =
 			otherReviews.length === 0
 				? `<div class="text-muted small fst-italic">No other reviews yet.</div>`
-				: otherReviews.map(renderReviewRow).join("");
+				: otherReviews.map(renderReviewRow).join("<hr>");
 
 		cardBody.innerHTML = formHTML + othersHTML;
 
-		if (!hasEnoughPlaytime) return;
+		if (!hasEnoughPlaytime || isCreator) return;
 
 		const starPicker =
 			cardBody.querySelector<HTMLElement>(".kiln-star-picker")!;

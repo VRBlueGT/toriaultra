@@ -53,9 +53,26 @@ const ChartPointSchema = z.object({
 	_value: z.number(),
 });
 
-export const WorldStatsChartApiSchema = z.object({
+export const WorldStatsValueChartApiSchema = z.object({
 	value: z.array(ChartPointSchema),
 });
+export type WorldStatsValueChartApi = z.infer<
+	typeof WorldStatsValueChartApiSchema
+>;
+
+export const WorldStatsRateChartApiSchema = z.object({
+	min: z.array(ChartPointSchema),
+	avg: z.array(ChartPointSchema),
+	max: z.array(ChartPointSchema),
+});
+export type WorldStatsRateChartApi = z.infer<
+	typeof WorldStatsRateChartApiSchema
+>;
+
+export const WorldStatsChartApiSchema = z.union([
+	WorldStatsValueChartApiSchema,
+	WorldStatsRateChartApiSchema,
+]);
 export type WorldStatsChartApi = z.infer<typeof WorldStatsChartApiSchema>;
 export const WorldStatsMetricSchema = z.enum([
 	"uniqueVisits",

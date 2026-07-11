@@ -18,9 +18,6 @@ import readline from "node:readline/promises";
 import { $ } from "bun";
 
 const root = `${import.meta.dir}/..`;
-const repoRoot = (
-	await $`git rev-parse --show-toplevel`.cwd(`${import.meta.dir}`).text()
-).trim();
 
 const rl = readline.createInterface({
 	input: process.stdin,
@@ -73,42 +70,14 @@ pkg.version = newVersion;
 await Bun.write(pkgPath, `${JSON.stringify(pkg, null, "\t")}\n`);
 console.log(`\n✓ Updated package.json → ${newVersion}`);
 
-const lastTag = (
-	await $`git describe --tags --abbrev=0`.cwd(root).text()
-).trim();
-const logOut = (
-	await $`git log ${lastTag}..HEAD --pretty=format:%s`.cwd(root).text()
-).trim();
-const commits = logOut.split("\n").filter((msg) => {
-	if (!msg) return false;
-	if (/^[a-z]+\([^)]+\):/.test(msg)) return /^[a-z]+\(extension\):/.test(msg);
-	return true;
-});
-console.log(`✓ ${commits.length} commits since ${lastTag}`);
-
-const changelogPath = `${root}/assets/changelog.md`;
-const existing = await Bun.file(changelogPath).text();
-
-const today = new Date().toISOString().slice(0, 10);
-const commitLines = commits.map((c) => `- ${c}`).join("\n");
-const newEntry = `## v${newVersion} — ${today}\n\n### Highlights\n\n### Commits\n\n${commitLines}\n`;
-
-await Bun.write(changelogPath, `${newEntry}\n${existing}`);
-console.log(`✓ Prepended v${newVersion} entry to assets/changelog.md`);
-console.log(
-	"  → Fill in description and highlights manually before shipping.\n",
+const fallbackConfigPath = `${root}/utils/static/fallbackConfig.json`;
+const fallbackConfig = await Bun.file(fallbackConfigPath).json();
+fallbackConfig.latestVersion = newVersion;
+await Bun.write(
+	fallbackConfigPath,
+	`${JSON.stringify(fallbackConfig, null, "\t")}\n`,
 );
-
-console.log("Staging all changes...");
-await $`git add -A`.cwd(repoRoot);
-await $`git commit -m "feat(extension): v${newVersion}"`.cwd(repoRoot);
-console.log(`✓ Committed "feat(extension): v${newVersion}"`);
-
-await $`git tag v${newVersion}`.cwd(repoRoot);
-console.log(`✓ Tagged v${newVersion}`);
-
-console.log("\nPushing extension mirror...");
-await $`bun scripts/deploy-mirror.ts`.cwd(root);
+console.log(`✓ Updated fallbackConfig.json latestVersion → ${newVersion}`);
 
 console.log("\nBuilding Chrome zip...");
 await $`bun run zip`.cwd(root);
@@ -117,3 +86,9 @@ console.log("\nBuilding Firefox zip...");
 await $`bun run zip:firefox`.cwd(root);
 
 console.log(`\n✓ Done — v${newVersion} zips are in .output/`);
+console.log(
+	"  → Nothing staged, committed, or pushed. Review the changes, then commit/tag the monorepo yourself.",
+);
+console.log(
+	"  → When you're ready to ship (mirror + KV), run scripts/publish-release.ts.\n",
+);

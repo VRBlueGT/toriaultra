@@ -18,7 +18,12 @@ import type { Extension } from "@kiln/schemas";
 import fallbackConfig from "./static/fallbackConfig.json";
 import fallbackCurrencyRates from "./static/fallbackCurrencyRates.json";
 import staticMetadata from "./static/metadata.json";
-import { _kilnNotifications, apiSessions, cache, dismissedNotices } from "./storage";
+import {
+	_kilnNotifications,
+	apiSessions,
+	cache,
+	dismissedNotices,
+} from "./storage";
 import type {
 	ApiSession,
 	CacheInterface,
@@ -1065,13 +1070,36 @@ export async function markKilnNotificationRead(id: string): Promise<void> {
 
 /** Paints every persisted Kiln notification into the notifications tray.
  *  Safe to call unconditionally on any page — it's a no-op if the tray or
- *  storage is empty. */
+ *  storage is empty.
+ *
+ *  Fabricated notifications older than the oldest real notification already
+ *  in the tray are skipped, so a stale entry (e.g. a place update from a
+ *  month ago) doesn't linger at the bottom of an otherwise-recent list. */
 export async function renderKilnNotifications(): Promise<void> {
+	const popup = document.querySelector<HTMLElement>(".notifications-popup");
+	if (!popup) return;
+
+	const existingDates = (
+		Array.from(popup.querySelectorAll(":scope > a")) as HTMLAnchorElement[]
+	)
+		.map((item) => item.querySelector(".small.text-muted")?.textContent?.trim())
+		.filter((text): text is string => !!text)
+		.map(parseNotificationRelativeTime)
+		.filter((date): date is Date => date !== null);
+
+	const oldestExistingDate =
+		existingDates.length > 0
+			? new Date(Math.min(...existingDates.map((d) => d.getTime())))
+			: null;
+
 	const notifications = await _kilnNotifications.getValue();
 	for (const notification of Object.values(notifications)) {
+		const date = new Date(notification.date);
+		if (oldestExistingDate !== null && date < oldestExistingDate) continue;
+
 		injectNotification({
 			message: notification.message,
-			date: new Date(notification.date),
+			date,
 			url: notification.url,
 			avatarUrl: notification.avatarUrl,
 			unread: !notification.read,

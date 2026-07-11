@@ -41,7 +41,8 @@ export const PATH_FEATURES = {
 		"randomPlace",
 		"serverRefreshing",
 		"serverShareLinks",
-		"subtleV2Labels"
+		"subtleV2Labels",
+		"worldTrends"
 	],
 	"https://polytoria.com/forum": [
 		"advancedForumSearch",
@@ -102,7 +103,8 @@ export const PATH_FEATURES = {
 		"randomPlace",
 		"serverRefreshing",
 		"serverShareLinks",
-		"subtleV2Labels"
+		"subtleV2Labels",
+		"worldTrends"
 	],
 	"https://polytoria.com/store/*": [
 		"accurateOwners",

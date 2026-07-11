@@ -214,6 +214,52 @@ export async function kilnSettings() {
 					</div>
 				</div>
 			</div>
+			<div class="card mb-2 d-none">
+				<div class="card-header small fw-semibold d-flex justify-content-between align-items-center">
+					Support the Extension
+				</div>
+				<div class="card-body text-center">
+					<p class="text-muted mb-3">Support the extension's development with bricks! Donations don't grant you any special perks. The extension will always remain free for everyone <3</p>
+					<div class="row justify-content-center">
+						<div class="col">
+							<a href="/store/" class="text-reset">
+								<div class="card bg-dark" style="border-color: #333;">
+									<div class="card-body">
+										<img src="" class="img-fluid rounded" alt="Small Donation" width="100" height="100">
+										<h6 class="text-truncate mb-0 mt-1">
+											Small Donation
+										</h6>
+									</div>
+								</div>
+							</a>
+						</div>
+						<div class="col">
+							<a href="/store/" class="text-reset">
+								<div class="card bg-dark" style="border-color: #333;">
+									<div class="card-body">
+										<img src="" class="img-fluid rounded" alt="Small Donation" width="100" height="100">
+										<h6 class="text-truncate mb-0 mt-1">
+											Small Donation
+										</h6>
+									</div>
+								</div>
+							</a>
+						</div>
+						<div class="col">
+							<a href="/store/" class="text-reset">
+								<div class="card bg-dark" style="border-color: #333;">
+									<div class="card-body">
+										<img src="" class="img-fluid rounded" alt="Small Donation" width="100" height="100">
+										<h6 class="text-truncate mb-0 mt-1">
+											Small Donation
+										</h6>
+									</div>
+								</div>
+							</a>
+						</div>
+					</div>
+				</div>
+			</div>
 			<div class="card mb-2">
 				<div class="card-header small fw-semibold d-flex justify-content-between align-items-center">
 					System Status
