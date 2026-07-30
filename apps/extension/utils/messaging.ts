@@ -47,6 +47,7 @@ export interface ProtocolMap {
 		filters: ForumSearchFilters,
 	): Promise<Result<PolyTrack.ForumSearchApi>>;
 	getForumReplyRedirect(replyId: number): Promise<Result<string>>;
+	showHiddenCategoryAlert(): void;
 	openCreator(version: 1 | 2): void;
 	changeUserAlias(data: { userId: number; currentAlias?: string }): void;
 
@@ -93,6 +94,9 @@ export interface ProtocolMap {
 		stop: string;
 		window?: string;
 	}): Promise<Result<PolyTrack.WorldIngameChartApi>>;
+	getWorldVersions(
+		worldIds: number[],
+	): Promise<Result<Record<string, "1.0" | "2.0" | null>>>;
 
 	getStore(data: {
 		order?: string;
@@ -261,10 +265,12 @@ export interface ProtocolMap {
 	getConfig(): Promise<Result<Extension.ExtensionConfig>>;
 	getChangelog(): Promise<Result<string>>;
 	getCurrencyRates(): Promise<Result<Extension.CurrencyExchangeRate>>;
+	getProfanityFilter(): Promise<Result<string>>;
 	submitFeedback(data: {
 		type: "feature" | "general" | "bug";
 		message: string;
 		version: string;
+		username: string;
 	}): Promise<Result<{ ok: boolean }>>;
 
 	getAvatarOutfits(userId: number): Promise<Result<Extension.AvatarOutfitsApi>>;

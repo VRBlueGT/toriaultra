@@ -14,17 +14,26 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-const MAX_CHARS = 5000;
+import { getProfanityFilter } from "@/utils/utilities";
+
+const DEFAULT_MAX_CHARS = 5000;
+// Temporarily disabled - matching against the live filter regexes is
+// producing unreliable highlight spans. Flip back on once that's resolved.
+const FILTER_HIGHLIGHTING_ENABLED = false;
 
 export function improvedForumComposer(
 	showCharacterCount: boolean,
 	showMarkdownBtns: boolean,
 	autoShowPreview: boolean,
+	highlightFilteredWords: boolean,
 ) {
 	const textarea = document.querySelector<HTMLTextAreaElement>(
 		'textarea[name="content"]',
 	);
 	if (!textarea) return;
+
+	const MAX_CHARS =
+		textarea.maxLength > 0 ? textarea.maxLength : DEFAULT_MAX_CHARS;
 
 	const toolbar = document.createElement("div");
 	toolbar.className = "d-flex align-items-center gap-1 mb-1 flex-wrap";
@@ -49,6 +58,13 @@ export function improvedForumComposer(
 			title: "Inline Code",
 			prefix: "`",
 			suffix: "`",
+			placeholder: "code",
+		},
+		{
+			icon: "fa-file-code",
+			title: "Code Block",
+			prefix: "```\n",
+			suffix: "\n```",
 			placeholder: "code",
 		},
 	];
@@ -106,9 +122,17 @@ export function improvedForumComposer(
 	wrapper.style.minHeight =
 		textarea.style.height || `${textarea.offsetHeight}px`;
 
+	const textareaContainer = document.createElement("div");
+	textareaContainer.style.cssText = "position: relative; width: 100%;";
+
 	textarea.parentElement?.insertBefore(wrapper, textarea);
-	wrapper.appendChild(textarea);
+	textareaContainer.appendChild(textarea);
+	wrapper.appendChild(textareaContainer);
 	wrapper.appendChild(preview);
+
+	if (FILTER_HIGHLIGHTING_ENABLED && highlightFilteredWords) {
+		initFilterHighlighting(textarea, textareaContainer);
+	}
 
 	const syncHeight = () => {
 		preview.style.height = `${textarea.offsetHeight}px`;
@@ -126,7 +150,7 @@ export function improvedForumComposer(
 	const openPreview = () => {
 		if (previewOpen) return;
 		previewOpen = true;
-		textarea.style.width = "50%";
+		textareaContainer.style.width = "50%";
 		preview.classList.remove("d-none");
 		preview.style.width = "50%";
 		previewBtn.classList.replace("btn-outline-secondary", "btn-secondary");
@@ -135,7 +159,7 @@ export function improvedForumComposer(
 
 	const closePreview = () => {
 		previewOpen = false;
-		textarea.style.width = "";
+		textareaContainer.style.width = "100%";
 		preview.classList.add("d-none");
 		previewBtn.classList.replace("btn-secondary", "btn-outline-secondary");
 	};
@@ -152,13 +176,171 @@ export function improvedForumComposer(
 	});
 }
 
+function initFilterHighlighting(
+	textarea: HTMLTextAreaElement,
+	container: HTMLElement,
+) {
+	const backdrop = document.createElement("div");
+	backdrop.setAttribute("aria-hidden", "true");
+	backdrop.style.cssText = `
+		position: absolute;
+		inset: 0;
+		overflow: hidden;
+		white-space: pre-wrap;
+		overflow-wrap: break-word;
+		color: transparent;
+		pointer-events: none;
+	`;
+
+	const copiedProps = [
+		"boxSizing",
+		"paddingTop",
+		"paddingRight",
+		"paddingBottom",
+		"paddingLeft",
+		"borderTopWidth",
+		"borderRightWidth",
+		"borderBottomWidth",
+		"borderLeftWidth",
+		"borderStyle",
+		"borderRadius",
+		"fontFamily",
+		"fontSize",
+		"fontWeight",
+		"fontStyle",
+		"letterSpacing",
+		"lineHeight",
+	] as const;
+
+	const cs = getComputedStyle(textarea);
+	for (const prop of copiedProps) {
+		backdrop.style[prop] = cs[prop];
+	}
+	backdrop.style.borderColor = "transparent";
+
+	container.insertBefore(backdrop, textarea);
+	textarea.style.position = "relative";
+	// Some pages don't give the textarea a transparent background, which
+	// would otherwise fully hide the backdrop's highlights behind it.
+	textarea.style.backgroundColor = "transparent";
+
+	let filters: RegExp[] = [];
+
+	const render = () => {
+		const text = textarea.value;
+		if (filters.length === 0) {
+			backdrop.innerHTML = "";
+			return;
+		}
+
+		const ranges = findFilteredRanges(text, filters);
+		let html = "";
+		let lastIndex = 0;
+
+		for (const [start, end] of ranges) {
+			html += escapeHtml(text.slice(lastIndex, start));
+			html += `<mark class="kiln-filtered-word">${escapeHtml(text.slice(start, end))}</mark>`;
+			lastIndex = end;
+		}
+		html += escapeHtml(text.slice(lastIndex));
+
+		backdrop.innerHTML = text.endsWith("\n") ? `${html} ` : html;
+		backdrop.scrollTop = textarea.scrollTop;
+		backdrop.scrollLeft = textarea.scrollLeft;
+
+		if (import.meta.env.MODE == "development") {
+			console.log(
+				`[Kiln] Filter highlighting: ${ranges.length} match(es) found`,
+				ranges.map(([start, end]) => JSON.stringify(text.slice(start, end))),
+			);
+		}
+	};
+
+	textarea.addEventListener("input", render);
+	textarea.addEventListener("scroll", () => {
+		backdrop.scrollTop = textarea.scrollTop;
+		backdrop.scrollLeft = textarea.scrollLeft;
+	});
+
+	getProfanityFilter().then((loadedFilters) => {
+		filters = loadedFilters;
+		if (import.meta.env.MODE == "development") {
+			console.log(
+				`[Kiln] Filter highlighting initialized with ${filters.length} pattern(s)`,
+			);
+		}
+		render();
+	});
+}
+
+function findFilteredRanges(
+	text: string,
+	filters: RegExp[],
+): [number, number][] {
+	const raw: [number, number][] = [];
+
+	for (const re of filters) {
+		re.lastIndex = 0;
+		let match: RegExpExecArray | null = re.exec(text);
+		while (match) {
+			if (match[0].length === 0) {
+				re.lastIndex++;
+			} else {
+				raw.push([match.index, match.index + match[0].length]);
+			}
+			match = re.exec(text);
+		}
+	}
+
+	raw.sort((a, b) => a[0] - b[0]);
+
+	const merged: [number, number][] = [];
+	for (const range of raw) {
+		const last = merged[merged.length - 1];
+		if (last && range[0] <= last[1]) {
+			last[1] = Math.max(last[1], range[1]);
+		} else {
+			merged.push(range);
+		}
+	}
+
+	// Some patterns' matches include a leading/trailing delimiter (e.g. a
+	// required space), which shouldn't visually bleed into the highlight.
+	return merged
+		.map(([start, end]): [number, number] => {
+			while (start < end && /\s/.test(text[start])) start++;
+			while (end > start && /\s/.test(text[end - 1])) end--;
+			return [start, end];
+		})
+		.filter(([start, end]) => end > start);
+}
+
+function escapeHtml(text: string): string {
+	return text
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;");
+}
+
 function renderMarkdown(text: string): string {
 	const escaped = text
 		.replace(/&/g, "&amp;")
 		.replace(/</g, "&lt;")
 		.replace(/>/g, "&gt;");
 
-	return escaped
+	const codeBlocks: string[] = [];
+	const withoutCodeBlocks = escaped.replace(
+		/```\w*\n?([\s\S]*?)```/g,
+		(_match, code: string) => {
+			const token = `<codeblock-${codeBlocks.length}>`;
+			codeBlocks.push(
+				`<pre class="hljs markdown-code"><code>${code.replace(/\n/g, "<br>")}</code></pre>`,
+			);
+			return token;
+		},
+	);
+
+	const rendered = withoutCodeBlocks
 		.replace(/^###### (.+)$/gm, "<h6>$1</h6>")
 		.replace(/^##### (.+)$/gm, "<h5>$1</h5>")
 		.replace(/^#### (.+)$/gm, "<h4>$1</h4>")
@@ -169,6 +351,11 @@ function renderMarkdown(text: string): string {
 		.replace(/\*(.+?)\*/g, "<em>$1</em>")
 		.replace(/~~(.+?)~~/g, "<s>$1</s>")
 		.replace(/\n/g, "<br>");
+
+	return rendered.replace(
+		/<codeblock-(\d+)>/g,
+		(_match, idx: string) => codeBlocks[Number(idx)],
+	);
 }
 
 function wrapSelection(

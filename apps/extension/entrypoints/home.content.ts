@@ -17,7 +17,7 @@
 import type { Polytoria } from "@kiln/schemas";
 import errorIcon from "@/assets/error.svg";
 import sadFace from "@/assets/sad-face.webp";
-import { _bestFriends, _lastViewedPlaces, preferences } from "@/utils/storage";
+import { _bestFriends, _lastViewedPlaces, isChrome, preferences } from "@/utils/storage";
 import type { CurrencyCode, FeedPost } from "@/utils/types";
 import {
 	fireKilnNotification,
@@ -41,7 +41,7 @@ export default defineContentScript({
 			if (values.enabled.includes("quickCreatorLaunchBtns"))
 				quickCreatorLaunchBtns();
 
-			if (values.enabled.includes("dailyChallengesRefreshing"))
+			if (values.enabled.includes("dailyChallengesRefreshing") && isChrome())
 				dailyChallengesRefreshing();
 
 			if (

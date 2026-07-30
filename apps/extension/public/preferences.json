@@ -2057,9 +2057,23 @@
 			]
 		},
 		{
-			"name": "Legacy Item View Layout",
-			"desc": "Revert the item page to be the old layout from before February 2026.",
+			"name": "Legacy Store Layout",
+			"desc": "Revert the store pages to be the old layout from before February 2026.",
 			"id": "legacyItemViewLayout",
+			"config": [
+				{
+					"type": "check",
+					"subsetting": "discovery",
+					"label": "Store Page",
+					"default": false
+				},
+				{
+					"type": "check",
+					"subsetting": "itemView",
+					"label": "Item Page",
+					"default": true
+				}
+			],
 			"tags": [
 				"expression"
 			]
@@ -2306,8 +2320,7 @@
 				}
 			],
 			"tags": [
-				"social",
-				"new"
+				"social"
 			]
 		},
 		{
@@ -2333,11 +2346,17 @@
 					"subsetting": "autoShowPreview",
 					"label": "Automatically Show Preview",
 					"default": false
+				},
+				{
+					"type": "check",
+					"subsetting": "highlightFilteredWords",
+					"label": "Highlight Words Blocked by the Forum Filter",
+					"default": true,
+					"hide": true
 				}
 			],
 			"tags": [
-				"utility",
-				"new"
+				"utility"
 			]
 		},
 		{
@@ -2347,8 +2366,7 @@
 			"defaultEnabled": true,
 			"tags": [
 				"utility",
-				"experimental",
-				"new"
+				"experimental"
 			],
 			"hide": true
 		},
@@ -2358,8 +2376,7 @@
 			"id": "serverRefreshing",
 			"defaultEnabled": true,
 			"tags": [
-				"utility",
-				"new"
+				"utility"
 			]
 		},
 		{
@@ -2367,9 +2384,9 @@
 			"desc": "Adds a refresh button to the daily challenges card on the homepage so you can check your progress without reloading the page.",
 			"id": "dailyChallengesRefreshing",
 			"defaultEnabled": true,
+			"chromeOnly": true,
 			"tags": [
-				"utility",
-				"new"
+				"utility"
 			]
 		},
 		{
@@ -2397,8 +2414,7 @@
 				}
 			],
 			"tags": [
-				"utility",
-				"new"
+				"utility"
 			]
 		},
 		{
@@ -2417,8 +2433,7 @@
 				}
 			],
 			"tags": [
-				"utility",
-				"new"
+				"utility"
 			]
 		},
 		{
@@ -2437,8 +2452,7 @@
 				}
 			],
 			"tags": [
-				"utility",
-				"new"
+				"utility"
 			]
 		},
 		{
@@ -2453,8 +2467,7 @@
 				}
 			],
 			"tags": [
-				"utility",
-				"new"
+				"utility"
 			]
 		},
 		{
@@ -2464,8 +2477,7 @@
 			"defaultEnabled": true,
 			"tags": [
 				"utility",
-				"development",
-				"new"
+				"development"
 			]
 		},
 		{
@@ -2479,6 +2491,61 @@
 					"text": "Trends are provided by PolyTrack. Thank you to them for allowing Kiln to pull from their data <3"
 				}
 			],
+			"tags": [
+				"utility",
+				"development"
+			]
+		},
+		{
+			"name": "Trade Viewed Indicators",
+			"desc": "Makes trades on the trade list page half-transparent to signify you've already viewed them.",
+			"id": "tradeViewedIndicators",
+			"defaultEnabled": true,
+			"tags": [
+				"utility",
+				"economy"
+			]
+		},
+		{
+			"name": "Copy Post Markdown Button",
+			"desc": "Adds a \"Copy Markdown\" option to a forum post's options dropdown, letting you copy its raw markdown content.",
+			"id": "copyPostContents",
+			"defaultEnabled": true,
+			"tags": [
+				"utility",
+				"new"
+			]
+		},
+		{
+			"name": "Bookmarked Threads",
+			"desc": "Adds a bookmark button to forum posts and adds a \"Bookmarks\" button below the forum search bar to view all of your bookmarked threads.",
+			"id": "bookmarkedThreads",
+			"defaultEnabled": true,
+			"notes": [
+				{
+					"type": "info",
+					"text": "Bookmarked threads are private and do not sync, regardless of if you have a linked Kiln account."
+				}
+			],
+			"tags": [
+				"utility",
+				"new"
+			]
+		},
+		{
+			"name": "Condensed Joined Guilds List",
+			"desc": "Condenses the long list of joined guilds on the left side of the guilds page into a simple-to-understand grid.",
+			"id": "condensedJoinedGuildsList",
+			"tags": [
+				"utility",
+				"new"
+			]
+		},
+		{
+			"name": "\"2.0\" World Labels in Creations List",
+			"desc": "Labels worlds that are 2.0-compatible in the list of worlds you have edit access to on the \"Creations\" page.",
+			"id": "v2WorldLabels",
+			"defaultEnabled": true,
 			"tags": [
 				"utility",
 				"development",

@@ -17,6 +17,7 @@ export const PATH_FEATURES = {
 	],
 	"https://polytoria.com/": [
 		"bestFriends",
+		"condensedJoinedGuildsList",
 		"creatorCommentLabels",
 		"dailyChallengesRefreshing",
 		"disableInfiniteScrolling",
@@ -24,6 +25,16 @@ export const PATH_FEATURES = {
 		"homeFriendJoins",
 		"irlBrickPrice",
 		"quickCreatorLaunchBtns"
+	],
+	"https://polytoria.com/create": [
+		"audioToolboxPreviews",
+		"modelTreeInspector",
+		"v2WorldLabels"
+	],
+	"https://polytoria.com/create/place*": [
+		"audioToolboxPreviews",
+		"modelTreeInspector",
+		"v2WorldLabels"
 	],
 	"https://polytoria.com/create/place/*": [
 		"activeChallengesDisplay",
@@ -47,6 +58,8 @@ export const PATH_FEATURES = {
 	"https://polytoria.com/forum": [
 		"advancedForumSearch",
 		"aiBotForumWarnings",
+		"bookmarkedThreads",
+		"copyPostContents",
 		"forumMentions",
 		"improvedForumComposer",
 		"myPosts"
@@ -54,11 +67,14 @@ export const PATH_FEATURES = {
 	"https://polytoria.com/forum/*": [
 		"advancedForumSearch",
 		"aiBotForumWarnings",
+		"bookmarkedThreads",
+		"copyPostContents",
 		"forumMentions",
 		"improvedForumComposer",
 		"myPosts"
 	],
 	"https://polytoria.com/guilds/*": [
+		"condensedJoinedGuildsList",
 		"creatorCommentLabels"
 	],
 	"https://polytoria.com/home": [
@@ -75,17 +91,38 @@ export const PATH_FEATURES = {
 	],
 	"https://polytoria.com/library": [
 		"audioToolboxPreviews",
-		"modelTreeInspector"
+		"modelTreeInspector",
+		"v2WorldLabels"
 	],
 	"https://polytoria.com/models/*": [
 		"audioToolboxPreviews",
-		"modelTreeInspector"
+		"modelTreeInspector",
+		"v2WorldLabels"
 	],
 	"https://polytoria.com/my/*": [
 		"avatarSandbox",
 		"customBodyColorHexCodes",
 		"improvedFriendLists",
 		"irlBrickPrice"
+	],
+	"https://polytoria.com/places": [
+		"activeChallengesDisplay",
+		"autoRefreshData",
+		"creatorCommentLabels",
+		"detailedPlaceReviews",
+		"disableInfiniteScrolling",
+		"favoritedPlaces",
+		"improvedAchievements",
+		"legacyWorldViewLayout",
+		"placeConsumablesTab",
+		"placeManagement",
+		"placeRevenue",
+		"playtimeTracking",
+		"randomPlace",
+		"serverRefreshing",
+		"serverShareLinks",
+		"subtleV2Labels",
+		"worldTrends"
 	],
 	"https://polytoria.com/places/*": [
 		"activeChallengesDisplay",
@@ -128,7 +165,8 @@ export const PATH_FEATURES = {
 		"nftItems",
 		"quickCancelOutboundTrades",
 		"quickCounterTrades",
-		"tradeManager"
+		"tradeManager",
+		"tradeViewedIndicators"
 	],
 	"https://polytoria.com/u/*": [
 		"avatarMeshDownloader",

@@ -617,13 +617,12 @@ export async function playtimeTracking(userId: number) {
 
 export function achievementsProgressBar() {
 	const tabContents = document.getElementById("achievements-tabpane")!;
+
+	const achievements = tabContents.getElementsByClassName("card");
 	const earned = tabContents.querySelectorAll(".fad.fa-check-circle").length;
 
-	const percentage = (earned * 100) / tabContents.children.length;
-	const percentageDisplay = (
-		(earned * 100) /
-		tabContents.children.length
-	).toFixed(0);
+	const percentage = (earned * 100) / achievements.length;
+	const percentageDisplay = ((earned * 100) / achievements.length).toFixed(0);
 
 	const progressBar = document.createElement("div");
 	progressBar.role = "progressbar";
@@ -849,9 +848,9 @@ export function legacyPlaceViewLayout(): void {
     </div>`,
 	);
 
-	rightCol.insertAdjacentHTML(
-		"beforeend",
-		`<div class="row px-3 px-lg-2">
+	const buttonContainer = document.createElement("div");
+	buttonContainer.className = "row px-3 px-lg-2";
+	buttonContainer.innerHTML = `
       <div class="col px-1">
         <button class="btn btn-lg btn-game w-100 my-2" id="btn-play" onclick="joinPlace()">
           <i class="fas fa-play"></i>
@@ -865,15 +864,26 @@ export function legacyPlaceViewLayout(): void {
           <i class="fad fa-wrench-simple"></i>
         </button>
       </div>
-      <div class="col-auto px-1">
-        <a href="/create/place/${placeID}" class="btn btn-lg btn-secondary px-4 my-2" style="padding:9px 14px; min-width:110px;" data-bs-toggle="tooltip" data-bs-placement="top" aria-label="World settings" data-bs-original-title="World settings">
+      <div class="col-auto px-1 manage-btn-wrapper">
+        <a href="/create/place/${placeID}" class="btn btn-lg btn-secondary px-4 my-2" style="padding:9px 14px; min-width:110px; display:none;" data-bs-toggle="tooltip" data-bs-placement="top" aria-label="World settings" data-bs-original-title="World settings" id="manage-btn">
           <i class="fas fa-gear"></i>
         </a>
       </div>`
 					: ""
 			}
-    </div>`,
-	);
+    `;
+	rightCol.appendChild(buttonContainer);
+
+	if (isCreator) {
+		const manageBtn = buttonContainer.querySelector<HTMLElement>("#manage-btn");
+		fetch(`/create/place/${placeID}`)
+			.then((res) => {
+				if (res.ok && manageBtn) {
+					manageBtn.style.display = "";
+				}
+			})
+			.catch(() => {});
+	}
 
 	if (ratingsContainer) {
 		ratingsContainer.classList.add("mb-2");

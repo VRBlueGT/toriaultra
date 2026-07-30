@@ -51,3 +51,26 @@ onMessage("getForumReplyRedirect", ({ data: replyId }) =>
 		return redirect;
 	}),
 );
+
+onMessage("showHiddenCategoryAlert", () => {
+	handle(async () => {
+		const tabs = await browser.tabs.query({
+			active: true,
+			currentWindow: true,
+		});
+		if (!tabs[0]?.id) return;
+
+		await browser.scripting.executeScript({
+			target: { tabId: tabs[0].id },
+			world: "MAIN",
+			func: () => {
+				//@ts-expect-error
+				window.Swal.fire({
+					icon: "error",
+					title: "Category Hidden",
+					text: "This forum category is hidden and can no longer be viewed.",
+				});
+			},
+		});
+	});
+});

@@ -435,6 +435,170 @@ export const COLOR_TOKENS: Record<string, { label: string; apply: (v: string) =>
 	},
 };
 
+export const SELECTOR_REFERENCE: {
+	category: string;
+	items: { label: string; selector: string; note?: string }[];
+}[] = [
+	{
+		category: "Global",
+		items: [
+			{ label: "Page body", selector: "body" },
+			{ label: "Theme CSS variables", selector: ":root", note: "--bs-primary, --bs-body-bg, --bs-border-color, etc." },
+			{ label: "Dividers", selector: "hr" },
+			{ label: "Dropdown menu", selector: ".dropdown-menu" },
+			{ label: "Pill nav (tabs)", selector: ".nav-pills" },
+			{ label: "Tab nav", selector: ".nav-tabs" },
+			{ label: "Tab nav link", selector: ".nav-tabs .nav-link" },
+			{ label: "Active tab link", selector: ".nav-tabs .nav-link.active" },
+			{ label: "Progress bar track", selector: ".progress" },
+			{ label: "Progress bar fill", selector: ".progress-bar" },
+			{ label: "Checkbox/radio input", selector: ".form-check-input" },
+			{ label: "Scrollbar (thin)", selector: "::-webkit-scrollbar" },
+			{ label: "Scrollbar track", selector: "::-webkit-scrollbar-track" },
+			{ label: "Scrollbar thumb", selector: "::-webkit-scrollbar-thumb" },
+			{ label: "Footer", selector: ".footer-container" },
+		],
+	},
+	{
+		category: "Navbar & Sidebar",
+		items: [
+			{ label: "Top navbar", selector: "nav.navbar" },
+			{ label: "Navbar background wrapper", selector: ".bg-navbar" },
+			{ label: "Navbar logo image", selector: ".navbar-brand img" },
+			{ label: "Account dropdown toggle", selector: "#navbar-dark-dropdown-menu-link" },
+			{ label: "Left sidebar container", selector: ".nav-sidebar-cont" },
+			{ label: "Left sidebar panel", selector: ".nav-sidebar-cont .nav-sidebar" },
+			{ label: "Sidebar icon button", selector: ".nav-sidebar-button" },
+			{ label: "Sidebar icon images", selector: ".nav-sidebar-cont a img" },
+			{ label: "Sidebar upgrade button", selector: ".nav-sidebar-upgrade-button" },
+			{ label: "Search input", selector: "#gsearch" },
+			{ label: "Search input wrapper", selector: ".input-group.nav-search" },
+			{ label: "Search results popup", selector: ".search-popup" },
+			{ label: "Search result row", selector: ".search-popup .search-item" },
+			{ label: "Notifications popup", selector: ".notifications-popup" },
+			{ label: "Notification row", selector: ".notification-item" },
+			{ label: "Friends popup", selector: ".friendsPopup" },
+			{ label: "Friend row in popup", selector: ".friendsPopup .popupItem" },
+		],
+	},
+	{
+		category: "Cards",
+		items: [
+			{ label: "Card", selector: ".card" },
+			{ label: "Card body", selector: ".card-body" },
+			{ label: "Card header", selector: ".card-header" },
+			{ label: "Card footer", selector: ".card-footer" },
+			{ label: "Inbox message card", selector: ".card-inbox", note: "left accent border" },
+			{ label: "Dashboard summary card", selector: ".card-dash" },
+			{ label: "Dashboard card subtitle", selector: ".dash-ctitle2" },
+			{ label: "XP / level card", selector: ".xp-card" },
+		],
+	},
+	{
+		category: "Buttons",
+		items: [
+			{ label: "Button (base)", selector: ".btn" },
+			{ label: "Primary button", selector: ".btn-primary" },
+			{ label: "Outline primary button", selector: ".btn-outline-primary" },
+			{ label: "Secondary button", selector: ".btn-secondary" },
+			{ label: "Feed \"Post\" button", selector: "#feed-post-button" },
+			{ label: "Like/rating thumb button", selector: ".thumbup-button" },
+			{ label: "Active thumb button", selector: ".thumbup-button.active" },
+		],
+	},
+	{
+		category: "Forms & Inputs",
+		items: [
+			{ label: "Text input", selector: ".form-control" },
+			{ label: "Select dropdown", selector: ".form-select" },
+			{ label: "Input group addon", selector: ".input-group-text" },
+			{ label: "Feed post composer", selector: "#feed-post" },
+		],
+	},
+	{
+		category: "Modals & Alerts",
+		items: [
+			{ label: "Bootstrap modal content", selector: ".modal-content" },
+			{ label: "Kiln extension modal", selector: ".kiln-extension-modal" },
+			{ label: "SweetAlert popup", selector: ".swal2-popup" },
+			{ label: "SweetAlert title", selector: ".swal2-title" },
+			{ label: "SweetAlert body text", selector: ".swal2-html-container" },
+			{ label: "SweetAlert confirm button", selector: ".swal2-confirm" },
+			{ label: "SweetAlert cancel button", selector: ".swal2-cancel" },
+			{ label: "SweetAlert text input", selector: ".swal2-input" },
+			{ label: "SweetAlert textarea", selector: ".swal2-textarea" },
+		],
+	},
+	{
+		category: "Pagination",
+		items: [
+			{ label: "Page link", selector: ".page-link" },
+			{ label: "Active page link", selector: ".page-item.active .page-link" },
+			{ label: "Disabled page link", selector: ".page-item.disabled .page-link" },
+		],
+	},
+	{
+		category: "Avatars & Profile",
+		items: [
+			{ label: "Circular avatar image", selector: ".img-fluid.rounded-circle" },
+			{ label: "Friend list avatar wrapper", selector: ".friend-circle" },
+			{ label: "Wall/profile post bubble", selector: ".user-post-bubble" },
+			{ label: "User forum post content", selector: ".user-forum-content" },
+		],
+	},
+	{
+		category: "Forum",
+		items: [
+			{ label: "Forum thread row", selector: ".forum-entry" },
+			{ label: "Read thread row", selector: ".forum-entry.forum-post-read" },
+			{ label: "Unread thread row", selector: ".forum-entry.forum-post-unread" },
+			{ label: "Forum category container", selector: ".forum-category-container" },
+			{ label: "Forum post title bar", selector: ".forum-post-title-container" },
+			{ label: "Forum user sidebar", selector: ".forum-user-container" },
+		],
+	},
+	{
+		category: "Store & Marketplace",
+		items: [
+			{ label: "Store landing banner", selector: ".card-store" },
+			{ label: "Store search banner", selector: ".card-store-search" },
+			{ label: "Stud market banner", selector: ".card-stud-market" },
+			{ label: "Forum banner card", selector: ".card-forum" },
+			{ label: "Item type filter button", selector: ".store-type-btn" },
+			{ label: "Accessory filter button", selector: ".store-accessory-btn" },
+			{ label: "Advanced filters panel", selector: ".store-advanced-panel" },
+			{ label: "Filter label text", selector: ".store-filter-label" },
+			{ label: "Item hero image", selector: ".item-hero" },
+		],
+	},
+	{
+		category: "Trades",
+		items: [
+			{ label: "Trade item preview strip", selector: ".trd-items-preview" },
+			{ label: "Trade item card", selector: ".trd-items-preview .item" },
+			{ label: "Trade value badge", selector: ".trd-box-val" },
+		],
+	},
+	{
+		category: "Dashboard & Challenges",
+		items: [
+			{ label: "Daily challenge card", selector: ".daily-challenge-card" },
+			{ label: "Streak badge", selector: ".challenge-streak-badge" },
+			{ label: "Streak badge label", selector: ".challenge-streak-badge-label" },
+			{ label: "Streak badge multiplier", selector: ".challenge-streak-badge-multiplier" },
+			{ label: "Item of the day card", selector: ".iotd-card" },
+		],
+	},
+	{
+		category: "Places",
+		items: [
+			{ label: "Place card title", selector: ".place-card-title" },
+			{ label: "\"Now playing\" indicator", selector: ".place-playing" },
+			{ label: "Place rating", selector: ".place-rating" },
+		],
+	},
+];
+
 export function proxyThemeImageUrl(url: string): string {
 	const trimmed = url.trim();
 	if (
@@ -567,6 +731,7 @@ export function buildThemeCSS(
 	const btnHoverText = getContrastColor(accentHover);
 
 	const [nr, ng, nb] = hexToRgb(navbarColor);
+	const chromeBg = darkenHex(navbarColor, 4);
 	const cardCap = lightenHex(navbarColor, 3);
 	const cardBg = lightenHex(navbarColor, 7);
 	const dropdownBg = lightenHex(navbarColor, 9);
@@ -631,6 +796,18 @@ export function buildThemeCSS(
   --bs-btn-disabled-border-color: ${accentColor};
 }
 
+#feed-post-button {
+  --bs-btn-color: #f6f6f6;
+  --bs-btn-border-color: ${accentColor};
+  --bs-btn-hover-color: ${btnText};
+  --bs-btn-hover-bg: ${accentColor};
+  --bs-btn-hover-border-color: ${accentColor};
+  --bs-btn-focus-shadow-rgb: ${ar}, ${ag}, ${ab};
+  --bs-btn-active-color: ${btnText};
+  --bs-btn-active-bg: ${accentColor};
+  --bs-btn-active-border-color: ${accentColor};
+}
+
 .card {
   --bs-card-bg: ${cardBg};
   --bs-card-cap-bg: ${cardCap};
@@ -647,6 +824,22 @@ export function buildThemeCSS(
   --bs-nav-pills-link-active-bg: ${accentColor};
 }
 
+.nav-tabs { border-bottom-color: ${borderColor} !important; }
+.nav-tabs .nav-link {
+  border-color: transparent !important;
+  color: #f6f6f6 !important;
+}
+.nav-tabs .nav-link:hover {
+  border-color: ${borderColor} ${borderColor} ${borderColor} !important;
+}
+.nav-tabs .nav-link.active {
+  color: ${lightenHex(accentColor, 20)} !important;
+  background-color: ${cardBg} !important;
+  border-color: ${borderColor} ${borderColor} ${cardBg} !important;
+}
+
+.daily-challenge-card .text-primary { color: ${lightenHex(accentColor, 20)} !important; }
+
 .form-check-input:checked {
   background-color: ${accentColor} !important;
   border-color: ${accentColor} !important;
@@ -662,8 +855,23 @@ export function buildThemeCSS(
   background-color: ${accentColor} !important;
   border-color: ${accentColor} !important;
 }
+.page-link {
+  background-color: ${cardBg} !important;
+  border-color: ${borderColor} !important;
+  color: #f6f6f6 !important;
+}
+.page-link:hover {
+  background-color: ${secondaryBg} !important;
+  border-color: ${borderColor} !important;
+  color: #f6f6f6 !important;
+}
+.page-item.disabled .page-link {
+  background-color: ${navbarColor} !important;
+  border-color: ${borderColor} !important;
+  color: rgba(246, 246, 246, 0.35) !important;
+}
 
-.bg-navbar { background-color: ${navbarColor} !important; }
+.bg-navbar { background-color: ${chromeBg} !important; }
 
 :root { --bs-dark-rgb: ${cr}, ${cg}, ${cb}; }
 
@@ -682,6 +890,19 @@ export function buildThemeCSS(
 
 .card-inbox { border-left-color: ${accentColor} !important; }
 
+.forum-entry {
+  background-color: ${cardBg} !important;
+}
+.forum-entry.forum-post-read { border-left-color: ${borderColor} !important; }
+.forum-entry.forum-post-unread { border-left-color: ${accentColor} !important; }
+
+.forum-category-container { background-color: ${cardBg} !important; }
+.forum-post-title-container { background-color: ${cardBg} !important; }
+
+@media (min-width: 768px) {
+  .forum-user-container { background: ${secondaryBg} !important; }
+}
+
 .trd-items-preview .item {
   background-color: ${cardBg} !important;
   border-color: ${borderColor} !important;
@@ -693,11 +914,67 @@ export function buildThemeCSS(
   background-size: cover !important;
 }
 
+.card-store {
+  background: linear-gradient(to right, ${accentColor} 35%, #0000),
+    url(https://cdn.polytoria.com/static/store-bg-DbYLmiES.png) no-repeat center !important;
+  background-size: cover !important;
+}
+
+.card-stud-market {
+  background: linear-gradient(to right, ${accentColor} 35%, #0000),
+    url(https://cdn.polytoria.com/static/studs-market-bg-DTVRt-7A.png) no-repeat center !important;
+  background-size: cover !important;
+}
+
+.card-forum {
+  background: linear-gradient(to right, ${accentColor} 20%, #0000),
+    url(https://cdn.polytoria.com/static/forum-bg-BxZFPqfx.png) no-repeat center !important;
+  background-size: cover !important;
+}
+
+.iotd-card {
+  background: linear-gradient(135deg, ${accentColor}, ${accentActive}) !important;
+  border-color: ${accentActive} !important;
+}
+.card-forum .card {
+  background-color: rgba(255, 255, 255, 0.15) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+}
+
 .notifications-popup {
   background-color: ${cardBg} !important;
   border: 1px solid ${borderColor} !important;
 }
 .notification-item:hover { background-color: ${secondaryBg} !important; }
+
+.search-popup {
+  background-color: ${cardBg} !important;
+  border: 1px solid ${borderColor} !important;
+}
+.search-popup .search-item:hover,
+.search-popup .search-item:focus {
+  background-color: ${secondaryBg} !important;
+  border-color: ${borderColor} !important;
+  box-shadow: none !important;
+}
+
+.friendsPopup {
+  background-color: ${cardBg} !important;
+  border-color: ${borderColor} !important;
+}
+.friendsPopup .popupItem:hover { background-color: ${secondaryBg} !important; }
+
+html .input-group.nav-search #search-addon,
+html .input-group.nav-search input#gsearch {
+  background: ${cardBg} !important;
+  border-color: ${borderColor} !important;
+  color: #f6f6f6 !important;
+}
+#gsearch::placeholder { color: rgba(246, 246, 246, 0.5) !important; }
+html .input-group.nav-search input#gsearch:focus {
+  border-color: ${accentColor} !important;
+  box-shadow: 0 0 0 0.25rem rgba(${ar}, ${ag}, ${ab}, 0.25) !important;
+}
 
 .store-type-btn,
 .store-accessory-btn {
@@ -738,6 +1015,13 @@ export function buildThemeCSS(
   box-shadow: 0 0 0 0.25rem rgba(${ar}, ${ag}, ${ab}, 0.25) !important;
 }
 
+#feed-post,
+#feed-post:focus {
+  background-color: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
 .xp-card {
   background-color: ${cardBg};
   border-radius: 15px;
@@ -775,6 +1059,15 @@ export function buildThemeCSS(
 .thumbup-button.active,
 .thumbup-button.active i { color: ${accentColor} !important; }
 .rating-divider { background-color: ${borderColor} !important; }
+.btns-container {
+  background-color: ${cardBg} !important;
+  border-color: ${borderColor} !important;
+}
+
+#reportForm .bg-dark { background-color: ${cardBg} !important; }
+code.bg-dark { background-color: ${navbarColor} !important; color: #f6f6f6 !important; }
+
+hr { border-color: ${borderColor} !important; opacity: 1; }
 
 .navbar-brand img,
 .nav-sidebar-cont a img { filter: ${navbarIconColor ? hexToIconFilter(navbarIconColor) : `hue-rotate(${hueRotate}deg) saturate(1.1)`}; }
@@ -817,7 +1110,7 @@ export function buildThemeCSS(
 .footer-container { border-top-color: ${borderColor} !important; }
 
 .nav-sidebar-cont .nav-sidebar {
-  background-color: ${navbarColor} !important;
+  background-color: ${chromeBg} !important;
   box-shadow: 5px 0 5px rgba(0, 0, 0, 0.2) !important;
 }
 .nav-sidebar-button {

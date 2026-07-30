@@ -22,7 +22,7 @@ import {
 	getUserDetails,
 } from "@/utils/utilities";
 
-const CATEGORIES = [
+export const CATEGORIES = [
 	{ id: 1, name: "Polytoria General", color: "#FF5555" },
 	{ id: 2, name: "Bugs & Troubleshooting", color: "#FFEE55" },
 	{ id: 3, name: "Updates", color: "#FF9255" },
@@ -32,7 +32,12 @@ const CATEGORIES = [
 	{ id: 8, name: "Showcase", color: "#DE33C3" },
 	{ id: 9, name: "Building", color: "#4d57ee" },
 	{ id: 10, name: "Scripting", color: "#7b82e8" },
+	{ id: 11, name: "Cobras", color: "#517f37" },
+	{ id: 12, name: "Phantoms", color: "#3741ce" },
+	{ id: 13, name: "Smeagle", color: "#1aff00" },
 ];
+
+const HIDDEN_CATEGORY_IDS = [11, 12, 13];
 
 const SORT_OPTIONS = [
 	{ value: "relevance", label: "Relevance" },
@@ -153,7 +158,13 @@ function renderEntry(
 	const threadLink = card.querySelector(
 		'[data-kiln="thread-link"',
 	) as HTMLAnchorElement;
-	if (isReply) {
+	if (HIDDEN_CATEGORY_IDS.includes(entry.categoryId)) {
+		threadLink.href = "#";
+		card.addEventListener("click", (event) => {
+			event.preventDefault();
+			sendMessage("showHiddenCategoryAlert");
+		});
+	} else if (isReply) {
 		threadLink.href = "#";
 		card.addEventListener("click", (event) => {
 			event.preventDefault();
@@ -657,19 +668,41 @@ export async function advancedForumSearch(seenThreads: number[]) {
 	runSearch();
 }
 
+export function getOrCreateForumToolbar(
+	searchForm: HTMLFormElement,
+): HTMLDivElement {
+	const existing = searchForm.nextElementSibling;
+	if (
+		existing instanceof HTMLDivElement &&
+		existing.dataset.kiln === "forum-toolbar"
+	) {
+		return existing;
+	}
+
+	searchForm.classList.remove("mb-3");
+
+	const toolbar = document.createElement("div");
+	toolbar.dataset.kiln = "forum-toolbar";
+	toolbar.className = "btn-group w-100 mb-3 mt-2";
+	toolbar.setAttribute("role", "group");
+	searchForm.insertAdjacentElement("afterend", toolbar);
+
+	return toolbar;
+}
+
 export async function myPosts() {
 	const searchForm = document.querySelector<HTMLFormElement>(
 		'form[action="/forum/search"]',
 	);
 	if (!searchForm) return;
 
-	searchForm.classList.remove("mb-3");
+	const toolbar = getOrCreateForumToolbar(searchForm);
 
 	const button = document.createElement("button");
 	button.type = "button";
-	button.className = "btn btn-outline-secondary w-100 mb-3 mt-2";
+	button.className = "btn btn-outline-secondary flex-fill w-50";
 	button.textContent = "My Posts";
-	searchForm.insertAdjacentElement("afterend", button);
+	toolbar.appendChild(button);
 
 	const showMyPosts = async () => {
 		const user = await getUserDetails();

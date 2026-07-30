@@ -27,6 +27,7 @@ import {
 	isValidHex,
 	lightenHex,
 	rgbToHex,
+	SELECTOR_REFERENCE,
 	THEME_PRESETS,
 } from "@/utils/theme";
 import type { ThemeEffect } from "@/utils/types";
@@ -561,9 +562,12 @@ export async function openThemeEditorSidebar(): Promise<void> {
 				<span>Custom CSS</span><i class="fas fa-chevron-down"></i>
 			</div>
 			<div class="card-body" id="kiln-te-css-body" style="display:none;">
-				<textarea id="kiln-te-custom-css" class="form-control form-control-sm mb-0" rows="5"
+				<textarea id="kiln-te-custom-css" class="form-control form-control-sm mb-2" rows="5"
 				          placeholder="/* e.g. .navbar { border-bottom: 2px solid var(--bs-primary); } */"
 				          style="font-family:monospace;font-size:0.75rem;resize:vertical;"></textarea>
+				<button type="button" class="btn btn-outline-secondary btn-sm w-100" id="kiln-te-selector-ref-btn">
+					<i class="fas fa-list me-1"></i>Selector Reference
+				</button>
 			</div>
 		</div>
 		</div>
@@ -619,6 +623,18 @@ export async function openThemeEditorSidebar(): Promise<void> {
 						<i class="fas fa-trash me-1"></i>Delete
 					</button>
 				</div>
+			</div>
+		</div>
+
+		<div id="kiln-te-selref-overlay" style="display:none;position:absolute;inset:0;z-index:10;background:rgba(0,0,0,0.55);flex-direction:column;padding:16px;">
+			<div style="background:var(--bs-body-bg,#212529);border:1px solid rgba(128,128,128,0.3);border-radius:8px;padding:16px;width:100%;height:100%;display:flex;flex-direction:column;min-height:0;">
+				<div class="d-flex justify-content-between align-items-center mb-2 flex-shrink-0">
+					<p class="fw-bold mb-0" style="font-size:0.95rem;">Selector Reference</p>
+					<button class="btn-close" id="kiln-te-selref-close" aria-label="Close"></button>
+				</div>
+				<p class="text-muted small mb-2 flex-shrink-0">Real Polytoria selectors you can target in Custom CSS. Click a row to copy it.</p>
+				<input type="text" id="kiln-te-selref-search" class="form-control form-control-sm mb-2 flex-shrink-0" placeholder="Filter…" />
+				<div id="kiln-te-selref-body" style="flex:1;overflow-y:auto;min-height:0;"></div>
 			</div>
 		</div>
 
@@ -792,6 +808,10 @@ export async function openThemeEditorSidebar(): Promise<void> {
 	const cssTextarea = sidebar.querySelector<HTMLTextAreaElement>(
 		"#kiln-te-custom-css",
 	)!;
+	const selectorRefBtn = sidebar.querySelector<HTMLButtonElement>(
+		"#kiln-te-selector-ref-btn",
+	)!;
+	selectorRefBtn.addEventListener("click", () => openSelectorRefOverlay());
 	const imageInput = sidebar.querySelector<HTMLInputElement>("#kiln-te-image")!;
 	const imageUrlInput =
 		sidebar.querySelector<HTMLInputElement>("#kiln-te-image-url")!;
@@ -2031,6 +2051,116 @@ export async function openThemeEditorSidebar(): Promise<void> {
 		publishStatus.innerHTML =
 			'<span class="text-info"><i class="fas fa-external-link-alt me-1"></i>Connect your account in the opened tab, then try again.</span>';
 		return Promise.resolve(null);
+	}
+
+	const selRefOverlay = sidebar.querySelector<HTMLElement>(
+		"#kiln-te-selref-overlay",
+	)!;
+	const selRefBody = sidebar.querySelector<HTMLElement>(
+		"#kiln-te-selref-body",
+	)!;
+	const selRefSearch = sidebar.querySelector<HTMLInputElement>(
+		"#kiln-te-selref-search",
+	)!;
+
+	function openSelectorRefOverlay() {
+		selRefSearch.value = "";
+		renderSelectorRef("");
+		selRefOverlay.style.display = "flex";
+		selRefSearch.focus();
+	}
+	function closeSelectorRefOverlay() {
+		selRefOverlay.style.display = "none";
+	}
+	sidebar
+		.querySelector("#kiln-te-selref-close")!
+		.addEventListener("click", closeSelectorRefOverlay);
+	selRefSearch.addEventListener("input", () =>
+		renderSelectorRef(selRefSearch.value),
+	);
+
+	function renderSelectorRef(filter: string) {
+		const needle = filter.trim().toLowerCase();
+		const groups = SELECTOR_REFERENCE.map((group) => ({
+			category: group.category,
+			items: group.items.filter(
+				(item) =>
+					!needle ||
+					item.label.toLowerCase().includes(needle) ||
+					item.selector.toLowerCase().includes(needle),
+			),
+		})).filter((group) => group.items.length > 0);
+
+		if (groups.length === 0) {
+			selRefBody.innerHTML = `<p class="text-muted small text-center py-4">No selectors match your search.</p>`;
+			return;
+		}
+		const expandAll = needle.length > 0;
+		selRefBody.innerHTML = groups
+			.map(
+				(group, i) => `
+			<div class="card mb-2">
+				<div class="card-header small fw-semibold d-flex justify-content-between align-items-center kiln-selref-cat-hdr" style="cursor:pointer;${expandAll ? "" : "border-radius:inherit;border:none;"}" data-cat="${i}">
+					<span>${group.category} <span class="text-muted fw-normal">(${group.items.length})</span></span>
+					<i class="fas fa-chevron-down" style="font-size:0.75rem;transition:transform 200ms;${expandAll ? "transform:rotate(180deg);" : ""}"></i>
+				</div>
+				<div class="card-body py-2" id="kiln-selref-cat-${i}" style="display:${expandAll ? "" : "none"};">
+					${group.items
+						.map(
+							(item) => `
+					<div class="d-flex align-items-center gap-2 mb-1 kiln-selref-row" data-selector="${item.selector.replace(/"/g, "&quot;")}" title="${item.selector.replace(/"/g, "&quot;")}" style="cursor:pointer;padding:4px 6px;border-radius:4px;">
+						<div class="flex-fill" style="min-width:0;">
+							<div class="small">${item.label}</div>
+							${item.note ? `<div class="small text-muted">${item.note}</div>` : ""}
+						</div>
+						<i class="fas fa-copy small text-muted flex-shrink-0"></i>
+					</div>`,
+						)
+						.join("")}
+				</div>
+			</div>`,
+			)
+			.join("");
+
+		selRefBody
+			.querySelectorAll<HTMLElement>(".kiln-selref-cat-hdr")
+			.forEach((hdr) => {
+				hdr.addEventListener("click", () => {
+					const catBody = document.getElementById(
+						`kiln-selref-cat-${hdr.dataset.cat}`,
+					)!;
+					const opening = catBody.style.display === "none";
+					catBody.style.display = opening ? "" : "none";
+					hdr.querySelector<HTMLElement>("i")!.style.transform = opening
+						? "rotate(180deg)"
+						: "";
+					if (opening) {
+						hdr.style.borderRadius = "";
+						hdr.style.border = "";
+					} else {
+						hdr.style.borderRadius = "inherit";
+						hdr.style.border = "none";
+					}
+				});
+			});
+
+		selRefBody.querySelectorAll<HTMLElement>(".kiln-selref-row").forEach((row) => {
+			row.addEventListener("mouseenter", () => {
+				row.style.background = "rgba(128,128,128,0.12)";
+			});
+			row.addEventListener("mouseleave", () => {
+				row.style.background = "";
+			});
+			row.addEventListener("click", (e) => {
+				e.stopPropagation();
+				navigator.clipboard.writeText(row.dataset.selector!);
+				const icon = row.querySelector("i")!;
+				icon.className = "fas fa-check small text-success flex-shrink-0";
+				setTimeout(() => {
+					icon.className = "fas fa-copy small text-muted flex-shrink-0";
+				}, 1200);
+			});
+		});
 	}
 
 	function showGalleryFlow() {

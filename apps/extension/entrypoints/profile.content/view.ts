@@ -839,27 +839,6 @@ export async function avatarMeshDownloader(userId: number) {
 }
 
 export async function rankingPositions(userId: number) {
-	const section = document.createElement("div");
-	section.innerHTML = `
-	<h6 class="section-title px-3 px-lg-0 mt-4">
-		<i class="fas fa-ranking-star me-1"></i> Ranking Positions
-	</h6>
-	<div class="card mcard card-themed mb-4">
-		<div class="card-body">
-			Loading..
-		</div>
-	</div>
-	`;
-
-	const card = section.getElementsByClassName("card")[0]! as HTMLDivElement;
-	const cardBody = card.children[0] as HTMLDivElement;
-	cardBody.innerHTML = `
-	<small class="d-block text-center text-muted" style="font-size: 0.8rem;">
-		Loading...
-	</small>
-	<lottie-player id="avatar-loading" src="https://cdn.polytoria.com/static/images/lottie/poly-brick-loading.2b51aa85.json" background="transparent" speed="1" style="width: 20%;height: auto;margin: -16px auto 50px;margin-top: 0px;" loop="" autoplay=""></lottie-player>
-	`;
-
 	const chartResults = await sendMessage("getUserCharts", userId);
 	const charts = chartResults.ok
 		? (chartResults.data as PolyTrack.UserChartsApi)
@@ -900,16 +879,29 @@ export async function rankingPositions(userId: number) {
 		],
 	];
 
-	cardBody.innerHTML = rows
-		.filter(([, , value]) => value != null)
-		.map(
-			([icon, label, value]) => `
-		<div class="mb-1">
-			<b><i class="${icon}" style="width:1em;text-align:center"></i> ${label}</b>
-			<span class="float-end">#${value}</span>
-		</div>`,
-		)
-		.join("");
+	const hasData = rows.some(([, , value]) => value != null);
+	if (!hasData) return;
+
+	const section = document.createElement("div");
+	section.innerHTML = `
+	<h6 class="section-title px-3 px-lg-0 mt-4">
+		<i class="fas fa-ranking-star me-1"></i> Ranking Positions
+	</h6>
+	<div class="card mcard card-themed mb-4">
+		<div class="card-body">
+			${rows
+				.filter(([, , value]) => value != null)
+				.map(
+					([icon, label, value]) => `
+				<div class="mb-1">
+					<b><i class="${icon}" style="width:1em;text-align:center"></i> ${label}</b>
+					<span class="float-end">#${value}</span>
+				</div>`
+				)
+				.join("")}
+		</div>
+	</div>
+	`;
 
 	document.getElementsByClassName("user-right")[0].appendChild(section);
 	sendMessage("registerBootstrapElements");

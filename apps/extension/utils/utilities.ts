@@ -117,6 +117,89 @@ export function getCurrencyRates(): Promise<Extension.CurrencyExchangeRate> {
 	return _currencyRatesPromise;
 }
 
+function normalizeFilterPattern(pattern: string): string {
+	let normalized = pattern;
+	if (normalized.startsWith("^")) normalized = normalized.slice(1);
+	if (normalized.endsWith("$") && !normalized.endsWith("\\$")) {
+		normalized = normalized.slice(0, -1);
+	}
+	normalized = normalized
+		.replace(/^(?:\.[*+])+/, "")
+		.replace(/(?:\.[*+])+$/, "");
+
+	// A leading `*` isn't valid regex (nothing precedes it to repeat), so
+	// entries written as glob-style wildcards (e.g. "*word*") would otherwise
+	// fail to compile entirely. An unanchored search already covers "anything
+	// before" for free, so just drop it.
+	normalized = normalized.replace(/^\*+/, "");
+
+	// Any `.*`/`.+` left at this point are internal, bridging two parts of the
+	// pattern (e.g. "word1.*word2" to flag two words appearing anywhere in the
+	// same message). Left unbounded, one match can span nearly the entire
+	// post; cap the gap so a match - and its highlight - stays localized.
+	const MAX_WILDCARD_SPAN = 20;
+	normalized = normalized
+		.replace(/\.\*/g, `.{0,${MAX_WILDCARD_SPAN}}`)
+		.replace(/\.\+/g, `.{1,${MAX_WILDCARD_SPAN}}`);
+
+	return normalized || pattern;
+}
+
+let _profanityFilterPromise: Promise<RegExp[]> | null = null;
+let _profanityFilterExpiry = 0;
+
+export function getProfanityFilter(): Promise<RegExp[]> {
+	const now = Date.now();
+	if (_profanityFilterPromise && now < _profanityFilterExpiry) {
+		return _profanityFilterPromise;
+	}
+	_profanityFilterExpiry = now + 60 * 60 * 1000;
+	_profanityFilterPromise = (async () => {
+		try {
+			const result = await sendMessage("getProfanityFilter");
+			if (!result.ok) {
+				if (import.meta.env.MODE == "development") {
+					console.warn(
+						"[Kiln] Couldn't reach remote server, disabling profanity filter highlighting..",
+						result.message,
+					);
+				}
+				return [];
+			}
+
+			let invalidLines = 0;
+			const patterns = result.data
+				.split("\n")
+				.map((line) => line.trim())
+				.filter(Boolean)
+				.reduce<RegExp[]>((acc, line) => {
+					try {
+						acc.push(new RegExp(normalizeFilterPattern(line), "gi"));
+					} catch (_err) {
+						invalidLines++;
+					}
+					return acc;
+				}, []);
+
+			if (import.meta.env.MODE == "development") {
+				console.log(
+					`[Kiln] Loaded ${patterns.length} profanity filter pattern(s)${
+						invalidLines ? ` (${invalidLines} invalid line(s) skipped)` : ""
+					}`,
+				);
+			}
+
+			return patterns;
+		} catch (err) {
+			if (import.meta.env.MODE == "development") {
+				console.warn("[Kiln] Failed to load profanity filter:", err);
+			}
+			return [];
+		}
+	})();
+	return _profanityFilterPromise;
+}
+
 export function renderMarkdownLinks(
 	message: string,
 	linkClass = "text-black",

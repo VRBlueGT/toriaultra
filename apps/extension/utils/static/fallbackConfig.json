@@ -1,5 +1,5 @@
 {
-	"latestVersion": "2.8.1",
+	"latestVersion": "2.9.0",
 	"updateLogURL": "https://kiln.indexx.dev/blog/v2-3-0",
 	"notices": [],
 	"apiAvailability": {
@@ -25,7 +25,10 @@
 	"users": {
 		"generativeAI": [
 			48196,
-			767253
+			767253,
+			48195,
+			826580,
+			826659
 		]
 	}
 }

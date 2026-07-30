@@ -30,7 +30,6 @@ export default defineContentScript({
 					console.log("[Kiln] Running view page functions: ", view);
 				}
 
-				console.log("thread id: ", third);
 				_viewedForumThreads.getValue().then((threads) => {
 					_viewedForumThreads.setValue([...threads, +third]);
 				});
@@ -38,6 +37,17 @@ export default defineContentScript({
 				if (values.enabled.includes("forumMentions")) view.forumMentions();
 				if (values.enabled.includes("aiBotForumWarnings"))
 					view.aiBotForumWarnings();
+				if (values.enabled.includes("copyPostContents"))
+					view.copyPostContents();
+				if (values.enabled.includes("bookmarkedThreads"))
+					view.bookmarkedThreads();
+				if (values.enabled.includes("improvedForumComposer"))
+					create.improvedForumComposer(
+						values.config.improvedForumComposer.showCharacterCount,
+						values.config.improvedForumComposer.showMarkdownBtns,
+						values.config.improvedForumComposer.autoShowPreview,
+						values.config.improvedForumComposer.highlightFilteredWords,
+					);
 			} else if (second == "new") {
 				if (import.meta.env.MODE == "development") {
 					console.log("[Kiln] Running create page functions: ", create);
@@ -48,6 +58,7 @@ export default defineContentScript({
 						values.config.improvedForumComposer.showCharacterCount,
 						values.config.improvedForumComposer.showMarkdownBtns,
 						values.config.improvedForumComposer.autoShowPreview,
+						values.config.improvedForumComposer.highlightFilteredWords,
 					);
 			} else if (!second || second == "category") {
 				if (values.enabled.includes("advancedForumSearch")) {
@@ -56,6 +67,8 @@ export default defineContentScript({
 					});
 				}
 				if (values.enabled.includes("myPosts")) search.myPosts();
+				if (values.enabled.includes("bookmarkedThreads"))
+					view.bookmarkedThreads();
 			}
 		});
 	},

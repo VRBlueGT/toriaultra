@@ -24,6 +24,7 @@ import {
 	cache,
 	type defaultPreferences,
 	dismissedNotices,
+	isChrome,
 	isMobileDevice,
 	preferences,
 } from "@/utils/storage";
@@ -78,6 +79,7 @@ type SettingData = {
 	tags: Array<Tags>;
 	hide?: boolean;
 	desktopOnly?: boolean;
+	chromeOnly?: boolean;
 };
 
 function isNewerVersion(latest: string, current: string): boolean {
@@ -275,7 +277,7 @@ export async function kilnSettings() {
 					<p class="text-muted small mb-2">Have a suggestion, ran into a bug, or just want to say something? Send it directly to me! :D</p>
 					<div class="alert border-secondary small py-2 mb-2">
 						<i class="fas fa-info-circle me-1"></i>
-						Feedback is anonymous, so I can't reply directly. Please keep feedback related to Kiln, not Polytoria.
+						Please keep feedback related to Kiln, not Polytoria.
 					</div>
 					<div class="mb-1">
 						<select id="kiln-feedback-type" class="form-select form-select-sm bg-dark" style="max-width:220px;">
@@ -480,6 +482,7 @@ export async function kilnSettings() {
 		const config = await getConfig();
 		const settingsList = document.getElementById("kiln-settings-list")!;
 		const mobile = isMobileDevice();
+		const chrome = isChrome();
 
 		const MODIFIER_TAGS = new Set(["experimental"]);
 		const categories = data.categories as CategoryData[];
@@ -551,6 +554,7 @@ export async function kilnSettings() {
 			const state = getState(setting.id);
 			const remotelyDisabled =
 				config.flags[`features.${setting.id}.enabled`] === false;
+			const chromeOnlyUnavailable = setting.chromeOnly && !chrome;
 
 			const tagBadges = [...setting.tags]
 				.sort((a, b) => {
@@ -570,6 +574,14 @@ export async function kilnSettings() {
 				.join("");
 
 			const allNotes = [
+				...(chromeOnlyUnavailable
+					? [
+							{
+								type: "warning" as NoteType,
+								text: "Unavailable on Firefox.",
+							},
+						]
+					: []),
 				...(setting.requiresSync
 					? [
 							{
@@ -608,7 +620,7 @@ export async function kilnSettings() {
 						${remotelyDisabled ? '<span class="text-danger small d-block">* This feature is currently unavailable.</span>' : ""}
 					</div>
 					<div class="form-check form-switch" style="transform:scale(1.5);transform-origin:right center;">
-						<input class="form-check-input toggle-btn" type="checkbox" role="switch" ${state ? "checked" : ""} ${remotelyDisabled ? "disabled" : ""} />
+						<input class="form-check-input toggle-btn" type="checkbox" role="switch" ${state ? "checked" : ""} ${remotelyDisabled || chromeOnlyUnavailable ? "disabled" : ""} />
 					</div>
 				</div>
 				<div class="kiln-config mt-1"></div>
@@ -787,7 +799,7 @@ export async function kilnSettings() {
 				configContainer.appendChild(openBtn);
 				openBtn.addEventListener("click", () => openThemeManager(values));
 
-				if (!remotelyDisabled) {
+			if (!remotelyDisabled && !chromeOnlyUnavailable) {
 					card
 						.querySelector<HTMLInputElement>(".toggle-btn")!
 						.addEventListener("change", async () => {
@@ -2037,7 +2049,7 @@ async function initWhatsNewTab() {
 		});
 }
 
-function initFeedbackTab() {
+async function initFeedbackTab() {
 	const textarea = document.getElementById(
 		"kiln-feedback-message",
 	) as HTMLTextAreaElement;
@@ -2046,6 +2058,8 @@ function initFeedbackTab() {
 		"kiln-feedback-submit",
 	) as HTMLButtonElement;
 	const status = document.getElementById("kiln-feedback-status") as HTMLElement;
+
+	const user = await getUserDetails();
 
 	textarea.addEventListener("input", () => {
 		chars.textContent = String(textarea.value.length);
@@ -2072,6 +2086,7 @@ function initFeedbackTab() {
 			type,
 			message,
 			version,
+			username: user?.username ?? "",
 		});
 
 		if (result.ok) {

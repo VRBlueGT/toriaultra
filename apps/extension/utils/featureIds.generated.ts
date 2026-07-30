@@ -80,7 +80,12 @@ export const ALL_FEATURE_IDS = [
 	"reenableSearch",
 	"myPosts",
 	"audioToolboxPreviews",
-	"worldTrends"
+	"worldTrends",
+	"tradeViewedIndicators",
+	"copyPostContents",
+	"bookmarkedThreads",
+	"condensedJoinedGuildsList",
+	"v2WorldLabels"
 ] as const;
 
 export type FeatureId = (typeof ALL_FEATURE_IDS)[number];

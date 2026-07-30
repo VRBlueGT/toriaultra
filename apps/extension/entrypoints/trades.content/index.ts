@@ -60,6 +60,13 @@ export default defineContentScript({
 				} else if (page.type === "view") {
 					const trade = parseTrade(document);
 
+					_viewedTradeIds.getValue().then((tradeIds) => {
+						_viewedTradeIds.setValue([
+							...tradeIds,
+							+window.location.pathname.split("/")[3],
+						]);
+					});
+
 					if (values.enabled.includes("irlBrickPrice")) {
 						view.irlBrickPrice(trade, values.config.irlBrickPrice.currency);
 					}
@@ -87,6 +94,15 @@ export default defineContentScript({
 
 					if (values.enabled.includes("tradeManager")) {
 						overview.tradeManager(user);
+					}
+
+					if (
+						values.enabled.includes("tradeViewedIndicators") &&
+						page.tab != "sent"
+					) {
+						_viewedTradeIds
+							.getValue()
+							.then((tradeIds) => overview.tradeViewedIndicators(tradeIds));
 					}
 				}
 			});

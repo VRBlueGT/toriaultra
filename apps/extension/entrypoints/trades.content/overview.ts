@@ -361,7 +361,7 @@ export async function tradeManager(user: UserDetails) {
 		giving: string[];
 		receiving: string[];
 		relativeDate: string;
-		tradeType: "inbound" | "outbound" | "inactive";
+		tradeType: "inbound" | "outbound" | "inactive" | "completed";
 		value?: number | null;
 	}
 
@@ -387,7 +387,7 @@ export async function tradeManager(user: UserDetails) {
 
 	function parseTradeRows(
 		doc: Document,
-		tradeType: "inbound" | "outbound" | "inactive" = "inbound",
+		tradeType: "inbound" | "outbound" | "inactive" | "completed" = "inbound",
 	): ScrapedTrade[] {
 		const cards = doc.querySelectorAll(".card-inbox");
 		const results: ScrapedTrade[] = [];
@@ -514,8 +514,13 @@ export async function tradeManager(user: UserDetails) {
 	const blockedUsernames = new Map<number, string>();
 	const nftEntries: Array<{ itemId: number; serials: number[] | null }> = [];
 	const nftItemDetails = new Map<number, { name: string; thumbnail: string }>();
-	let activeTab: "inbound" | "outbound" | "inactive" | "blocked" | "nft" =
-		"inbound";
+	let activeTab:
+		| "inbound"
+		| "outbound"
+		| "inactive"
+		| "completed"
+		| "blocked"
+		| "nft" = "inbound";
 	let sortKey: "username" | "id-asc" | "id-desc" | "value-desc" | "value-asc" =
 		"id-desc";
 	let modalPage = 1;
@@ -529,6 +534,9 @@ export async function tradeManager(user: UserDetails) {
 	let scrapingInactive = false;
 	let scrapedInactive = false;
 	let inactiveProgress = { current: 0, total: 0 };
+	let scrapingCompleted = false;
+	let scrapedCompleted = false;
+	let completedProgress = { current: 0, total: 0 };
 	const hashToId: Record<string, number> = {};
 	const communityValueMap = new Map<number, number>();
 	const rapMap = new Map<number, number>();
@@ -543,6 +551,7 @@ export async function tradeManager(user: UserDetails) {
 			<div style="display:flex;gap:6px;margin-bottom:12px;border-bottom:1px solid #333;padding-bottom:8px;">
 				${tabBtn("kiln-tab-inbound", `Inbound`, activeTab === "inbound")}
 				${tabBtn("kiln-tab-outbound", `Outbound`, activeTab === "outbound")}
+				${tabBtn("kiln-tab-completed", `Completed`, activeTab === "completed")}
 				${tabBtn("kiln-tab-inactive", `Inactive`, activeTab === "inactive")}
 				${tabBtn("kiln-tab-blocked", `Blocked Traders${blockedIds.size ? ` (${blockedIds.size})` : ""}`, activeTab === "blocked")}
 				${tabBtn("kiln-tab-nft", `Not for Trade Items${nftEntries.length ? ` (${nftEntries.length})` : ""}`, activeTab === "nft")}
@@ -562,6 +571,15 @@ export async function tradeManager(user: UserDetails) {
 				.addEventListener("click", () => {
 					activeTab = "outbound";
 					modalPage = 1;
+					renderModal();
+				});
+			document
+				.getElementById("kiln-tab-completed")!
+				.addEventListener("click", () => {
+					activeTab = "completed";
+					modalPage = 1;
+					if (!scrapedCompleted && !scrapingCompleted && !scraping)
+						scrapeCompletedTrades();
 					renderModal();
 				});
 			document
@@ -744,6 +762,32 @@ export async function tradeManager(user: UserDetails) {
 			return;
 		}
 
+		if (scrapingCompleted && activeTab === "completed") {
+			const progressPct = completedProgress.total
+				? Math.round((completedProgress.current / completedProgress.total) * 100)
+				: 0;
+			modal.innerHTML = `
+				<span class="badge bg-warning mb-2">KILN</span>
+				<button id="kiln-ts-close" style="background:transparent;border:1px solid #484848;border-radius:8px;color:#aaa;cursor:pointer;padding:4px 10px;float:right;">✕</button>
+				<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+					<h5 style="color:#fff;margin:0;">Trade Manager</h5>
+				</div>
+				${tabBar}
+				<div style="text-align:center;padding:40px 0;">
+					<div style="color:#aaa;font-size:0.9rem;margin-bottom:8px;">Scraping completed trades…</div>
+					<div style="color:#666;font-size:0.8rem;">${completedProgress.current} / ${completedProgress.total} pages</div>
+					<div style="margin-top:16px;height:4px;background:#333;border-radius:2px;overflow:hidden;">
+						<div style="height:100%;width:${progressPct}%;background:#4a9eff;border-radius:2px;transition:width 0.2s ease;"></div>
+					</div>
+				</div>
+			`;
+			document
+				.getElementById("kiln-ts-close")!
+				.addEventListener("click", () => modal.close());
+			attachTabHandlers();
+			return;
+		}
+
 		if (scrapingInactive && activeTab === "inactive") {
 			const progressPct = inactiveProgress.total
 				? Math.round((inactiveProgress.current / inactiveProgress.total) * 100)
@@ -770,6 +814,9 @@ export async function tradeManager(user: UserDetails) {
 			return;
 		}
 
+		const isReadOnlyType = (t: ScrapedTrade["tradeType"]) =>
+			t === "inactive" || t === "completed";
+
 		const filtered = trades.filter((t) => t.tradeType === activeTab);
 		const sorted = getSorted(filtered, sortKey);
 		const totalPages = Math.max(1, Math.ceil(sorted.length / MODAL_PAGE_SIZE));
@@ -789,7 +836,7 @@ export async function tradeManager(user: UserDetails) {
 						(t) => `
 					<tr data-trade-id="${t.tradeId}" style="border-bottom:1px solid #222;${blockedIds.has(t.userId) ? "background:#1f1400;" : selectedIds.has(t.tradeId) ? "background:#1e2a1e;" : ""}">
 						${
-							t.tradeType !== "inactive"
+							!isReadOnlyType(t.tradeType)
 								? `
 							<td style="padding:8px 10px;">
 								<input type="checkbox" class="kiln-ts-check" data-trade-id="${t.tradeId}"
@@ -819,7 +866,7 @@ export async function tradeManager(user: UserDetails) {
 						<td style="padding:8px 10px;color:#666;font-size:0.8rem;white-space:nowrap;">${escapeHtml(t.relativeDate)}</td>
 						<td style="padding:8px 10px;white-space:nowrap;">
 							${
-								t.tradeType !== "inactive"
+								!isReadOnlyType(t.tradeType)
 									? `
 								${t.tradeType === "inbound" ? `<button class="btn btn-success btn-sm px-3 me-1 kiln-ts-counter" data-trade-id="${t.tradeId}" data-user-id="${t.userId}">Counter</button>` : ""}
 								<button class="btn btn-danger btn-sm px-3 me-1 kiln-ts-decline" data-trade-id="${t.tradeId}">${t.tradeType === "outbound" ? "Cancel" : "Decline"}</button>
@@ -838,7 +885,7 @@ export async function tradeManager(user: UserDetails) {
 					</tr>`,
 					)
 					.join("")
-			: `<tr><td colspan="${activeTab === "inactive" ? 6 : 7}" style="padding:24px;text-align:center;color:#555;font-size:0.85rem;">No ${activeTab} trades</td></tr>`;
+			: `<tr><td colspan="${isReadOnlyType(activeTab as ScrapedTrade["tradeType"]) ? 6 : 7}" style="padding:24px;text-align:center;color:#555;font-size:0.85rem;">No ${activeTab} trades</td></tr>`;
 
 		const mkPageBtn = (label: string, page: number, disabled: boolean) => {
 			const isActive = page === safePage && !disabled;
@@ -879,7 +926,7 @@ export async function tradeManager(user: UserDetails) {
 				<div style="display:flex;align-items:center;gap:10px;">
 					<small style="color:#555;">${sorted.length} ${activeTab} trades</small>
 					${
-						hasSelection && activeTab !== "inactive"
+						hasSelection && !isReadOnlyType(activeTab as ScrapedTrade["tradeType"])
 							? `
 						<button id="kiln-ts-decline-selected" class="btn btn-danger btn-sm px-3">
 							${activeTab === "outbound" ? "Cancel" : "Decline"} selected (${selectedIds.size})
@@ -904,7 +951,7 @@ export async function tradeManager(user: UserDetails) {
 				<thead>
 					<tr style="border-bottom:1px solid #333;">
 						${
-							activeTab !== "inactive"
+							!isReadOnlyType(activeTab as ScrapedTrade["tradeType"])
 								? `
 							<th style="padding:6px 10px;">
 								<input type="checkbox" id="kiln-ts-check-all" style="cursor:pointer;"
@@ -1118,6 +1165,39 @@ export async function tradeManager(user: UserDetails) {
 		}
 	}
 
+	async function scrapeCompletedTrades(): Promise<void> {
+		scrapingCompleted = true;
+		scrapedCompleted = true;
+		completedProgress = { current: 0, total: 0 };
+		renderModal();
+
+		const firstRes = await fetch("/trade/completed?page=1");
+		const firstHtml = await firstRes.text();
+		const firstDoc = new DOMParser().parseFromString(firstHtml, "text/html");
+		const maxPages = getMaxPages(firstDoc);
+
+		completedProgress = { current: 1, total: maxPages };
+		renderModal();
+
+		const completedTrades = parseTradeRows(firstDoc, "completed");
+
+		for (let page = 2; page <= maxPages; page++) {
+			await delay(FETCH_DELAY_MS);
+			const res = await fetch(`/trade/completed?page=${page}`);
+			const html = await res.text();
+			const doc = new DOMParser().parseFromString(html, "text/html");
+			completedTrades.push(...parseTradeRows(doc, "completed"));
+			completedProgress.current = page;
+			renderModal();
+		}
+
+		trades.push(...completedTrades);
+		await valuateTrades(completedTrades);
+
+		scrapingCompleted = false;
+		renderModal();
+	}
+
 	async function scrapeInactiveTrades(): Promise<void> {
 		scrapingInactive = true;
 		scrapedInactive = true;
@@ -1247,6 +1327,7 @@ export async function tradeManager(user: UserDetails) {
 		scraping = false;
 		renderModal();
 
+		if (activeTab === "completed" && !scrapedCompleted) scrapeCompletedTrades();
 		if (activeTab === "inactive" && !scrapedInactive) scrapeInactiveTrades();
 	}
 
@@ -1262,5 +1343,22 @@ export async function tradeManager(user: UserDetails) {
 
 		navPills.children[0].classList.remove("mb-3");
 		navPills.children[0].classList.add("mb-2");
+	}
+}
+
+export async function tradeViewedIndicators(tradeIds: number[]) {
+	const container = document.querySelector(".col:has(.card-inbox)")!;
+	const cards = container.querySelectorAll(".card-inbox");
+
+	for (const card of cards) {
+		const viewBtn = card.getElementsByClassName(
+			"btn-primary",
+		)[0] as unknown as HTMLLinkElement;
+		console.log(viewBtn.href);
+		const tradeId = +new URL(viewBtn.href).pathname.split("/")[3];
+
+		if (tradeIds.includes(tradeId)) {
+			(card as HTMLDivElement).style.opacity = "50%";
+		}
 	}
 }

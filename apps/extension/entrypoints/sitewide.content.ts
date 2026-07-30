@@ -643,9 +643,11 @@ function friendReqNotifActions() {
 			borderRadius: "10px",
 			padding: "12px 14px",
 			width: "200px",
+			maxWidth: "calc(100vw - 20px)",
 			boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
 			zIndex: "99999",
 			pointerEvents: "all",
+			boxSizing: "border-box",
 		});
 
 		const viewProfileBtn = document.createElement("button");
@@ -723,10 +725,26 @@ function friendReqNotifActions() {
 		anchor: HTMLAnchorElement,
 	): void {
 		const rect = anchor.getBoundingClientRect();
-		const popoutWidth = 200;
+		const popoutWidth = Math.min(200, window.innerWidth - 20);
 		const gap = 10;
-		popout.style.top = `${rect.top + rect.height / 2 - 60}px`;
-		popout.style.left = `${rect.left - popoutWidth - gap}px`;
+		const popoutHeight = 140;
+		
+		let top = rect.top + rect.height / 2 - popoutHeight / 2;
+		top = Math.max(10, Math.min(top, window.innerHeight - popoutHeight - 10));
+		
+		let left = rect.left - popoutWidth - gap;
+		
+		if (left < 10) {
+			left = rect.right + gap;
+		}
+		
+		if (left + popoutWidth > window.innerWidth - 10) {
+			left = window.innerWidth - popoutWidth - 10;
+		}
+		
+		popout.style.top = `${top}px`;
+		popout.style.left = `${left}px`;
+		popout.style.width = `${popoutWidth}px`;
 	}
 
 	function closePopout(): void {

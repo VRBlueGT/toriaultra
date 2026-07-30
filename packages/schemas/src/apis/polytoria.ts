@@ -19,6 +19,7 @@ export const ItemTypeSchema = z.enum([
 	"body",
 	"achievement",
 	"consumable",
+	"gamePass",
 ]);
 export type ItemType = z.infer<typeof ItemTypeSchema>;
 

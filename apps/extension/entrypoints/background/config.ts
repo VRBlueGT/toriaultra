@@ -69,3 +69,29 @@ onMessage("getCurrencyRates", () =>
 		});
 	}),
 );
+
+onMessage("getProfanityFilter", () =>
+	handle(async () =>
+		pullCache(
+			"profanityFilter",
+			async () => {
+				const res = await fetch(
+					"https://api.polytoria.com/v1/game/server/profanity",
+				);
+				if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+				const text = await res.text();
+				// Some CDN/WAF layers respond to plain fetches with an HTML
+				// challenge/error page instead of the actual filter list, still
+				// with a 200 status - don't cache that as if it were valid data.
+				if (/^\s*<(!doctype|html)/i.test(text)) {
+					throw new Error("Received HTML instead of the profanity filter");
+				}
+
+				return text;
+			},
+			60 * 60 * 1000,
+			false,
+		),
+	),
+);

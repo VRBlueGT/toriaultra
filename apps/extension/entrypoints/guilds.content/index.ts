@@ -15,6 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import { preferences } from "@/utils/storage";
+import * as discovery from "./discovery";
 import * as view from "./view";
 
 export default defineContentScript({
@@ -29,7 +30,15 @@ export default defineContentScript({
 
 			const [_, _first, second] = window.location.pathname.split("/");
 
-			if (!Number.isNaN(Number(second))) {
+			if (!second) {
+				if (import.meta.env.MODE == "development") {
+					console.log("[Kiln] Running discovery page functions: ", discovery);
+				}
+
+				if (values.enabled.includes("condensedJoinedGuildsList")) {
+					discovery.condensedJoinedGuildsList();
+				}
+			} else if (!Number.isNaN(Number(second))) {
 				if (import.meta.env.MODE == "development") {
 					console.log("[Kiln] Running view page functions: ", view);
 				}

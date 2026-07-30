@@ -21,6 +21,7 @@ import * as view from "./view";
 
 export default defineContentScript({
 	matches: [
+		"https://polytoria.com/places",
 		"https://polytoria.com/places/*",
 		"https://polytoria.com/create/place/*",
 	],

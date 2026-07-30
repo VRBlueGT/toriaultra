@@ -34,6 +34,14 @@ export default defineContentScript({
 						console.log("[Kiln] Running discovery page functions: ", discovery);
 					}
 
+					const legacyDiscoveryLayout =
+						values.enabled.includes("legacyItemViewLayout") &&
+						values.config.legacyItemViewLayout.discovery;
+
+					if (legacyDiscoveryLayout) {
+						discovery.legacyStoreLayout();
+					}
+
 					if (values.enabled.includes("irlBrickPrice")) {
 						discovery.irlBrickPrice(values.config.irlBrickPrice.currency);
 					}
@@ -44,6 +52,7 @@ export default defineContentScript({
 						discovery.eventItems();
 					}
 					if (
+						!legacyDiscoveryLayout &&
 						values.enabled.includes("disableInfiniteScrolling") &&
 						values.config.disableInfiniteScrolling.store
 					) {
@@ -120,7 +129,10 @@ export default defineContentScript({
 						view.pinnedAchievements(user.userId);
 					}
 
-					if (values.enabled.includes("legacyItemViewLayout")) {
+					if (
+						values.enabled.includes("legacyItemViewLayout") &&
+						values.config.legacyItemViewLayout.itemView
+					) {
 						view.legacyStoreLayout();
 					}
 

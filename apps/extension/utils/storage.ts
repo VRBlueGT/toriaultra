@@ -33,9 +33,19 @@ export function isMobileDevice(): boolean {
 	return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
+export function isChrome(): boolean {
+	return /Chrome/i.test(navigator.userAgent) && !/Edg|OPR/i.test(navigator.userAgent);
+}
+
 const desktopOnlyIds = new Set(
 	(prefItems as Array<{ id: string; desktopOnly?: boolean }>)
 		.filter((p) => p.desktopOnly)
+		.map((p) => p.id),
+);
+
+const chromeOnlyIds = new Set(
+	(prefItems as Array<{ id: string; chromeOnly?: boolean }>)
+		.filter((p) => p.chromeOnly)
 		.map((p) => p.id),
 );
 
@@ -210,6 +220,14 @@ export const _seenTradeIds = storage.defineItem<number[]>(
 	},
 );
 
+export const _viewedTradeIds = storage.defineItem<number[]>(
+	"local:viewedTradeIds",
+	{
+		fallback: [],
+		version: 1,
+	},
+);
+
 export const _userAliases = storage.defineItem<Record<number, string>>(
 	"local:userAliases",
 	{
@@ -327,3 +345,18 @@ export const dismissedNotices = storage.defineItem<string[]>(
 		version: 1,
 	},
 );
+
+export interface BookmarkedThread {
+	threadId: number;
+	categoryId?: number;
+	title: string;
+	url: string;
+	bookmarkedAt: string;
+}
+
+export const _bookmarkedThreads = storage.defineItem<
+	Record<number, BookmarkedThread>
+>("local:bookmarkedThreads", {
+	fallback: {},
+	version: 1,
+});

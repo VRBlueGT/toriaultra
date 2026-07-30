@@ -17,9 +17,15 @@
 import { preferences } from "@/utils/storage";
 import * as discovery from "./discovery";
 import * as models from "./models";
+import * as worlds from "./worlds";
 
 export default defineContentScript({
-	matches: ["https://polytoria.com/library", "https://polytoria.com/models/*"],
+	matches: [
+		"https://polytoria.com/library",
+		"https://polytoria.com/models/*",
+		"https://polytoria.com/create",
+		"https://polytoria.com/create/place*",
+	],
 	main() {
 		preferences.getPreferences().then((values) => {
 			getUserDetails().then((user) => {
@@ -32,9 +38,13 @@ export default defineContentScript({
 					if (values.enabled.includes("audioToolboxPreviews")) {
 						discovery.audioPreviews();
 					}
-				} else {
+				} else if (window.location.pathname.includes("models")) {
 					if (values.enabled.includes("modelTreeInspector")) {
 						models.modelTreeInspector();
+					}
+				} else {
+					if (values.enabled.includes("v2WorldLabels")) {
+						worlds.v2WorldLabels();
 					}
 				}
 			});

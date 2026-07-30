@@ -209,3 +209,15 @@ body:has(.kiln-extension-modal[open]) {
 .ribbon-kiln-extension-retro::before {
 	border-color: rgb(104, 0, 104) !important;
 }
+
+/* ------------------------------------------ */
+
+/*
+    IMPROVED FORUM COMPOSER
+*/
+
+.kiln-filtered-word {
+	background-color: rgba(220, 53, 69, 0.45);
+	color: transparent !important;
+	border-radius: 2px;
+}

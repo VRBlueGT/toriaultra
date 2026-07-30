@@ -639,3 +639,27 @@ onMessage("deleteMyPlaceReview", ({ data: { placeId, userId } }) =>
 		),
 	),
 );
+
+onMessage("getWorldVersions", ({ data }) =>
+	handle(async () => {
+		const cacheKey = "data";
+		return (
+			await pullBulkKVCache(
+				"worldVersions",
+				data.map((x) => `world-${x}`),
+				async () => ({
+					[cacheKey]: await safeFetch(
+						`https://polytrack.top/api/worlds/kiln/world-version`,
+						z.record(z.string(), z.enum(["1.0", "2.0"]).nullable()),
+						{
+							method: "POST",
+							body: JSON.stringify(data),
+						},
+					),
+				}),
+				60 * 1000,
+				false,
+			)
+		)[cacheKey];
+	}),
+);
