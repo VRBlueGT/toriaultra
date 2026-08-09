@@ -17,7 +17,9 @@
 import { sendMessage } from "@/utils/messaging";
 import metadata from "@/utils/static/metadata.json";
 import { _lastViewedPlaces } from "@/utils/storage";
+import type { CurrencyCode } from "@/utils/types";
 import {
+	fireKilnNotification,
 	getConfig,
 	markKilnNotificationRead,
 	pullKVCache,
@@ -116,7 +118,10 @@ export async function favoritedPlaces(userId: number) {
 	});
 }
 
-export async function approxPlaceRevenue() {
+export async function approxPlaceRevenue(
+	includeIRLRevenue: boolean,
+	irlCurrency: CurrencyCode,
+) {
 	const isOwnedByGuild = !document.querySelector(
 		'.place-hero-content a:has([class^="userlink-"])',
 	);
@@ -188,7 +193,7 @@ export async function approxPlaceRevenue() {
 		);
 	}
 
-	value.innerHTML = `<i class="pi pi-brick me-2"></i> ~${revenue.toLocaleString()}`;
+	value.innerHTML = `<i class="pi pi-brick me-2"></i> ~${revenue.toLocaleString()} ${includeIRLRevenue && revenue > 0 ? `<span class="text-muted">(${await bricksToCurrency(revenue, irlCurrency)})</span>` : ""}`;
 }
 
 export async function activeChallenges() {
@@ -200,6 +205,15 @@ export async function activeChallenges() {
 
 	const escAttr = (s: string) =>
 		s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+	const normalizeGenre = (s: string | null | undefined) =>
+		s?.toLowerCase().replace(/[^a-z0-9]/g, "") ?? null;
+
+	const placeGenre = normalizeGenre(
+		document
+			.querySelector(".card:has(.fa-calendar) .fa-backpack")
+			?.closest("li")?.textContent,
+	);
 
 	const fetchChallenges = async () => {
 		const response = await fetch("https://polytoria.com/");
@@ -249,6 +263,10 @@ export async function activeChallenges() {
 				?.getAttribute("href")
 				?.match(/\/places\/(\d+)/);
 
+			const genreMatch = (row.querySelector("p")?.textContent ?? "").match(
+				/join a place of the ([a-z]+) genre/i,
+			);
+
 			const xpBadgeImg = row
 				.querySelector(".xp-badge-text")
 				?.closest(".position-relative")
@@ -277,6 +295,7 @@ export async function activeChallenges() {
 							name: placeLink.textContent.trim(),
 						}
 					: null,
+				genre: genreMatch ? genreMatch[1].toLowerCase() : null,
 				progress: (() => {
 					const claimButton = row.querySelector(
 						'button[onclick^="claimChallengeReward"]',
@@ -353,7 +372,9 @@ export async function activeChallenges() {
 
 	const buildContent = (freshData: ChallengeData) => {
 		const freshFiltered = freshData.challenges.filter(
-			(challenge) => challenge.place?.id === placeID,
+			(challenge) =>
+				challenge.place?.id === placeID ||
+				(placeGenre !== null && normalizeGenre(challenge.genre) === placeGenre),
 		);
 
 		const streakHTML = freshData.streak?.active
@@ -997,11 +1018,9 @@ export function legacyPlaceViewLayout(): void {
 }
 
 export async function detailedPlaceReviews(userId: number) {
-	const infoColumn = document.querySelector(".card:has(.fa-calendar)")!
-		.parentElement!;
-
-	const card = document.createElement("div");
-	card.classList.add("card", "mcard", "mt-2");
+	const tabList = document.getElementById("place-tabs");
+	const tabContent = document.querySelector(".card-body.tab-content");
+	if (!tabList || !tabContent) return;
 
 	const isVerified = !!(await getApiSession(userId));
 
@@ -1014,12 +1033,64 @@ export async function detailedPlaceReviews(userId: number) {
 		return html;
 	};
 
+	interface ReviewReply {
+		id: string;
+		reviewId: string;
+		userId: number;
+		username: string;
+		thumbnail: string | null;
+		body: string;
+		createdAt: string;
+		updatedAt: string;
+	}
+
+	const renderReplyRow = (reply: ReviewReply) => {
+		const date = new Date(reply.createdAt).toLocaleDateString(undefined, {
+			month: "short",
+			day: "numeric",
+			year: "numeric",
+		});
+
+		return `
+			<div class="d-flex align-items-start gap-2 mt-2 ps-3 border-start border-secondary" data-reply-id="${reply.id}">
+				<img src="${reply.thumbnail ?? ""}" alt="${reply.username}" class="rounded-circle border border-secondary" width="28" height="28">
+				<div class="flex-grow-1">
+					<div class="small">
+						<a href="/u/${reply.username}" class="text-reset"><span class="userlink-default">${reply.username}</span></a>
+						<span class="text-muted ms-1">${date}</span>
+					</div>
+					<div class="small">${reply.body}</div>
+					${
+						reply.userId === userId
+							? `<button class="btn btn-link btn-sm p-0 text-danger kiln-reply-delete" data-reply-id="${reply.id}">Delete</button>`
+							: ""
+					}
+				</div>
+			</div>
+			`;
+	};
+
+	const renderRepliesSection = (review: {
+		id: string;
+		replies: ReviewReply[];
+	}) => `
+		<div class="mt-2 pt-2 border-top border-secondary kiln-review-replies">
+			${review.replies.map(renderReplyRow).join("")}
+			<div class="d-flex gap-2 mt-2">
+				<textarea class="form-control form-control-sm bg-dark text-light border-secondary kiln-reply-textarea" rows="1" placeholder="Write a reply..." style="resize:vertical;font-size:0.8rem;" data-review-id="${review.id}"></textarea>
+				<button class="btn btn-primary btn-sm kiln-reply-submit" data-review-id="${review.id}"><i class="fas fa-reply"></i></button>
+			</div>
+		</div>
+		`;
+
 	const renderReviewRow = (review: {
+		id: string;
 		username: string;
 		thumbnail: string | null;
 		rating: number;
 		body: string | null;
 		createdAt: string;
+		replies: ReviewReply[];
 	}) => {
 		const date = new Date(review.createdAt).toLocaleDateString(undefined, {
 			month: "short",
@@ -1028,87 +1099,58 @@ export async function detailedPlaceReviews(userId: number) {
 		});
 
 		return `
-			<div class="row small">
-				<div class="col-lg-1">
-					<div class="d-none d-lg-block">
-						<a href="/u/${review.username}">
-							<img src="${review.thumbnail}" alt="${review.username}" class="rounded-circle border border-2 border-secondary" width="50px" height="50px">
+			<div class="card mcard mb-2">
+				<div class="card-body p-3">
+					<div class="d-flex align-items-center gap-2 mb-2">
+						<a href="/u/${review.username}" class="flex-shrink-0">
+							<img src="${review.thumbnail}" alt="${review.username}" class="rounded-circle border border-2 border-secondary" width="40" height="40">
 						</a>
-					</div>
-					<div class="d-lg-none mb-2">
-						<div class="row">
-							<div class="col-2">
-								<a href="/u/${review.username}">
-									<img src="${review.thumbnail}" alt="${review.username}" class="rounded-circle border border-2 border-secondary" width="50px" height="50px">
-								</a>
+						<div class="min-w-0">
+							<a href="/u/${review.username}" class="text-reset"><span class="userlink-default fw-bold">${review.username}</span></a>
+							<div class="text-muted small">
+								<i class="fad fa-clock me-1"></i>${date}
 							</div>
-							<div class="col">
-								<a href="/u/${review.username}" class="text-reset"><span class="userlink-default">${review.username}</span></a><br>
-								<span class="text-muted">
-									<i class="fad fa-clock me-1"></i>
-									${date}
-								</span>
-							</div>
-							<!--
-							<div class="col-auto">
-								<a href="#" class="text-muted" data-bs-toggle="tooltip" data-bs-placement="top" title="Report">
-									<i class="fad fa-flag"></i>
-								</a>
-							</div>
-							-->
 						</div>
 					</div>
-				</div>
-				<div class="col-lg-11">
-					<div class="row d-none d-lg-flex small">
-						<div class="col">
-							<p class="mb-1">
-								<a href="/u/${review.username}" class="text-reset"><span class="userlink-default">${review.username}</span></a>
-								<span class="text-muted ms-2">
-									<i class="fad fa-clock me-1"></i>
-									${date}
-								</span>
-							</p>
-						</div>
-						<!--
-						<div class="col-auto">
-							<a href="#" class="text-muted" data-bs-toggle="tooltip" data-bs-placement="top" title="Report">
-								<i class="fad fa-flag"></i>
-							</a>
-						</div>
-						-->
-					</div>
-					<p class="mb-1 feed-post-text">
-						${review.body}
-					</p>
+					<p class="mb-2 feed-post-text">${review.body}</p>
 					<div>${renderStars(review.rating)}</div>
+					${renderRepliesSection(review)}
 				</div>
 			</div>
 			`;
 	};
 
-	const showLoading = () => {
-		cardBody.innerHTML = `
-			<div class="d-flex justify-content-center py-2">
-				<div class="spinner-border spinner-border-sm text-secondary" role="status">
-					<span class="visually-hidden">Loading...</span>
-				</div>
-			</div>`;
-	};
-
-	card.innerHTML = `
-		<div class="card-header d-flex align-items-center">
-			<div class="flex-grow-1">
-				<i class="fas fa-star me-1"></i> World Reviews
-			</div>
+	const navItem = document.createElement("li");
+	navItem.className = "nav-item";
+	navItem.setAttribute("role", "presentation");
+	navItem.innerHTML = `
+		<a class="nav-link text-light" href="#!" id="reviews-tab" data-bs-toggle="tab" role="tab"
+		   data-bs-target="#reviews-tabpane" aria-controls="reviews-tabpane" aria-selected="false" tabindex="-1">
+			<i class="fas fa-star me-1"></i>
+			Reviews
 			<span class="kiln-review-avg-badge"></span>
-		</div>
-		<div class="card-body" style="max-height:350px;overflow-y:auto;"></div>
+		</a>
 	`;
-	infoColumn.appendChild(card);
+	tabList.appendChild(navItem);
 
-	const cardBody = card.querySelector<HTMLElement>(".card-body")!;
-	const avgBadge = card.querySelector<HTMLElement>(".kiln-review-avg-badge")!;
+	const tabPane = document.createElement("div");
+	tabPane.id = "reviews-tabpane";
+	tabPane.className = "tab-pane fade";
+	tabPane.setAttribute("role", "tabpanel");
+	tabPane.setAttribute("aria-labelledby", "reviews-tab");
+	tabPane.innerHTML = `
+		<div class="d-flex justify-content-center py-3">
+			<div class="spinner-border spinner-border-sm text-secondary" role="status">
+				<span class="visually-hidden">Loading...</span>
+			</div>
+		</div>
+	`;
+	tabContent.appendChild(tabPane);
+
+	const cardBody = tabPane;
+	const avgBadge = navItem.querySelector<HTMLElement>(
+		".kiln-review-avg-badge",
+	)!;
 
 	if (!isVerified) {
 		cardBody.innerHTML = `
@@ -1117,65 +1159,81 @@ export async function detailedPlaceReviews(userId: number) {
 		return;
 	}
 
-	showLoading();
+	await loadReviews();
 
-	const [result, activityResult, placeResult] = await Promise.all([
-		sendMessage("getPlaceReviews", { placeId: placeID, userId }),
-		sendMessage("getGameActivity", {
-			userId,
-			gameId: placeID,
-			page: 1,
-			pageSize: 25,
-		}),
-		sendMessage("getPlace", placeID),
-	]);
-	if (!result.ok) {
-		cardBody.innerHTML = `<div class="text-muted small fst-italic">Failed to load reviews.</div>`;
-		return;
-	}
-
-	const totalPlaytimeMs = activityResult.ok
-		? activityResult.data.totalPlaytime
-		: null;
-	const hasEnoughPlaytime =
-		totalPlaytimeMs === null || totalPlaytimeMs >= MIN_REVIEW_PLAYTIME_MS;
-	const isCreator = placeResult.ok && placeResult.data.creator.id === userId;
-
-	const formatMinutes = (minutes: number) => {
-		if (minutes < 60) return `${minutes}min${minutes === 1 ? "" : "s"}`;
-		const h = Math.floor(minutes / 60);
-		const m = minutes % 60;
-		return m > 0 ? `${h}hrs ${m}mins` : `${h}hrs`;
-	};
-
-	let { reviews, averageRating, totalReviews, myReview } = result.data.data;
-	let pendingRating = myReview?.rating ?? 0;
-	let isSubmitting = false;
-
-	const updateAvgBadge = () => {
-		if (averageRating === null || totalReviews === 0) {
-			avgBadge.innerHTML = "";
+	async function loadReviews() {
+		const [result, activityResult, placeResult] = await Promise.all([
+			sendMessage("getPlaceReviews", { placeId: placeID, userId }),
+			sendMessage("getGameActivity", {
+				userId,
+				gameId: placeID,
+				page: 1,
+				pageSize: 25,
+			}),
+			sendMessage("getPlace", placeID),
+		]);
+		if (!result.ok) {
+			cardBody.innerHTML = `<div class="text-muted small fst-italic">Failed to load reviews.</div>`;
 			return;
 		}
-		avgBadge.innerHTML = `<span class="badge bg-warning text-dark ms-1" style="font-size:0.8rem;"><i class="fas fa-star me-1"></i>${averageRating.toFixed(1)} <span class="fw-normal opacity-75">(${totalReviews})</span></span>`;
-	};
 
-	const render = () => {
-		updateAvgBadge();
+		const totalPlaytimeMs = activityResult.ok
+			? activityResult.data.totalPlaytime
+			: null;
+		const hasEnoughPlaytime =
+			totalPlaytimeMs === null || totalPlaytimeMs >= MIN_REVIEW_PLAYTIME_MS;
+		const isCreator = placeResult.ok && placeResult.data.creator.id === userId;
 
-		const otherReviews = reviews.filter((r) => r.userId !== userId);
+		const formatMinutes = (minutes: number) => {
+			if (minutes < 60) return `${minutes}min${minutes === 1 ? "" : "s"}`;
+			const h = Math.floor(minutes / 60);
+			const m = minutes % 60;
+			return m > 0 ? `${h}hrs ${m}mins` : `${h}hrs`;
+		};
 
-		const formHTML = isCreator
-			? `
+		let { reviews, averageRating, totalReviews, myReview } = result.data.data;
+		let pendingRating = myReview?.rating ?? 0;
+		let isSubmitting = false;
+
+		if (myReview) {
+			const placeName = placeResult.ok ? placeResult.data.name : "your world";
+			for (const reply of myReview.replies) {
+				if (reply.userId === userId) continue;
+				await fireKilnNotification({
+					id: `place-review-reply:${reply.id}`,
+					message: `${reply.username} replied to your review of ${placeName}`,
+					date: new Date(reply.createdAt),
+					url: `/places/${placeID}`,
+					avatarUrl: reply.thumbnail ?? "",
+					dedupeValue: reply.id,
+				});
+			}
+		}
+
+		const updateAvgBadge = () => {
+			if (averageRating === null || totalReviews === 0) {
+				avgBadge.innerHTML = "";
+				return;
+			}
+			avgBadge.innerHTML = `<span class="badge bg-warning text-dark ms-1" style="font-size:0.8rem;"><i class="fas fa-star me-1"></i>${averageRating.toFixed(1)} <span class="fw-normal opacity-75">(${totalReviews})</span></span>`;
+		};
+
+		const render = () => {
+			updateAvgBadge();
+
+			const otherReviews = reviews.filter((r) => r.userId !== userId);
+
+			const formHTML = isCreator
+				? `
 			<div class="kiln-review-form border-bottom border-secondary pb-3 mb-3">
-				<p class="text-muted small mb-0">
+				<p class="text-muted mb-0">
 					<i class="fa-regular fa-ban me-1"></i> You cannot review your own world.
 				</p>
 			</div>`
-			: hasEnoughPlaytime
-				? `
+				: hasEnoughPlaytime
+					? `
 			<div class="kiln-review-form border-bottom border-secondary pb-3 mb-2">
-				<div class="small text-muted mb-1 fw-bold">${myReview ? "Your Review" : "Leave a Review"}</div>
+				<div class="text-muted mb-1 fw-bold">${myReview ? "Your Review" : "Leave a Review"}</div>
 				<div class="d-flex gap-1 mb-2 kiln-star-picker">
 					${renderStars(pendingRating, true)}
 				</div>
@@ -1187,9 +1245,9 @@ export async function detailedPlaceReviews(userId: number) {
 					${myReview ? `<button class="btn btn-outline-danger btn-sm kiln-review-delete">Delete</button>` : ""}
 				</div>
 			</div>`
-				: `
+					: `
 			<div class="kiln-review-form border-bottom border-secondary pb-3 mb-3">
-				<p class="text-muted small mb-0">
+				<p class="text-muted mb-0">
 					<i class="fa-regular fa-clock me-1"></i> You need at least 5 minutes of playtime in this world to leave a review${
 						totalPlaytimeMs !== null
 							? ` (you've played ${formatMinutes(Math.round(totalPlaytimeMs / 60_000))} so far)`
@@ -1198,146 +1256,217 @@ export async function detailedPlaceReviews(userId: number) {
 				</p>
 			</div>`;
 
-		const othersHTML =
-			otherReviews.length === 0
-				? `<div class="text-muted small fst-italic">No other reviews yet.</div>`
-				: otherReviews.map(renderReviewRow).join("<hr>");
+			const myRepliesHTML =
+				myReview && myReview.replies.length > 0
+					? renderRepliesSection(myReview)
+					: "";
 
-		cardBody.innerHTML = formHTML + othersHTML;
+			const othersHTML =
+				otherReviews.length === 0
+					? `<div class="text-muted fst-italic">No other reviews yet.</div>`
+					: otherReviews.map(renderReviewRow).join("");
 
-		if (!hasEnoughPlaytime || isCreator) return;
+			cardBody.innerHTML = formHTML + myRepliesHTML + othersHTML;
 
-		const starPicker =
-			cardBody.querySelector<HTMLElement>(".kiln-star-picker")!;
-		const textarea =
-			cardBody.querySelector<HTMLTextAreaElement>(".kiln-review-body")!;
-		const submitBtn = cardBody.querySelector<HTMLButtonElement>(
-			".kiln-review-submit",
-		)!;
-		const deleteBtn = cardBody.querySelector<HTMLButtonElement>(
-			".kiln-review-delete",
-		);
+			cardBody
+				.querySelectorAll<HTMLButtonElement>(".kiln-reply-submit")
+				.forEach((replySubmitBtn) => {
+					replySubmitBtn.addEventListener("click", async () => {
+						const reviewId = replySubmitBtn.dataset.reviewId!;
+						const replyTextarea = cardBody.querySelector<HTMLTextAreaElement>(
+							`.kiln-reply-textarea[data-review-id="${reviewId}"]`,
+						)!;
 
-		starPicker.addEventListener("click", (e) => {
-			const star = (e.target as HTMLElement).closest<HTMLElement>(
-				".kiln-review-star",
+						const replyBody = replyTextarea.value.trim();
+						if (!replyBody) return;
+
+						replySubmitBtn.disabled = true;
+						const res = await sendMessage("submitReviewReply", {
+							userId,
+							reviewId,
+							body: replyBody,
+						});
+
+						if (!res.ok) {
+							replySubmitBtn.disabled = false;
+							return;
+						}
+
+						const target =
+							myReview?.id === reviewId
+								? myReview
+								: reviews.find((r) => r.id === reviewId);
+						target?.replies.push(res.data.data);
+
+						render();
+					});
+				});
+
+			cardBody
+				.querySelectorAll<HTMLButtonElement>(".kiln-reply-delete")
+				.forEach((deleteReplyBtn) => {
+					deleteReplyBtn.addEventListener("click", async () => {
+						const replyId = deleteReplyBtn.dataset.replyId!;
+						deleteReplyBtn.disabled = true;
+
+						const res = await sendMessage("deleteReviewReply", {
+							userId,
+							replyId,
+						});
+						if (!res.ok) {
+							deleteReplyBtn.disabled = false;
+							return;
+						}
+
+						for (const r of myReview ? [myReview, ...reviews] : reviews) {
+							const idx = r.replies.findIndex((reply) => reply.id === replyId);
+							if (idx !== -1) {
+								r.replies.splice(idx, 1);
+								break;
+							}
+						}
+
+						render();
+					});
+				});
+
+			if (!hasEnoughPlaytime || isCreator) return;
+
+			const starPicker =
+				cardBody.querySelector<HTMLElement>(".kiln-star-picker")!;
+			const textarea =
+				cardBody.querySelector<HTMLTextAreaElement>(".kiln-review-body")!;
+			const submitBtn = cardBody.querySelector<HTMLButtonElement>(
+				".kiln-review-submit",
+			)!;
+			const deleteBtn = cardBody.querySelector<HTMLButtonElement>(
+				".kiln-review-delete",
 			);
-			if (!star || isSubmitting) return;
-			pendingRating = parseInt(star.dataset.star ?? "0", 10);
-			starPicker.innerHTML = renderStars(pendingRating, true);
-			submitBtn.disabled = pendingRating === 0;
 
-			starPicker
-				.querySelectorAll<HTMLElement>(".kiln-review-star")
-				.forEach((s) => {
-					s.addEventListener("mouseenter", () => {
-						const hov = parseInt(s.dataset.star ?? "0", 10);
-						starPicker
-							.querySelectorAll<HTMLElement>(".kiln-review-star")
-							.forEach((st) => {
-								const n = parseInt(st.dataset.star ?? "0", 10);
-								st.className = `${n <= hov ? "fas" : "far"} fa-star kiln-review-star`;
-								(st as HTMLElement).style.color = n <= hov ? "#f0b429" : "#aaa";
-							});
-					});
-				});
-			starPicker.addEventListener("mouseleave", () => {
+			starPicker.addEventListener("click", (e) => {
+				const star = (e.target as HTMLElement).closest<HTMLElement>(
+					".kiln-review-star",
+				);
+				if (!star || isSubmitting) return;
+				pendingRating = parseInt(star.dataset.star ?? "0", 10);
 				starPicker.innerHTML = renderStars(pendingRating, true);
-				attachStarHover();
+				submitBtn.disabled = pendingRating === 0;
+
+				starPicker
+					.querySelectorAll<HTMLElement>(".kiln-review-star")
+					.forEach((s) => {
+						s.addEventListener("mouseenter", () => {
+							const hov = parseInt(s.dataset.star ?? "0", 10);
+							starPicker
+								.querySelectorAll<HTMLElement>(".kiln-review-star")
+								.forEach((st) => {
+									const n = parseInt(st.dataset.star ?? "0", 10);
+									st.className = `${n <= hov ? "fas" : "far"} fa-star kiln-review-star`;
+									(st as HTMLElement).style.color =
+										n <= hov ? "#f0b429" : "#aaa";
+								});
+						});
+					});
+				starPicker.addEventListener("mouseleave", () => {
+					starPicker.innerHTML = renderStars(pendingRating, true);
+					attachStarHover();
+				});
 			});
-		});
 
-		const attachStarHover = () => {
-			starPicker
-				.querySelectorAll<HTMLElement>(".kiln-review-star")
-				.forEach((s) => {
-					s.addEventListener("mouseenter", () => {
-						const hov = parseInt(s.dataset.star ?? "0", 10);
-						starPicker
-							.querySelectorAll<HTMLElement>(".kiln-review-star")
-							.forEach((st) => {
-								const n = parseInt(st.dataset.star ?? "0", 10);
-								st.className = `${n <= hov ? "fas" : "far"} fa-star kiln-review-star`;
-								(st as HTMLElement).style.color = n <= hov ? "#f0b429" : "#aaa";
-							});
+			const attachStarHover = () => {
+				starPicker
+					.querySelectorAll<HTMLElement>(".kiln-review-star")
+					.forEach((s) => {
+						s.addEventListener("mouseenter", () => {
+							const hov = parseInt(s.dataset.star ?? "0", 10);
+							starPicker
+								.querySelectorAll<HTMLElement>(".kiln-review-star")
+								.forEach((st) => {
+									const n = parseInt(st.dataset.star ?? "0", 10);
+									st.className = `${n <= hov ? "fas" : "far"} fa-star kiln-review-star`;
+									(st as HTMLElement).style.color =
+										n <= hov ? "#f0b429" : "#aaa";
+								});
+						});
 					});
+				starPicker.addEventListener("mouseleave", () => {
+					starPicker.innerHTML = renderStars(pendingRating, true);
+					attachStarHover();
 				});
-			starPicker.addEventListener("mouseleave", () => {
-				starPicker.innerHTML = renderStars(pendingRating, true);
-				attachStarHover();
+			};
+			attachStarHover();
+
+			submitBtn.addEventListener("click", async () => {
+				if (isSubmitting || pendingRating === 0) return;
+				isSubmitting = true;
+				submitBtn.disabled = true;
+				submitBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>${myReview ? "Updating..." : "Submitting..."}`;
+
+				const body = textarea.value.trim() || undefined;
+				const res = await sendMessage("submitPlaceReview", {
+					placeId: placeID,
+					userId,
+					rating: pendingRating,
+					body,
+				});
+
+				isSubmitting = false;
+				if (!res.ok) {
+					submitBtn.disabled = false;
+					submitBtn.textContent = myReview ? "Update" : "Submit";
+					return;
+				}
+
+				const submitted = res.data.data;
+				if (myReview) {
+					reviews = reviews.filter((r) => r.userId !== userId);
+				}
+				myReview = submitted;
+				reviews = [submitted, ...reviews.filter((r) => r.userId !== userId)];
+
+				const prevTotal = totalReviews;
+				if (!myReview || prevTotal === 0) {
+					totalReviews = prevTotal + 1;
+				}
+				averageRating =
+					reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length ||
+					null;
+
+				render();
+			});
+
+			deleteBtn?.addEventListener("click", async () => {
+				if (isSubmitting) return;
+				isSubmitting = true;
+				deleteBtn.disabled = true;
+				deleteBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Deleting...`;
+
+				const res = await sendMessage("deleteMyPlaceReview", {
+					placeId: placeID,
+					userId,
+				});
+				isSubmitting = false;
+				if (!res.ok) {
+					deleteBtn.disabled = false;
+					deleteBtn.textContent = "Delete";
+					return;
+				}
+
+				reviews = reviews.filter((r) => r.userId !== userId);
+				myReview = null;
+				pendingRating = 0;
+				totalReviews = Math.max(0, totalReviews - 1);
+				averageRating =
+					reviews.length > 0
+						? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+						: null;
+
+				render();
 			});
 		};
-		attachStarHover();
 
-		submitBtn.addEventListener("click", async () => {
-			if (isSubmitting || pendingRating === 0) return;
-			isSubmitting = true;
-			submitBtn.disabled = true;
-			submitBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>${myReview ? "Updating..." : "Submitting..."}`;
-
-			const body = textarea.value.trim() || undefined;
-			const res = await sendMessage("submitPlaceReview", {
-				placeId: placeID,
-				userId,
-				rating: pendingRating,
-				body,
-			});
-
-			isSubmitting = false;
-			if (!res.ok) {
-				submitBtn.disabled = false;
-				submitBtn.textContent = myReview ? "Update" : "Submit";
-				return;
-			}
-
-			const submitted = res.data.data;
-			if (myReview) {
-				reviews = reviews.filter((r) => r.userId !== userId);
-			}
-			myReview = submitted;
-			reviews = [submitted, ...reviews.filter((r) => r.userId !== userId)];
-
-			const prevTotal = totalReviews;
-			if (!myReview || prevTotal === 0) {
-				totalReviews = prevTotal + 1;
-			}
-			averageRating =
-				reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length || null;
-
-			render();
-		});
-
-		deleteBtn?.addEventListener("click", async () => {
-			if (isSubmitting) return;
-			isSubmitting = true;
-			deleteBtn.disabled = true;
-			deleteBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Deleting...`;
-
-			const res = await sendMessage("deleteMyPlaceReview", {
-				placeId: placeID,
-				userId,
-			});
-			isSubmitting = false;
-			if (!res.ok) {
-				deleteBtn.disabled = false;
-				deleteBtn.textContent = "Delete";
-				return;
-			}
-
-			reviews = reviews.filter((r) => r.userId !== userId);
-			myReview = null;
-			pendingRating = 0;
-			totalReviews = Math.max(0, totalReviews - 1);
-			averageRating =
-				reviews.length > 0
-					? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
-					: null;
-
-			render();
-		});
-	};
-
-	render();
+		render();
+	}
 }
 
 export async function autoRefreshData(interval: "30s" | "1m" | "5m") {

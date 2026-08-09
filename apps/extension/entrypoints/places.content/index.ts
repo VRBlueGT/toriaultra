@@ -53,7 +53,10 @@ export default defineContentScript({
 					view.favoritedPlaces(user.userId);
 				}
 				if (values.enabled.includes("placeRevenue")) {
-					view.approxPlaceRevenue();
+					view.approxPlaceRevenue(
+						values.enabled.includes("irlBrickPrice"),
+						values.config.irlBrickPrice.currency,
+					);
 				}
 				if (values.enabled.includes("playtimeTracking")) {
 					view.playtimeTracking(user.userId);

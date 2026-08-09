@@ -134,6 +134,50 @@ onMessage("checkUserActivity", ({ data: { userIds, days } }) =>
 	}),
 );
 
+onMessage("showSecurityKeyRenamePrompt", ({ data: { currentName } }) =>
+	handle(async () => {
+		const tabs = await browser.tabs.query({
+			active: true,
+			currentWindow: true,
+		});
+		if (!tabs[0]?.id) return null;
+
+		const results = await browser.scripting.executeScript({
+			target: { tabId: tabs[0].id },
+			world: "MAIN",
+			args: [currentName],
+			func: async (currentName: string) => {
+				// @ts-expect-error
+				const { value, isConfirmed } = await window.Swal.fire({
+					title: "Rename Security Key",
+					input: "text",
+					inputLabel: "New name",
+					inputValue: currentName,
+					inputPlaceholder: "Enter new name...",
+					showCancelButton: true,
+					confirmButtonText: "Save",
+				});
+				if (!isConfirmed || !value?.trim()) return null;
+				const newName = value.trim();
+				// @ts-expect-error
+				window.Swal.fire({
+					icon: "success",
+					title: "Security key renamed!",
+					text: newName,
+					timer: 3000,
+					timerProgressBar: true,
+					showConfirmButton: false,
+					toast: true,
+					position: "bottom-end",
+				});
+				return newName;
+			},
+		});
+
+		return (results[0]?.result as string | null) ?? null;
+	}),
+);
+
 onMessage("searchUsersByActivity", ({ data: query }) =>
 	handle(async () => {
 		const config = await withApi("kiln_api", "extension");

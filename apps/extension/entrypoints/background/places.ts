@@ -31,8 +31,7 @@ import {
 
 function renameInZip(
 	buffer: ArrayBuffer,
-	oldName: string,
-	newName: string,
+	renames: Record<string, string>,
 ): ArrayBuffer {
 	const bytes = new Uint8Array(buffer);
 	const view = new DataView(buffer);
@@ -48,8 +47,6 @@ function renameInZip(
 
 	const centralDirOffset = view.getUint32(eocdOffset + 16, true);
 	const totalEntries = view.getUint16(eocdOffset + 10, true);
-
-	const newNameBytes = new TextEncoder().encode(newName);
 
 	const chunks: Uint8Array[] = [];
 	const localHeaderOffsets: number[] = [];
@@ -83,10 +80,11 @@ function renameInZip(
 		const lhFlags = view.getUint16(localOffset + 6, true);
 		const hasDataDescriptor = (lhFlags & 0x0008) !== 0;
 
-		const isTarget = entryName === oldName;
-		const finalNameBytes = isTarget
-			? newNameBytes
-			: new TextEncoder().encode(entryName);
+		const renamedTo = renames[entryName];
+		const finalNameBytes =
+			renamedTo !== undefined
+				? new TextEncoder().encode(renamedTo)
+				: new TextEncoder().encode(entryName);
 
 		localHeaderOffsets.push(writeOffset);
 
@@ -132,10 +130,11 @@ function renameInZip(
 		);
 		const cdEntrySize = 46 + cdNameLen + cdExtraLen + cdCommentLen;
 
-		const isTarget = entryName === oldName;
-		const finalNameBytes = isTarget
-			? newNameBytes
-			: new TextEncoder().encode(entryName);
+		const renamedTo = renames[entryName];
+		const finalNameBytes =
+			renamedTo !== undefined
+				? new TextEncoder().encode(renamedTo)
+				: new TextEncoder().encode(entryName);
 
 		const cdFixed = new Uint8Array(46);
 		cdFixed.set(bytes.subarray(cdOffset, cdOffset + 46));
@@ -274,7 +273,10 @@ onMessage("downloadPlaceFile", async ({ data: id }) => {
 
 	if (isZip) {
 		try {
-			finalBuffer = renameInZip(arrayBuffer, "meta.json", "project.ptproj");
+			finalBuffer = renameInZip(arrayBuffer, {
+				"meta.json": "project.ptproj",
+				"index.json": "file-lock.json",
+			});
 		} catch (e) {
 			console.error("ZIP rename failed:", e);
 		}
@@ -373,7 +375,6 @@ onMessage("openCreator", async ({ data: version }) => {
 		world: "MAIN",
 		args: [version],
 		func: async (version: 1 | 2) => {
-			console.log("running!");
 			const getCookie = (name: string) => {
 				const value = `; ${document.cookie}`;
 				const parts = value.split(`; ${name}=`);
@@ -627,6 +628,52 @@ onMessage("deleteMyPlaceReview", ({ data: { placeId, userId } }) =>
 		withAuthSession(userId, (token, config) =>
 			safeFetch(
 				`${config.resolvedUrls.extension}places/reviews/${placeId}/me`,
+				null,
+				{
+					method: "DELETE",
+					headers: {
+						Authorization: `Bearer ${token}`,
+						"x-kiln-version": browser.runtime.getManifest().version,
+					},
+				},
+			),
+		),
+	),
+);
+
+onMessage("submitReviewReply", ({ data: { userId, reviewId, body } }) =>
+	handle(async () => {
+		try {
+			return await withAuthSession(userId, (token, config) =>
+				safeFetch(
+					`${config.resolvedUrls.extension}places/reviews/${reviewId}/replies`,
+					Extension.PlaceReviewReplyApi,
+					{
+						method: "POST",
+						body: JSON.stringify({ body }),
+						headers: {
+							Authorization: `Bearer ${token}`,
+							"x-kiln-version": browser.runtime.getManifest().version,
+						},
+					},
+				),
+			);
+		} catch (err) {
+			await showReviewErrorAlert(
+				err instanceof ApiHttpError
+					? err.message
+					: "Something went wrong submitting your reply.",
+			);
+			throw err;
+		}
+	}),
+);
+
+onMessage("deleteReviewReply", ({ data: { userId, replyId } }) =>
+	handle(() =>
+		withAuthSession(userId, (token, config) =>
+			safeFetch(
+				`${config.resolvedUrls.extension}places/reviews/replies/${replyId}`,
 				null,
 				{
 					method: "DELETE",

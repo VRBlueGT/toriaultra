@@ -2249,10 +2249,14 @@ export async function openThemeEditorSidebar(): Promise<void> {
 				col.className = "col-6 col-md-4 col-lg-3";
 				col.innerHTML = `
 					<div class="card h-100" style="cursor:pointer;" data-theme-id="${theme.id}">
-						<div style="height:48px;display:flex;border-radius:var(--bs-card-border-radius) var(--bs-card-border-radius) 0 0;overflow:hidden;">
+						${
+							theme.thumbnailUrl
+								? `<img src="${theme.thumbnailUrl}" loading="lazy" style="height:96px;width:100%;object-fit:cover;border-radius:var(--bs-card-border-radius) var(--bs-card-border-radius) 0 0;" />`
+								: `<div style="height:48px;display:flex;border-radius:var(--bs-card-border-radius) var(--bs-card-border-radius) 0 0;overflow:hidden;">
 							<div style="flex:1;background:${theme.navbarColor};"></div>
 							<div style="flex:1;background:${theme.accentColor};"></div>
-						</div>
+						</div>`
+						}
 						<div class="card-body py-2 px-2">
 							<div class="fw-semibold small text-truncate">${theme.name}</div>
 							<div class="d-flex align-items-center justify-content-between">

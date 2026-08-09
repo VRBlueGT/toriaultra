@@ -1546,3 +1546,96 @@ export function avatarSandbox(
 		outfits = newValue ?? [];
 	});
 }
+
+export function outfitManagement() {
+	const outfitsTab = document.getElementById("outfits-tab");
+	if (!outfitsTab) return;
+
+	const _outfitsTab: HTMLElement = outfitsTab;
+
+	function processOutfitCards() {
+		if (!_outfitsTab.classList.contains("active")) return;
+
+		const wardrobeAssets = document.getElementById("wardrobe-assets");
+		if (!wardrobeAssets) return;
+
+		const cards =
+			wardrobeAssets.querySelectorAll<HTMLElement>("div.col-auto.mb-3");
+
+		cards.forEach((card) => {
+			if (card.querySelector(".kiln-outfit-dropdown")) return;
+
+			const deleteBtn = card.querySelector<HTMLElement>(
+				'[onclick^="deleteOutfit("]',
+			);
+			if (!deleteBtn) return;
+
+			const match = deleteBtn
+				.getAttribute("onclick")
+				?.match(/deleteOutfit\((\d+)\)/);
+			if (!match) return;
+			const outfitId = parseInt(match[1], 10);
+
+			const nameEl = card.querySelector("h6.text-truncate");
+			if (!nameEl) return;
+			const outfitName = nameEl.textContent?.trim() ?? "";
+
+			const imageCard = card.querySelector<HTMLElement>(".card.mb-2 .p-2");
+			if (!imageCard) return;
+			imageCard.style.position = "relative";
+
+			imageCard.innerHTML += `
+<div class="btn-group position-absolute" style="bottom: 4px; right: 4px; z-index: 1;">
+  <button type="button" class="btn btn-sm btn-secondary dropdown-toggle kiln-outfit-dropdown" data-bs-toggle="dropdown" aria-expanded="false" style="line-height: 1; padding: 2px 6px; font-size: 0.75rem;">
+    ...
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end" style="min-width: 100px;">
+    <li><a class="dropdown-item text-secondary kiln-outfit-rename disabled" href="#"><i class="fa-solid fa-signature"></i> Rename (UNAVAILABLE)</a></li>
+    <li><a class="dropdown-item text-warning kiln-outfit-update" href="#"><i class="fa-solid fa-upload"></i> Update</a></li>
+  </ul>
+</div>`;
+
+			imageCard
+				.querySelector<HTMLElement>(".kiln-outfit-rename")!
+				.addEventListener("click", (e) => {
+					e.preventDefault();
+				});
+
+			imageCard
+				.querySelector<HTMLElement>(".kiln-outfit-update")!
+				.addEventListener("click", async (e) => {
+					e.preventDefault();
+					const result = await sendMessage("updateOutfit", {
+						id: outfitId,
+						name: outfitName,
+					});
+					if (result.ok) {
+						window.location.reload();
+					}
+				});
+		});
+
+		sendMessage("registerBootstrapElements");
+	}
+
+	const tabObserver = new MutationObserver(() => {
+		if (_outfitsTab.classList.contains("active")) {
+			processOutfitCards();
+		}
+	});
+	tabObserver.observe(_outfitsTab, {
+		attributes: true,
+		attributeFilter: ["class"],
+	});
+
+	const wardrobeAssets = document.getElementById("wardrobe-assets");
+	if (wardrobeAssets?.parentElement) {
+		const contentObserver = new MutationObserver(() => processOutfitCards());
+		contentObserver.observe(wardrobeAssets, {
+			childList: true,
+			subtree: false,
+		});
+	}
+
+	processOutfitCards();
+}

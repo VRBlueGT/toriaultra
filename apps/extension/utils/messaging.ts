@@ -34,6 +34,7 @@ export interface ProtocolMap {
 	getModelFile(id: number): string;
 	joinPlace(data: { placeId: number; serverId?: number; version: 1 | 2 }): void;
 	registerBootstrapElements(): void;
+	getStreakFreezeCount(): Promise<Result<number | null>>;
 	disableFeedAutoScroll(): void;
 	getFeed(page: number): Promise<Result<FeedApi>>;
 	getStoreListing(
@@ -293,6 +294,15 @@ export interface ProtocolMap {
 		placeId: number;
 		userId: number;
 	}): Promise<Result<null>>;
+	submitReviewReply(data: {
+		userId: number;
+		reviewId: string;
+		body: string;
+	}): Promise<Result<Extension.PlaceReviewReplyApi>>;
+	deleteReviewReply(data: {
+		userId: number;
+		replyId: string;
+	}): Promise<Result<null>>;
 
 	getRetroItems(page?: number): Promise<Result<Extension.RetroItemsApi>>;
 	getEventForItem(itemId: number): Promise<Result<Extension.EventForItemApi>>;
@@ -307,6 +317,12 @@ export interface ProtocolMap {
 	}): Promise<
 		Result<Record<string, { active: boolean; registeredAt: string | null }>>
 	>;
+
+	showSecurityKeyRenamePrompt(data: {
+		currentName: string;
+	}): Promise<Result<string | null>>;
+
+	updateOutfit(data: { id: number; name: string }): Promise<Result<unknown>>;
 }
 
 export const { sendMessage, onMessage } =

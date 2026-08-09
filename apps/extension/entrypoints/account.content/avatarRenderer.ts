@@ -58,18 +58,14 @@ async function loadImage(url: string): Promise<HTMLImageElement> {
 	});
 }
 
-// GLTFLoader.loadAsync() fetches via THREE's FileLoader, which wraps
-// response.body.getReader() in a manually constructed ReadableStream for
-// progress events. In Firefox, content scripts hit a Xray-wrapper bug where
-// touching that stream throws "Permission denied to access property
-// autoAllocateChunkSize". Fetching the bytes ourselves and using parse()
-// skips FileLoader's streaming path entirely.
 function loadGLB(loader: GLTFLoader, url: string): Promise<any> {
 	return fetch(url)
 		.then((r) => r.arrayBuffer())
 		.then(
 			(buf) =>
-				new Promise((resolve, reject) => loader.parse(buf, "", resolve, reject)),
+				new Promise((resolve, reject) =>
+					loader.parse(buf, "", resolve, reject),
+				),
 		);
 }
 

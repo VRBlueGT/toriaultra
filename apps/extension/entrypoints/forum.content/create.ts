@@ -17,8 +17,6 @@
 import { getProfanityFilter } from "@/utils/utilities";
 
 const DEFAULT_MAX_CHARS = 5000;
-// Temporarily disabled - matching against the live filter regexes is
-// producing unreliable highlight spans. Flip back on once that's resolved.
 const FILTER_HIGHLIGHTING_ENABLED = false;
 
 export function improvedForumComposer(
@@ -220,8 +218,6 @@ function initFilterHighlighting(
 
 	container.insertBefore(backdrop, textarea);
 	textarea.style.position = "relative";
-	// Some pages don't give the textarea a transparent background, which
-	// would otherwise fully hide the backdrop's highlights behind it.
 	textarea.style.backgroundColor = "transparent";
 
 	let filters: RegExp[] = [];
@@ -304,8 +300,6 @@ function findFilteredRanges(
 		}
 	}
 
-	// Some patterns' matches include a leading/trailing delimiter (e.g. a
-	// required space), which shouldn't visually bleed into the highlight.
 	return merged
 		.map(([start, end]): [number, number] => {
 			while (start < end && /\s/.test(text[start])) start++;

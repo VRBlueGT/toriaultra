@@ -31,9 +31,6 @@ import type {
 	UserDetails,
 } from "./types";
 
-/*
-  Extension
-*/
 export async function getConfig(): Promise<Extension.ExtensionConfig> {
 	const result = await sendMessage("getConfig").catch(() => null);
 	if (result?.ok) return result.data;
@@ -127,16 +124,8 @@ function normalizeFilterPattern(pattern: string): string {
 		.replace(/^(?:\.[*+])+/, "")
 		.replace(/(?:\.[*+])+$/, "");
 
-	// A leading `*` isn't valid regex (nothing precedes it to repeat), so
-	// entries written as glob-style wildcards (e.g. "*word*") would otherwise
-	// fail to compile entirely. An unanchored search already covers "anything
-	// before" for free, so just drop it.
 	normalized = normalized.replace(/^\*+/, "");
 
-	// Any `.*`/`.+` left at this point are internal, bridging two parts of the
-	// pattern (e.g. "word1.*word2" to flag two words appearing anywhere in the
-	// same message). Left unbounded, one match can span nearly the entire
-	// post; cap the gap so a match - and its highlight - stays localized.
 	const MAX_WILDCARD_SPAN = 20;
 	normalized = normalized
 		.replace(/\.\*/g, `.{0,${MAX_WILDCARD_SPAN}}`)
@@ -586,9 +575,6 @@ export async function migrateLegacySettings(): Promise<boolean> {
 	return true;
 }
 
-/*
-  Cache
-*/
 export async function pullCache(
 	key: string,
 	replenish: () => Promise<any>,
@@ -785,9 +771,6 @@ function timeAgo(overlap: number) {
 	return "just now";
 }
 
-/*
-  Polytoria
-*/
 export function getUserDetails(): Promise<UserDetails | null> {
 	return new Promise((resolve) => {
 		function tryResolve() {
@@ -994,9 +977,6 @@ export function parseTrade(root: Element | Document): ParsedTrade {
 	};
 }
 
-/*
-	Other
-*/
 export function parseFormattedNumber(value: string): number {
 	return Number(value.replace(/,/g, ""));
 }
@@ -1050,16 +1030,6 @@ function parseNotificationRelativeTime(text: string): Date | null {
 	return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-/**
- * Low-level primitive: paints a single fabricated notification into the
- * notifications tray in the correct chronological position, inferring the
- * position of existing entries from their displayed relative time text
- * (there's no exact timestamp available in the DOM to compare against).
- *
- * This is DOM-only and forgotten on the next page load. Most callers should
- * use `fireKilnNotification` (to persist one) and let `renderKilnNotifications`
- * paint it instead of calling this directly.
- */
 export function injectNotification(notification: FabricatedNotification): void {
 	const popup = document.querySelector<HTMLElement>(".notifications-popup");
 	if (!popup) return;
@@ -1099,28 +1069,14 @@ export function injectNotification(notification: FabricatedNotification): void {
 }
 
 export interface KilnNotificationInput {
-	/** Unique id for the thing this notification is about, e.g.
-	 *  `place-update:${placeId}`. Firing the same id again updates the
-	 *  existing notification in place rather than creating a duplicate. */
 	id: string;
 	message: string;
 	date: Date;
 	url: string;
 	avatarUrl: string;
-	/** Value identifying *this* occurrence of the event (e.g. the place's
-	 *  `updatedAt`). If it matches the last time this id was fired, the
-	 *  existing read/unread state is kept; if it differs, a fresh unread
-	 *  notification is created. Defaults to `date`'s ISO string. */
 	dedupeValue?: string;
 }
 
-/**
- * Persists a fabricated Kiln notification so it survives across page loads
- * and stays in the tray (marked read) after `markKilnNotificationRead` is
- * called for it, instead of disappearing once its underlying condition
- * clears. Call `renderKilnNotifications` to actually paint stored
- * notifications into the tray.
- */
 export async function fireKilnNotification(
 	input: KilnNotificationInput,
 ): Promise<void> {
@@ -1140,8 +1096,6 @@ export async function fireKilnNotification(
 	await _kilnNotifications.setValue(notifications);
 }
 
-/** Marks a previously-fired Kiln notification as read without removing it,
- *  so it remains visible (without "unread" styling) on future renders. */
 export async function markKilnNotificationRead(id: string): Promise<void> {
 	const notifications = await _kilnNotifications.getValue();
 	const existing = notifications[id];
@@ -1151,13 +1105,6 @@ export async function markKilnNotificationRead(id: string): Promise<void> {
 	}
 }
 
-/** Paints every persisted Kiln notification into the notifications tray.
- *  Safe to call unconditionally on any page — it's a no-op if the tray or
- *  storage is empty.
- *
- *  Fabricated notifications older than the oldest real notification already
- *  in the tray are skipped, so a stale entry (e.g. a place update from a
- *  month ago) doesn't linger at the bottom of an otherwise-recent list. */
 export async function renderKilnNotifications(): Promise<void> {
 	const popup = document.querySelector<HTMLElement>(".notifications-popup");
 	if (!popup) return;
@@ -1188,4 +1135,94 @@ export async function renderKilnNotifications(): Promise<void> {
 			unread: !notification.read,
 		});
 	}
+}
+
+const AUDIO_CIRCUMFERENCE = 2 * Math.PI * 45;
+
+export function createAudioPlayButton(
+	assetId: number,
+	activeAudio: { current: HTMLAudioElement | null },
+) {
+	const cont = document.createElement("div");
+	cont.className =
+		"audioPlayButtonCont rounded-4 bg-dark d-flex justify-content-center align-items-center";
+	cont.style.cssText = "width:100%;aspect-ratio:1/1;font-size:0";
+	cont.innerHTML = `
+		<button type="button" class="audioPlayButton" style="font-size: 28px;">
+			<svg class="progress-circle" width="100%" height="100%" viewBox="0 0 100 100">
+				<circle class="progress-bar" cx="50" cy="50" r="45" stroke="#007aff" stroke-width="0" fill="none" stroke-dasharray="0, ${AUDIO_CIRCUMFERENCE}"></circle>
+			</svg>
+			<i class="buttonIcon fas fa-play"></i>
+		</button>
+	`;
+
+	const button = cont.querySelector<HTMLButtonElement>(".audioPlayButton")!;
+	const icon = cont.querySelector<HTMLElement>(".buttonIcon")!;
+	const circle = cont.querySelector<SVGCircleElement>(".progress-bar")!;
+
+	let audio: HTMLAudioElement | null = null;
+	let loading = false;
+
+	const onTimeUpdate = () => {
+		if (!audio?.duration) return;
+		const progress = audio.currentTime / audio.duration;
+		const dashOffset = AUDIO_CIRCUMFERENCE * (1 - progress);
+		circle.setAttribute(
+			"stroke-dasharray",
+			`${AUDIO_CIRCUMFERENCE}, ${AUDIO_CIRCUMFERENCE}`,
+		);
+		circle.setAttribute("stroke-dashoffset", String(dashOffset));
+	};
+
+	const setPlaying = (playing: boolean) => {
+		icon.classList.toggle("fa-play", !playing);
+		icon.classList.toggle("fa-pause", playing);
+		circle.setAttribute("stroke-width", playing ? "10%" : "0");
+		if (!playing)
+			circle.setAttribute("stroke-dasharray", `0, ${AUDIO_CIRCUMFERENCE}`);
+	};
+
+	button.addEventListener("click", async (e) => {
+		e.preventDefault();
+		e.stopPropagation();
+		if (loading) return;
+
+		if (audio) {
+			if (audio.paused) {
+				if (activeAudio.current && activeAudio.current !== audio)
+					activeAudio.current.pause();
+				activeAudio.current = audio;
+				await audio.play();
+			} else {
+				audio.pause();
+			}
+			return;
+		}
+
+		loading = true;
+		icon.className = "buttonIcon fas fa-spinner fa-spin";
+
+		const result = await sendMessage("getAssetAudio", assetId);
+		loading = false;
+		if (!result.ok || !result.data.url) {
+			icon.className = "buttonIcon fas fa-play";
+			return;
+		}
+
+		icon.className = "buttonIcon fas fa-play";
+		audio = new Audio(result.data.url);
+		audio.addEventListener("timeupdate", onTimeUpdate);
+		audio.addEventListener("play", () => setPlaying(true));
+		audio.addEventListener("pause", () => setPlaying(false));
+		audio.addEventListener("ended", () => {
+			if (audio) audio.currentTime = 0;
+			setPlaying(false);
+		});
+
+		if (activeAudio.current) activeAudio.current.pause();
+		activeAudio.current = audio;
+		await audio.play();
+	});
+
+	return cont;
 }

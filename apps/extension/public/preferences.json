@@ -35,6 +35,12 @@
 			"name": "Development",
 			"description": "Tools to assist world developers.",
 			"icon": "fas fa-code"
+		},
+		{
+			"id": "deprecated",
+			"name": "Deprecated",
+			"description": "Features that are on their way out and will be removed in a future update.",
+			"icon": "fas fa-triangle-exclamation"
 		}
 	],
 	"preferences": [
@@ -1959,7 +1965,8 @@
 			"id": "customBodyColorHexCodes",
 			"defaultEnabled": true,
 			"tags": [
-				"utility"
+				"utility",
+				"deprecated"
 			]
 		},
 		{
@@ -2549,6 +2556,38 @@
 			"tags": [
 				"utility",
 				"development",
+				"new"
+			]
+		},
+		{
+			"name": "Security Key Renaming",
+			"desc": "Rename your account's security keys for clean management.",
+			"id": "securityKeyRenaming",
+			"defaultEnabled": true,
+			"tags": [
+				"utility",
+				"new"
+			]
+		},
+		{
+			"name": "Outfit Management",
+			"desc": "Adds options to rename and update saved outfits on the avatar page. Updating saves the outfit with the same name, just with the state of your current avatar.",
+			"id": "outfitManagement",
+			"defaultEnabled": true,
+			"tags": [
+				"utility",
+				"expression",
+				"new"
+			],
+			"hide": true
+		},
+		{
+			"name": "Streak Freezes Counter in Navbar",
+			"desc": "Quickly see how many streak freezes you have next to the streak counter in the navbar.",
+			"id": "streakFreezeDisplay",
+			"defaultEnabled": false,
+			"tags": [
+				"utility",
 				"new"
 			]
 		}

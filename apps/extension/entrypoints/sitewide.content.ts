@@ -215,6 +215,14 @@ export default defineContentScript({
 					if (values.enabled.includes("reenableSearch")) {
 						reenableSearch();
 					}
+
+					if (values.enabled.includes("advancedForumSearch")) {
+						linkForumSearchToAdvanced();
+					}
+
+					if (values.enabled.includes("streakFreezeDisplay")) {
+						streakFreezeDisplay();
+					}
 				});
 			});
 
@@ -728,20 +736,20 @@ function friendReqNotifActions() {
 		const popoutWidth = Math.min(200, window.innerWidth - 20);
 		const gap = 10;
 		const popoutHeight = 140;
-		
+
 		let top = rect.top + rect.height / 2 - popoutHeight / 2;
 		top = Math.max(10, Math.min(top, window.innerHeight - popoutHeight - 10));
-		
+
 		let left = rect.left - popoutWidth - gap;
-		
+
 		if (left < 10) {
 			left = rect.right + gap;
 		}
-		
+
 		if (left + popoutWidth > window.innerWidth - 10) {
 			left = window.innerWidth - popoutWidth - 10;
 		}
-		
+
 		popout.style.top = `${top}px`;
 		popout.style.left = `${left}px`;
 		popout.style.width = `${popoutWidth}px`;
@@ -1156,4 +1164,54 @@ function reenableSearch() {
 			highlightSection.classList.remove("d-none");
 		}, 250);
 	});
+}
+
+function linkForumSearchToAdvanced(): void {
+	const forumSearchItem = document.querySelector<HTMLElement>(
+		'.search-item[data-searchurl="/forum/search?q=%v"]',
+	);
+	if (!forumSearchItem) return;
+
+	forumSearchItem.dataset.searchurl = "/forum/?kiln-adv-search&q=%v";
+}
+
+function streakFreezeDisplay(): void {
+	const streakSpan = document.querySelector<HTMLElement>(
+		".nav-link .text-streak",
+	);
+	const streakItem = streakSpan?.closest<HTMLElement>(
+		'li[data-bs-toggle="tooltip"]',
+	);
+	if (!streakSpan || !streakItem) return;
+
+	const raw =
+		streakItem.getAttribute("data-bs-original-title") ||
+		streakItem.getAttribute("data-bs-title") ||
+		streakItem.getAttribute("title");
+
+	(async () => {
+		const result = await sendMessage("getStreakFreezeCount");
+		if (!result.ok || result.data == null) return;
+
+		const freezeCount = result.data;
+
+		streakSpan.insertAdjacentHTML(
+			"afterend",
+			`<small class="text-primary" style="margin-left: 10px;"><i class="fas fa-snowflake me-1"></i>${freezeCount}</small>`,
+		);
+
+		if (!raw) return;
+
+		const freezeText = `<p class="mb-0 mt-1"><i class="fas fa-snowflake me-1"></i>${freezeCount} streak freeze${freezeCount === 1 ? "" : "s"} left</p>`;
+		const updated = raw.replace(/<\/div>\s*$/, `${freezeText}</div>`);
+		if (updated === raw) return;
+
+		streakItem.setAttribute("data-bs-original-title", updated);
+		streakItem.setAttribute("title", updated);
+		if (streakItem.hasAttribute("data-bs-title")) {
+			streakItem.setAttribute("data-bs-title", updated);
+		}
+
+		sendMessage("registerBootstrapElements");
+	})();
 }

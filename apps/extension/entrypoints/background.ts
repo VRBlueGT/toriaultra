@@ -20,6 +20,7 @@ import { cache, migrateThemesToLocal } from "@/utils/storage";
 import {
 	ApiDisabledError,
 	ApiHttpError,
+	handle,
 	NoSessionError,
 	safeFetch,
 	withApi,
@@ -256,6 +257,28 @@ onMessage("registerBootstrapElements", async () => {
 		},
 	});
 });
+
+onMessage("getStreakFreezeCount", () =>
+	handle(async () => {
+		const tabs = await browser.tabs.query({
+			active: true,
+			currentWindow: true,
+		});
+		if (!tabs[0]?.id) throw new Error("No active tab");
+
+		const results = await browser.scripting.executeScript({
+			target: { tabId: tabs[0].id },
+			world: "MAIN",
+			func: () => {
+				//@ts-expect-error
+				const count = window.streakFreezeCount;
+				return typeof count === "number" ? count : null;
+			},
+		});
+
+		return (results[0]?.result ?? null) as number | null;
+	}),
+);
 
 onMessage("disableFeedAutoScroll", async () => {
 	const tabs = await browser.tabs.query({ active: true, currentWindow: true });

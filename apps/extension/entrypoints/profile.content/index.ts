@@ -106,7 +106,12 @@ export default defineContentScript({
 							values.config.userLabels?.inactiveDays ?? 30,
 							values.config.userLabels?.ogYear ?? 2023,
 						);
-					if (values.enabled.includes("outfitCost")) view.outfitCost(userId);
+					if (values.enabled.includes("outfitCost"))
+						view.outfitCost(
+							userId,
+							values.enabled.includes("irlBrickPrice"),
+							values.config.irlBrickPrice.currency,
+						);
 					if (values.enabled.includes("rankingPositions"))
 						view.rankingPositions(userId);
 					if (values.enabled.includes("tgdStats"))
@@ -127,6 +132,23 @@ export default defineContentScript({
 					}
 					if (values.enabled.includes("userCreationsTab")) {
 						view.creationsTab(userId);
+
+						/*
+						const style = document.createElement("style");
+						style.textContent = `
+							#user-info-tabs {
+								flex-wrap: nowrap;
+								overflow-x: auto;
+								overflow-y: hidden;
+								scrollbar-width: none;
+								-ms-overflow-style: none;
+							}
+							#user-info-tabs::-webkit-scrollbar {
+								display: none;
+							}
+						`;
+						document.head.appendChild(style);
+						*/
 					}
 					if (values.enabled.includes("userNotes")) {
 						view.userNotes(userId);

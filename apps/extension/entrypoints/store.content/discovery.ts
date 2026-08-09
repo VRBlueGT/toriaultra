@@ -931,7 +931,7 @@ function wireLegacyDiscovery(root: HTMLElement): void {
 	const lastBtn = root.querySelector<HTMLElement>("#pagination-last")!;
 	const currentPageEl = root.querySelector<HTMLElement>("#pagination-current")!;
 
-	const ITEMS_PER_VIEW = 15; // 3 rows of 5
+	const ITEMS_PER_VIEW = 15;
 
 	const chunk = <T>(arr: T[], size: number): T[][] => {
 		const out: T[][] = [];

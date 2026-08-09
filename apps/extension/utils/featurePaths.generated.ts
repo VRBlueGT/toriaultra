@@ -3,6 +3,7 @@
 
 export const PATH_FEATURES = {
 	"https://polytoria.com/*": [
+		"advancedForumSearch",
 		"friendReqNotifActions",
 		"hideNotificationBadges",
 		"hideUserAds",
@@ -12,6 +13,7 @@ export const PATH_FEATURES = {
 		"membershipThemes",
 		"reenableSearch",
 		"stickyNavbar",
+		"streakFreezeDisplay",
 		"themeCreator",
 		"userAliases"
 	],
@@ -44,6 +46,7 @@ export const PATH_FEATURES = {
 		"disableInfiniteScrolling",
 		"favoritedPlaces",
 		"improvedAchievements",
+		"irlBrickPrice",
 		"legacyWorldViewLayout",
 		"placeConsumablesTab",
 		"placeManagement",
@@ -103,7 +106,9 @@ export const PATH_FEATURES = {
 		"avatarSandbox",
 		"customBodyColorHexCodes",
 		"improvedFriendLists",
-		"irlBrickPrice"
+		"irlBrickPrice",
+		"outfitManagement",
+		"securityKeyRenaming"
 	],
 	"https://polytoria.com/places": [
 		"activeChallengesDisplay",
@@ -113,6 +118,7 @@ export const PATH_FEATURES = {
 		"disableInfiniteScrolling",
 		"favoritedPlaces",
 		"improvedAchievements",
+		"irlBrickPrice",
 		"legacyWorldViewLayout",
 		"placeConsumablesTab",
 		"placeManagement",
@@ -132,6 +138,7 @@ export const PATH_FEATURES = {
 		"disableInfiniteScrolling",
 		"favoritedPlaces",
 		"improvedAchievements",
+		"irlBrickPrice",
 		"legacyWorldViewLayout",
 		"placeConsumablesTab",
 		"placeManagement",
@@ -175,6 +182,7 @@ export const PATH_FEATURES = {
 		"classicAvatarPerspective",
 		"collectibleOwnerLabels",
 		"inventoryCollectibles",
+		"irlBrickPrice",
 		"outfitCost",
 		"pinnedAchievements",
 		"rankingPositions",
@@ -191,6 +199,7 @@ export const PATH_FEATURES = {
 		"classicAvatarPerspective",
 		"collectibleOwnerLabels",
 		"inventoryCollectibles",
+		"irlBrickPrice",
 		"outfitCost",
 		"pinnedAchievements",
 		"rankingPositions",
@@ -207,6 +216,7 @@ export const PATH_FEATURES = {
 		"classicAvatarPerspective",
 		"collectibleOwnerLabels",
 		"inventoryCollectibles",
+		"irlBrickPrice",
 		"outfitCost",
 		"pinnedAchievements",
 		"rankingPositions",

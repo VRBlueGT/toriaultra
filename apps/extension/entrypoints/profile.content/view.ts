@@ -15,7 +15,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import type { Extension, PolyTrack, Polytoria } from "@kiln/schemas";
-import { _userNotes } from "@/utils/storage";
+import { _savedThemes, _userNotes, preferences } from "@/utils/storage";
+import { applyKilnTheme, THEME_PRESETS } from "@/utils/theme";
 
 export async function pinnedAchievements(userId: number) {
 	const result = await sendMessage("getPinnedAchievements", userId);
@@ -175,7 +176,11 @@ export async function displayId(userId: number, blocked: boolean = false) {
 	}
 }
 
-export async function outfitCost(userId: number) {
+export async function outfitCost(
+	userId: number,
+	includeIRLRevenue: boolean,
+	irlCurrency: CurrencyCode,
+) {
 	const calculateBtn = document.createElement("small");
 	calculateBtn.classList.add("fw-normal");
 	calculateBtn.style.letterSpacing = "0px";
@@ -231,8 +236,7 @@ export async function outfitCost(userId: number) {
 		outfit.offsale += outfit.timed;
 		outfit.timed = 0;
 
-		console.log("[Kiln] Outfit breakdown: ", outfit);
-		calculateBtn.innerHTML = `<span class="text-success"><i class="pi pi-brick me-2"></i> approx. ${outfit.cost.toLocaleString()} brick(s) <i class="fa-solid fa-circle-info" data-bs-toggle="tooltip" data-bs-title="${[outfit.collectibles ? `${outfit.collectibles} collectibles` : "", outfit.offsale ? `${outfit.offsale} offsale items` : ""].filter(Boolean).join(", ")}; profile themes excluded"></i></span>`;
+		calculateBtn.innerHTML = `<span class="text-success"><i class="pi pi-brick me-2"></i> ${outfit.collectibles > 0 ? "approx. " : ""}${outfit.cost.toLocaleString()} brick(s) ${includeIRLRevenue && outfit.cost > 0 ? `<span class="text-muted">OR ${await bricksToCurrency(outfit.cost, irlCurrency)}</span>` : ""}</span> <i class="fa-solid fa-circle-info" data-bs-toggle="tooltip" data-bs-title="${[outfit.collectibles ? `${outfit.collectibles} collectibles` : "", outfit.offsale ? `${outfit.offsale} offsale items` : ""].filter(Boolean).join(", ")}; profile themes excluded"></i>`;
 		sendMessage("registerBootstrapElements");
 	};
 
@@ -299,11 +303,12 @@ export async function greatDivideStats(userId: number) {
 
 	const kdrRaw = stats.kills / stats.deaths;
 	const KDR = Number.isNaN(kdrRaw) ? "N/A" : kdrRaw.toFixed(2);
-	const kdrClass = !Number.isNaN(kdrRaw) && kdrRaw > 1
-		? "text-success"
-		: !Number.isNaN(kdrRaw) && kdrRaw !== 0
-			? "text-danger"
-			: "";
+	const kdrClass =
+		!Number.isNaN(kdrRaw) && kdrRaw > 1
+			? "text-success"
+			: !Number.isNaN(kdrRaw) && kdrRaw !== 0
+				? "text-danger"
+				: "";
 
 	if (stats.team === "phantoms") {
 		card.style.backgroundImage =
@@ -560,108 +565,497 @@ export async function avatarVersions(userId: number) {
 	sendMessage("registerBootstrapElements");
 }
 
+const CREATION_TYPE_META: Record<string, { icon: string; label: string }> = {
+	model: { icon: "fad fa-cubes", label: "Models" },
+	audio: { icon: "fad fa-volume-up", label: "Audio" },
+	decal: { icon: "fad fa-image", label: "Images" },
+	mesh: { icon: "fad fa-cube", label: "Meshes" },
+	hat: { icon: "fas fa-hat-cowboy", label: "Hats" },
+	tool: { icon: "fas fa-wrench", label: "Tools" },
+	face: { icon: "fas fa-smile", label: "Faces" },
+	clothing: { icon: "fas fa-tshirt", label: "Clothing" },
+	gamePass: { icon: "fas fa-certificate", label: "Game Passes" },
+	achievement: { icon: "fas fa-medal", label: "Achievements" },
+	body: { icon: "fas fa-person-limbs-wide", label: "Bodies" },
+	profileTheme: { icon: "fas fa-brush", label: "Profile Themes" },
+	consumable: { icon: "fas fa-flask", label: "Consumables" },
+};
+
+function creationTypeLabel(type: string) {
+	return (
+		CREATION_TYPE_META[type]?.label ??
+		type
+			.replace(/([a-z])([A-Z])/g, "$1 $2")
+			.replace(/^\w/, (c) => c.toUpperCase())
+	);
+}
+
+function creationTypeIcon(type: string) {
+	return CREATION_TYPE_META[type]?.icon ?? "fas fa-cube";
+}
+
+const CREATIONS_QUERY_PARAM = "kiln-creations";
+
+function getProfileContainer(): HTMLElement | null {
+	const anchor = document.getElementsByClassName("user-right")[0];
+	return anchor?.closest<HTMLElement>(".container") ?? null;
+}
+
+function getProfileUsername(): string {
+	const el = document.querySelector<HTMLElement>(
+		'.text-themeglow [class^="userlink-"]',
+	);
+	return el?.innerText.trim() ?? "";
+}
+
+function getProfileThemeStyle(): HTMLStyleElement | null {
+	let wrapper = document.querySelector<HTMLElement>(
+		'div[style*="min-height: 60vh"]',
+	);
+	if (!wrapper) {
+		wrapper =
+			Array.from(document.getElementsByTagName("div")).find(
+				(div) => div.style.minHeight === "60vh",
+			) ?? null;
+	}
+	return wrapper?.querySelector("style") ?? null;
+}
+
+function getStickyNavbar(): HTMLElement | null {
+	return document.querySelector<HTMLElement>(
+		".navbar.navbar-expand-lg.navbar-light.bg-navbar.nav-topbar",
+	);
+}
+
+function disableNavbarBlur(navbar: HTMLElement) {
+	const state = {
+		backgroundColor: navbar.style.backgroundColor,
+		backdropFilter: navbar.style.backdropFilter,
+		webkitBackdropFilter: navbar.style.getPropertyValue(
+			"-webkit-backdrop-filter",
+		),
+	};
+
+	navbar.style.backgroundColor = "";
+	navbar.style.backdropFilter = "";
+	navbar.style.removeProperty("-webkit-backdrop-filter");
+
+	return () => {
+		navbar.style.backgroundColor = state.backgroundColor;
+		navbar.style.backdropFilter = state.backdropFilter;
+		if (state.webkitBackdropFilter) {
+			navbar.style.setProperty(
+				"-webkit-backdrop-filter",
+				state.webkitBackdropFilter,
+			);
+		}
+	};
+}
+
+async function enableKilnTheme(): Promise<boolean> {
+	const alreadyActive = !!document.getElementById("kiln-custom-theme");
+
+	const values = await preferences.getPreferences();
+	if (!values.enabled.includes("themeCreator")) return alreadyActive;
+
+	const activeId = values.config.themeCreator.activeThemeId || "default";
+	if (activeId === "default") return alreadyActive;
+
+	if (activeId in THEME_PRESETS) {
+		applyKilnTheme(THEME_PRESETS[activeId]);
+	} else {
+		const saved = await _savedThemes.getValue();
+		const theme = saved.find((t) => t.id === activeId);
+		applyKilnTheme(theme ?? null);
+	}
+
+	return alreadyActive;
+}
+
+async function showCreationsPage(userId: number) {
+	const ITEMS_PER_PAGE = 28;
+
+	const container = getProfileContainer();
+	if (!container || container.querySelector(".kiln-creations-page")) return;
+
+	const originalTitle = document.title;
+	const basePath = window.location.pathname;
+	const username = getProfileUsername();
+
+	const existingChildren = Array.from(container.children) as HTMLElement[];
+	for (const child of existingChildren) child.style.display = "none";
+
+	const profileThemeStyle = getProfileThemeStyle();
+	if (profileThemeStyle) profileThemeStyle.disabled = true;
+	const hadKilnTheme = await enableKilnTheme();
+
+	const navbar = getStickyNavbar();
+	const restoreNavbarBlur = navbar ? disableNavbarBlur(navbar) : null;
+
+	const kilnBadge = document.createElement("span");
+	kilnBadge.classList.add("badge", "bg-warning", "mb-2");
+	kilnBadge.textContent = "Kiln";
+	container.prepend(kilnBadge);
+
+	const page = document.createElement("div");
+	page.className = "kiln-creations-page px-3 px-lg-0";
+	page.innerHTML = `
+		<nav aria-label="breadcrumb">
+			<ol class="breadcrumb">
+				<li class="breadcrumb-item"><a class="text-muted" href="/users">People</a></li>
+				<li class="breadcrumb-item"><a class="text-muted" data-kiln="back-link"></a></li>
+				<li class="breadcrumb-item active" aria-current="page"><span class="text-light">Creations</span></li>
+			</ol>
+		</nav>
+		<div class="d-flex align-items-center justify-content-between">
+			<h4 class="mb-0"></h4>
+			<button type="button" class="btn btn-sm btn-outline-secondary" data-kiln="creations-back">
+				<i class="fas fa-arrow-left me-1"></i>Back to Profile
+			</button>
+		</div>
+	`;
+	const backLink = page.querySelector<HTMLAnchorElement>(
+		'[data-kiln="back-link"]',
+	)!;
+	backLink.href = basePath;
+	backLink.textContent = username || "Profile";
+	page.querySelector("h4")!.textContent = username
+		? `${username}'s creations`
+		: "Creations";
+	kilnBadge.insertAdjacentElement("afterend", page);
+
+	const hr = document.createElement("hr");
+	hr.classList.add("mb-4");
+	page.insertAdjacentElement("afterend", hr);
+
+	const row = document.createElement("div");
+	row.className = "row";
+	row.innerHTML = `<div class="col-12 text-center py-4"><i class="fas fa-spinner fa-spin"></i></div>`;
+	hr.insertAdjacentElement("afterend", row);
+
+	const restore = () => {
+		window.history.pushState(null, "", basePath);
+		document.title = originalTitle;
+		kilnBadge.remove();
+		page.remove();
+		hr.remove();
+		row.remove();
+		for (const child of existingChildren) child.style.display = "";
+		if (profileThemeStyle) profileThemeStyle.disabled = false;
+		if (!hadKilnTheme) applyKilnTheme(null);
+		restoreNavbarBlur?.();
+		activeAudio.current?.pause();
+	};
+
+	backLink.addEventListener("click", (e) => {
+		e.preventDefault();
+		restore();
+	});
+	page
+		.querySelector<HTMLButtonElement>('[data-kiln="creations-back"]')!
+		.addEventListener("click", restore);
+
+	document.title = username ? `${username}'s Creations` : "Creations";
+
+	let activeType = "all";
+	let searchQuery = "";
+	let currentPage = 1;
+	let searchDebounce: ReturnType<typeof setTimeout>;
+	const activeAudio: { current: HTMLAudioElement | null } = { current: null };
+
+	const first = await sendMessage("getUserCreations", {
+		userId,
+		page: 1,
+		limit: 100,
+	});
+	if (!first.ok) {
+		row.innerHTML = `<p class="text-muted text-center py-3">Failed to load creations.</p>`;
+		return;
+	}
+
+	const assets = [...first.data.assets];
+	const rest = await Promise.all(
+		Array.from({ length: first.data.pages - 1 }, (_, i) =>
+			sendMessage("getUserCreations", { userId, page: i + 2, limit: 100 }),
+		),
+	);
+	for (const result of rest) {
+		if (result.ok) assets.push(...result.data.assets);
+	}
+
+	if (assets.length === 0) {
+		row.innerHTML = `<p class="text-muted text-center py-3">No creations found.</p>`;
+		return;
+	}
+
+	row.innerHTML = `
+		<div class="col-12 col-lg-2 mb-3">
+			<ul class="nav nav-pills flex-column creations-type-nav"></ul>
+		</div>
+		<div class="col-12 col-lg-10">
+			<div class="input-group input-group-sm mb-3">
+				<input type="text" class="form-control" placeholder="Search creations...">
+				<button class="btn btn-secondary" type="button">
+					<i class="fas fa-search"></i>
+				</button>
+			</div>
+			<div class="creations-results"></div>
+		</div>
+	`;
+
+	const typeNav = row.querySelector<HTMLUListElement>(".creations-type-nav")!;
+	const results = row.querySelector<HTMLDivElement>(".creations-results")!;
+	const searchInput = row.querySelector<HTMLInputElement>("input")!;
+	const searchBtn = row.querySelector<HTMLButtonElement>("button")!;
+
+	const presentTypes = [...new Set(assets.map((a) => a.type))].sort((a, b) => {
+		const order = Object.keys(CREATION_TYPE_META);
+		const ai = order.indexOf(a);
+		const bi = order.indexOf(b);
+		if (ai === -1 && bi === -1) return a.localeCompare(b);
+		if (ai === -1) return 1;
+		if (bi === -1) return -1;
+		return ai - bi;
+	});
+
+	const addPill = (
+		type: string,
+		icon: string,
+		label: string,
+		count: number,
+	) => {
+		const li = document.createElement("li");
+		li.classList.add("nav-item");
+
+		const a = document.createElement("a");
+		a.href = "#!";
+		a.classList.add("nav-link");
+		if (type === activeType) a.classList.add("active");
+
+		const iconEl = document.createElement("i");
+		iconEl.classList.add(...icon.split(" "), "me-1");
+		a.appendChild(iconEl);
+
+		const labelEl = document.createElement("span");
+		labelEl.classList.add("pilltitle");
+		labelEl.textContent = label;
+		a.appendChild(labelEl);
+
+		const badge = document.createElement("span");
+		badge.classList.add("badge", "bg-secondary", "float-end");
+		badge.textContent = String(count);
+		a.appendChild(badge);
+
+		a.addEventListener("click", (e) => {
+			e.preventDefault();
+			if (activeType === type) return;
+			activeType = type;
+			currentPage = 1;
+			for (const link of typeNav.querySelectorAll(".nav-link"))
+				link.classList.remove("active");
+			a.classList.add("active");
+			renderResults();
+		});
+
+		li.appendChild(a);
+		typeNav.appendChild(li);
+	};
+
+	addPill("all", "fas fa-layer-group", "All", assets.length);
+	for (const type of presentTypes) {
+		addPill(
+			type,
+			creationTypeIcon(type),
+			creationTypeLabel(type),
+			assets.filter((a) => a.type === type).length,
+		);
+	}
+
+	const renderPagination = (pages: number) => {
+		const existing = results.querySelector(".creations-pagination");
+		existing?.remove();
+		if (pages <= 1) return;
+
+		const items: string[] = [];
+		const pageLink = (label: string, page: number, disabled = false) =>
+			`<li class="page-item ${disabled ? "disabled" : ""}"><a class="page-link" href="#!" data-page="${page}">${label}</a></li>`;
+
+		items.push(pageLink("«", 1, currentPage === 1));
+		items.push(pageLink("‹", Math.max(1, currentPage - 1), currentPage === 1));
+
+		const windowSize = 2;
+		const start = Math.max(1, currentPage - windowSize);
+		const end = Math.min(pages, currentPage + windowSize);
+
+		if (start > 1) {
+			items.push(pageLink("1", 1));
+			if (start > 2)
+				items.push(
+					`<li class="page-item disabled"><a class="page-link">…</a></li>`,
+				);
+		}
+		for (let p = start; p <= end; p++) {
+			items.push(
+				p === currentPage
+					? `<li class="page-item active"><a class="page-link" href="#!" data-page="${p}">${p}</a></li>`
+					: pageLink(String(p), p),
+			);
+		}
+		if (end < pages) {
+			if (end < pages - 1)
+				items.push(
+					`<li class="page-item disabled"><a class="page-link">…</a></li>`,
+				);
+			items.push(pageLink(String(pages), pages));
+		}
+
+		items.push(
+			pageLink("›", Math.min(pages, currentPage + 1), currentPage === pages),
+		);
+		items.push(pageLink("»", pages, currentPage === pages));
+
+		const nav = document.createElement("div");
+		nav.classList.add(
+			"creations-pagination",
+			"d-flex",
+			"justify-content-center",
+			"mt-3",
+		);
+		nav.innerHTML = `<nav><ul class="pagination">${items.join("")}</ul></nav>`;
+		nav.addEventListener("click", (e) => {
+			const target = (e.target as HTMLElement).closest("a[data-page]");
+			if (!target) return;
+			e.preventDefault();
+			const page = Number(target.getAttribute("data-page"));
+			if (Number.isNaN(page) || page === currentPage) return;
+			currentPage = page;
+			renderResults();
+		});
+		results.appendChild(nav);
+	};
+
+	const renderResults = () => {
+		activeAudio.current?.pause();
+		activeAudio.current = null;
+
+		let filtered =
+			activeType === "all"
+				? assets
+				: assets.filter((a) => a.type === activeType);
+		if (searchQuery) {
+			const q = searchQuery.toLowerCase();
+			filtered = filtered.filter((a) => a.name.toLowerCase().includes(q));
+		}
+
+		const pages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+		if (currentPage > pages) currentPage = pages;
+
+		const grid = results.querySelector(".itemgrid");
+		grid?.remove();
+		results.querySelector(".creations-empty")?.remove();
+
+		if (filtered.length === 0) {
+			const empty = document.createElement("p");
+			empty.classList.add(
+				"text-muted",
+				"text-center",
+				"py-3",
+				"creations-empty",
+			);
+			empty.textContent = searchQuery
+				? `No creations match "${searchQuery}".`
+				: "No creations in this category.";
+			results.prepend(empty);
+			renderPagination(0);
+			return;
+		}
+
+		const pageItems = filtered.slice(
+			(currentPage - 1) * ITEMS_PER_PAGE,
+			currentPage * ITEMS_PER_PAGE,
+		);
+
+		const itemGrid = document.createElement("div");
+		itemGrid.classList.add("row", "alignleft", "itemgrid");
+		for (const asset of pageItems) {
+			const col = document.createElement("div");
+			col.classList.add("px-0");
+			col.innerHTML = `
+					<a href="/store/${asset.id}" class="text-reset">
+						<div class="card mb-2">
+							<div class="card-body"></div>
+						</div>
+						<h6 class="text-truncate mb-0"></h6>
+					</a>
+				`;
+			const cardBody = col.querySelector<HTMLDivElement>(".card-body")!;
+			if (asset.type === "audio") {
+				cardBody.appendChild(createAudioPlayButton(asset.id, activeAudio));
+			} else {
+				const img = document.createElement("img");
+				img.className = "img-fluid rounded";
+				img.src = asset.thumbnail;
+				img.alt = asset.name;
+				cardBody.appendChild(img);
+			}
+			col.querySelector("h6")!.textContent = asset.name;
+			itemGrid.appendChild(col);
+		}
+		results.prepend(itemGrid);
+
+		renderPagination(pages);
+		sendMessage("registerBootstrapElements");
+	};
+
+	const runSearch = () => {
+		searchQuery = searchInput.value.trim();
+		currentPage = 1;
+		renderResults();
+	};
+
+	searchBtn.addEventListener("click", runSearch);
+	searchInput.addEventListener("keydown", (e) => {
+		if (e.key === "Enter") {
+			e.preventDefault();
+			runSearch();
+		}
+	});
+	searchInput.addEventListener("input", () => {
+		clearTimeout(searchDebounce);
+		searchDebounce = setTimeout(runSearch, 200);
+	});
+
+	renderResults();
+	sendMessage("registerBootstrapElements");
+}
+
 export async function creationsTab(userId: number) {
 	const tabList = document.getElementById("user-info-tabs");
-	const tabContent = document.querySelector(
-		"#user-menu-tabs-card .tab-content",
-	);
-	if (!tabList || !tabContent) return;
+	if (!tabList) return;
 
 	const navItem = document.createElement("li");
 	navItem.classList.add("nav-item");
 	navItem.setAttribute("role", "presentation");
 	navItem.innerHTML = `
-		<a class="nav-link" href="#!" data-bs-toggle="tab" role="tab"
-		   data-bs-target="#user-creations" aria-controls="user-creations" aria-selected="false" tabindex="-1">
+		<a class="nav-link" href="#!">
 			<i class="fad fa-paint-brush me-1"></i> Creations
 		</a>
 	`;
 	tabList.appendChild(navItem);
 
-	const pane = document.createElement("div");
-	pane.id = "user-creations";
-	pane.classList.add("tab-pane", "fade");
-	pane.setAttribute("role", "tabpanel");
-	tabContent.appendChild(pane);
-
-	let loaded = false;
-
-	const render = async (page: number) => {
-		pane.innerHTML = `<div class="text-center py-4"><i class="fas fa-spinner fa-spin"></i></div>`;
-
-		const result = await sendMessage("getUserCreations", { userId, page });
-		if (!result.ok) {
-			pane.innerHTML = `<p class="text-muted text-center py-3">Failed to load creations.</p>`;
-			return;
-		}
-
-		const { assets, pages, total } = result.data;
-
-		if (assets.length === 0) {
-			pane.innerHTML = `<p class="text-muted text-center py-3">No creations found.</p>`;
-			return;
-		}
-
-		pane.innerHTML = "";
-
-		const grid = document.createElement("div");
-		grid.classList.add("row");
-		for (const asset of assets) {
-			const col = document.createElement("div");
-			col.classList.add("col-6", "col-md-2", "mb-3");
-			col.innerHTML = `
-				<a href="/store/${asset.id}" class="text-reset">
-					<img src="" class="img-fluid rounded" alt="">
-					<h6 class="text-truncate mb-0 mt-2" style="font-size:0.85rem;"></h6>
-				</a>
-			`;
-			col.querySelector("img")!.src = asset.thumbnail;
-			col.querySelector("img")!.alt = asset.name;
-			col.querySelector("h6")!.textContent = asset.name;
-			grid.appendChild(col);
-		}
-		pane.appendChild(grid);
-
-		if (pages > 1) {
-			const pagination = document.createElement("div");
-			pagination.classList.add(
-				"d-flex",
-				"align-items-center",
-				"justify-content-center",
-				"gap-2",
-				"mb-3",
-			);
-			const prevBtn = document.createElement("button");
-			prevBtn.type = "button";
-			prevBtn.classList.add("btn", "btn-sm", "btn-secondary");
-			prevBtn.innerHTML = `<i class="fas fa-chevron-left"></i>`;
-			if (page <= 1) prevBtn.disabled = true;
-			prevBtn.addEventListener("click", () => render(page - 1));
-
-			const nextBtn = document.createElement("button");
-			nextBtn.type = "button";
-			nextBtn.classList.add("btn", "btn-sm", "btn-secondary");
-			nextBtn.innerHTML = `<i class="fas fa-chevron-right"></i>`;
-			if (page >= pages) nextBtn.disabled = true;
-			nextBtn.addEventListener("click", () => render(page + 1));
-
-			const label = document.createElement("span");
-			label.classList.add("text-muted", "small");
-			label.textContent = `Page ${page} of ${pages} (${total.toLocaleString()} total)`;
-
-			pagination.appendChild(prevBtn);
-			pagination.appendChild(label);
-			pagination.appendChild(nextBtn);
-			pane.appendChild(pagination);
-		}
-	};
-
-	navItem.querySelector("a")!.addEventListener("shown.bs.tab", () => {
-		if (!loaded) {
-			loaded = true;
-			render(1);
-		}
+	navItem.querySelector("a")!.addEventListener("click", (e) => {
+		e.preventDefault();
+		window.history.pushState(
+			null,
+			"",
+			`${window.location.pathname}?${CREATIONS_QUERY_PARAM}`,
+		);
+		showCreationsPage(userId);
 	});
+
+	if (new URLSearchParams(window.location.search).has(CREATIONS_QUERY_PARAM)) {
+		await showCreationsPage(userId);
+	}
 }
 
 export async function userAliases(
@@ -855,7 +1249,8 @@ export async function rankingPositions(userId: number) {
 		[
 			"fa-duotone fa-eye",
 			"Profile Views",
-			charts.data.profileviews?.filter((x) => x._field == "rank").at(-1)?._value,
+			charts.data.profileviews?.filter((x) => x._field == "rank").at(-1)
+				?._value,
 		],
 		[
 			"fa-duotone fa-flag-checkered",
@@ -896,7 +1291,7 @@ export async function rankingPositions(userId: number) {
 				<div class="mb-1">
 					<b><i class="${icon}" style="width:1em;text-align:center"></i> ${label}</b>
 					<span class="float-end">#${value}</span>
-				</div>`
+				</div>`,
 				)
 				.join("")}
 		</div>

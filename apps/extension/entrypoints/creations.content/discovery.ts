@@ -15,14 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 export async function audioPreviews() {
-	const activeAudioElements = new Set<HTMLAudioElement>();
-
-	const pauseAllAudio = (): void => {
-		for (const audio of activeAudioElements) {
-			audio.pause();
-		}
-		activeAudioElements.clear();
-	};
+	const activeAudio: { current: HTMLAudioElement | null } = { current: null };
 
 	const getSelectedTab = (): string | null => {
 		return (
@@ -30,29 +23,6 @@ export async function audioPreviews() {
 				.querySelector("#categories .active")
 				?.getAttribute("data-category") || null
 		);
-	};
-
-	const setButtonState = (
-		button: HTMLButtonElement,
-		state: "idle" | "loading" | "playing",
-	): void => {
-		switch (state) {
-			case "idle":
-				button.innerHTML = '<i class="fa-solid fa-play"></i>';
-				button.className = "btn btn-primary btn-sm";
-				break;
-			case "loading":
-				button.innerHTML =
-					'<div class="spinner-border text-light" role="status" ' +
-					'style="--bs-spinner-width: 15px; --bs-spinner-height: 15px; ' +
-					'--bs-spinner-border-width: 2px; vertical-align: middle; text-align: center;">' +
-					'<span class="sr-only">Loading...</span></div>';
-				break;
-			case "playing":
-				button.innerHTML = '<i class="fa-duotone fa-solid fa-play-pause"></i>';
-				button.className = "btn btn-warning btn-sm";
-				break;
-		}
 	};
 
 	const attachPlayButton = (assetCard: HTMLDivElement): void => {
@@ -63,71 +33,18 @@ export async function audioPreviews() {
 		const assetId = link.getAttribute("href")?.split("/")[2];
 		if (!assetId) return;
 
-		const playButton = document.createElement("button");
-		playButton.className = "btn btn-primary btn-sm";
-		playButton.style.cssText =
-			"position: absolute; bottom: 0; right: 0; margin: 5px; margin-bottom: 55px; z-index: 2000;";
-		setButtonState(playButton, "idle");
+		const thumbnail = assetCard.querySelector("img");
+		if (!thumbnail) return;
 
-		const anchor = assetCard.getElementsByTagName("a")[0];
-		anchor.parentElement?.insertBefore(playButton, anchor);
+		const sizedWrapper = assetCard.firstElementChild as HTMLElement | null;
+		const maxWidth = sizedWrapper
+			? getComputedStyle(sizedWrapper).maxWidth
+			: null;
+		if (sizedWrapper && maxWidth && maxWidth !== "none") {
+			sizedWrapper.style.width = maxWidth;
+		}
 
-		const firstChild = assetCard.children[0] as HTMLElement | undefined;
-		if (firstChild) firstChild.style.position = "relative";
-
-		let audioElement: HTMLAudioElement | null = null;
-		let isPlaying = false;
-		let isLoading = false;
-
-		const onEnded = (): void => {
-			isPlaying = false;
-			setButtonState(playButton, "idle");
-		};
-
-		playButton.addEventListener("click", async () => {
-			if (isLoading) return;
-
-			if (isPlaying) {
-				isPlaying = false;
-				audioElement?.pause();
-				setButtonState(playButton, "idle");
-				return;
-			}
-
-			if (audioElement) {
-				isPlaying = true;
-				await audioElement.play();
-				setButtonState(playButton, "playing");
-				return;
-			}
-
-			isLoading = true;
-			setButtonState(playButton, "loading");
-
-			const url = await sendMessage("getAssetAudio", +assetId);
-			if (!url.ok || !url.data.url) return;
-
-			isLoading = false;
-
-			if (!url) {
-				playButton.remove();
-				return;
-			}
-
-			audioElement = new Audio(url.data.url);
-			activeAudioElements.add(audioElement);
-
-			audioElement.addEventListener("ended", onEnded);
-			audioElement.addEventListener(
-				"canplaythrough",
-				() => {
-					isPlaying = true;
-					audioElement?.play();
-					setButtonState(playButton, "playing");
-				},
-				{ once: true },
-			);
-		});
+		thumbnail.replaceWith(createAudioPlayButton(+assetId, activeAudio));
 	};
 
 	const assetGrid = document.getElementById("assets");
@@ -140,7 +57,8 @@ export async function audioPreviews() {
 		);
 
 		if (clearedAllAssets) {
-			pauseAllAudio();
+			activeAudio.current?.pause();
+			activeAudio.current = null;
 		}
 
 		if (getSelectedTab() !== "audio") return;

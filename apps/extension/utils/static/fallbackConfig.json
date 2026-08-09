@@ -1,5 +1,5 @@
 {
-	"latestVersion": "2.9.0",
+	"latestVersion": "2.10.0",
 	"updateLogURL": "https://kiln.indexx.dev/blog/v2-3-0",
 	"notices": [],
 	"apiAvailability": {
@@ -12,7 +12,9 @@
 	"flags": {
 		"apis.usePublicApiProxy": false,
 		"apis.isExtensionApiStable": true,
-		"features.timePlayed.enabled": false
+		"features.timePlayed.enabled": false,
+		"features.placeConsumablesTab.enabled": false,
+		"features.outfitManagement.enabled": false
 	},
 	"limits": {
 		"maxPinnedWorlds": 25,

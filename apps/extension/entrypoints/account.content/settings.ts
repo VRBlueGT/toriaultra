@@ -51,7 +51,8 @@ type Tags =
 	| "development"
 	| "expression"
 	| "experimental"
-	| "new";
+	| "new"
+	| "deprecated";
 
 type NoteType = "warning" | "info" | "secondary";
 
@@ -559,7 +560,7 @@ export async function kilnSettings() {
 			const tagBadges = [...setting.tags]
 				.sort((a, b) => {
 					const p = (t: string) =>
-						t === "experimental" || t === "new" ? -1 : 1;
+						t === "experimental" || t === "new" || t === "deprecated" ? -1 : 1;
 					return p(a) - p(b);
 				})
 				.map((tag) => {
@@ -568,7 +569,9 @@ export async function kilnSettings() {
 							? "bg-warning text-dark"
 							: tag === "new"
 								? "bg-success"
-								: "bg-secondary";
+								: tag === "deprecated"
+									? "bg-danger"
+									: "bg-secondary";
 					return `<span class="badge ${cls} me-1">${tag.charAt(0).toUpperCase() + tag.slice(1)}</span>`;
 				})
 				.join("");
@@ -799,7 +802,7 @@ export async function kilnSettings() {
 				configContainer.appendChild(openBtn);
 				openBtn.addEventListener("click", () => openThemeManager(values));
 
-			if (!remotelyDisabled && !chromeOnlyUnavailable) {
+				if (!remotelyDisabled && !chromeOnlyUnavailable) {
 					card
 						.querySelector<HTMLInputElement>(".toggle-btn")!
 						.addEventListener("change", async () => {
@@ -1166,32 +1169,14 @@ function initAdminTab(userId: number) {
 
 	inner.innerHTML = `
 		<div class="d-flex gap-2 mb-3">
-			<button class="btn btn-primary flex-grow-1" id="kadmin-tab-config">Config</button>
 			<button class="btn btn-secondary flex-grow-1" id="kadmin-tab-themes">Themes</button>
 		</div>
-		<div id="kadmin-config"></div>
-		<div id="kadmin-themes" style="display:none;"></div>
+		<div id="kadmin-themes"></div>
 	`;
 
 	const themesPanel = document.getElementById("kadmin-themes")!;
-	const configPanel = document.getElementById("kadmin-config")!;
-	const themesBtn = document.getElementById("kadmin-tab-themes")!;
-	const configBtn = document.getElementById("kadmin-tab-config")!;
-	let themesLoaded = false;
 
-	function switchAdminTab(name: "themes" | "config") {
-		themesPanel.style.display = name === "themes" ? "" : "none";
-		configPanel.style.display = name === "config" ? "" : "none";
-		themesBtn.className = `btn flex-grow-1 ${name === "themes" ? "btn-primary" : "btn-secondary"}`;
-		configBtn.className = `btn flex-grow-1 ${name === "config" ? "btn-primary" : "btn-secondary"}`;
-		if (name === "themes" && !themesLoaded) {
-			themesLoaded = true;
-			renderPendingThemes();
-		}
-	}
-
-	themesBtn.addEventListener("click", () => switchAdminTab("themes"));
-	configBtn.addEventListener("click", () => switchAdminTab("config"));
+	renderPendingThemes();
 
 	async function renderPendingThemes() {
 		themesPanel.innerHTML = `<p class="text-muted small">Loading…</p>`;
@@ -1331,425 +1316,6 @@ function initAdminTab(userId: number) {
 				deleteStatus.className = "small text-danger";
 				deleteBtn.disabled = false;
 			}
-		});
-	}
-
-	loadConfigPanel();
-
-	async function loadConfigPanel() {
-		configPanel.innerHTML = `<p class="text-muted small">Loading…</p>`;
-		const result = await sendMessage("adminListConfigs", userId);
-		if (!result.ok) {
-			configPanel.innerHTML = `<p class="text-danger small">Failed to load: ${result.message}</p>`;
-			return;
-		}
-		renderVersionList(result.data.data);
-	}
-
-	type VersionRow =
-		import("@kiln/schemas").Extension.AdminConfigListApi["data"][number];
-
-	function renderVersionList(rows: VersionRow[]) {
-		const hasDefault = rows.some((r) => r.version === "default");
-
-		configPanel.innerHTML = `
-			<div class="d-flex gap-2 align-items-center mb-3">
-				<input id="kac-new-ver" type="text" class="form-control form-control-sm" style="max-width:200px;"
-				       placeholder="${hasDefault ? "e.g. 2.4.0" : "default"}" />
-				<button id="kac-new-create" class="btn btn-outline-primary btn-sm">Create</button>
-			</div>
-			<table class="table table-sm mb-0">
-				<thead><tr><th>Version</th><th>Updated</th><th></th></tr></thead>
-				<tbody>
-					${rows
-						.map(
-							(r) => `
-						<tr>
-							<td><code>${r.version}</code></td>
-							<td class="text-muted small">${r.updatedAt ? r.updatedAt.slice(0, 10) : "—"}</td>
-							<td class="text-end">
-								<button class="btn btn-outline-secondary btn-sm py-0" data-edit="${r.version}">Edit</button>
-								${r.version !== "default" ? `<button class="btn btn-outline-danger btn-sm py-0 ms-1" data-delete="${r.version}">Delete</button>` : ""}
-							</td>
-						</tr>
-					`,
-						)
-						.join("")}
-					${rows.length === 0 ? `<tr><td colspan="3" class="text-muted small">No configs yet. Create one above.</td></tr>` : ""}
-				</tbody>
-			</table>
-		`;
-
-		(
-			document.getElementById("kac-new-create") as HTMLButtonElement
-		).addEventListener("click", async () => {
-			const ver = (
-				document.getElementById("kac-new-ver") as HTMLInputElement
-			).value.trim();
-			if (!ver) return;
-			const result = await sendMessage("adminUpdateConfig", {
-				userId,
-				version: ver,
-				patch: {},
-			});
-			if (!result.ok) {
-				alert(`Failed to create: ${result.message}`);
-				return;
-			}
-			renderConfigEditor(ver, result.data.data);
-		});
-
-		for (const btn of configPanel.querySelectorAll<HTMLButtonElement>(
-			"[data-edit]",
-		)) {
-			btn.addEventListener("click", async () => {
-				const ver = btn.dataset.edit!;
-				btn.disabled = true;
-				const result = await sendMessage("adminGetConfig", {
-					userId,
-					version: ver,
-				});
-				btn.disabled = false;
-				if (!result.ok) {
-					alert(`Failed to load: ${result.message}`);
-					return;
-				}
-				renderConfigEditor(ver, result.data);
-			});
-		}
-
-		for (const btn of configPanel.querySelectorAll<HTMLButtonElement>(
-			"[data-delete]",
-		)) {
-			btn.addEventListener("click", async () => {
-				const ver = btn.dataset.delete!;
-				if (!confirm(`Delete config for "${ver}"?`)) return;
-				btn.disabled = true;
-				const result = await sendMessage("adminDeleteConfig", {
-					userId,
-					version: ver,
-				});
-				if (!result.ok) {
-					alert(`Failed: ${result.message}`);
-					btn.disabled = false;
-					return;
-				}
-				loadConfigPanel();
-			});
-		}
-	}
-
-	function renderConfigEditor(
-		version: string,
-		initial: import("@kiln/schemas").Extension.ExtensionConfig,
-	) {
-		type Notice = { id: string; message: string; type: "info" | "warning" };
-		const draft = structuredClone(initial) as typeof initial & {
-			notices: Notice[];
-			flags: Record<string, boolean>;
-		};
-
-		const apiKeys = [
-			"public",
-			"internal",
-			"extension",
-			"proxy",
-			"currencyRates",
-		] as const;
-		const limitKeys = [
-			"maxPinnedWorlds",
-			"maxNFTItems",
-			"maxNFTSerialsPerItem",
-			"maxBlockedTraders",
-			"maxPublishedThemes",
-			"maxPinnedAchievements",
-		] as const;
-
-		configPanel.innerHTML = `
-			<div class="d-flex align-items-center gap-2 mb-3">
-				<button id="kac-back" class="btn btn-outline-secondary btn-sm">&larr; Back</button>
-				<span class="small text-muted">Editing <code>${version}</code></span>
-			</div>
-
-			<div class="card mb-2">
-				<div class="card-body">
-					<div class="row g-3 mb-3">
-						<div class="col-auto">
-							<label class="form-label small text-muted mb-1">Latest Version</label>
-							<input id="kac-latest-ver" type="text" class="form-control form-control-sm" style="max-width:160px;" value="${draft.latestVersion}" />
-						</div>
-					</div>
-					<div class="small text-muted mb-2">API Availability</div>
-					<div class="d-flex flex-wrap gap-3">
-						${apiKeys
-							.map(
-								(k) => `
-							<div class="form-check form-switch">
-								<input class="form-check-input" type="checkbox" role="switch" id="kac-api-${k}" ${draft.apiAvailability[k] ? "checked" : ""} />
-								<label class="form-check-label small" for="kac-api-${k}">${k}</label>
-							</div>
-						`,
-							)
-							.join("")}
-					</div>
-				</div>
-			</div>
-
-			<div class="card mb-2">
-				<div class="card-header small fw-semibold">Limits</div>
-				<div class="card-body">
-					<div class="row g-2">
-						${limitKeys
-							.map(
-								(k) => `
-							<div class="col-sm-6 col-lg-3">
-								<label class="form-label small text-muted mb-1">${k}</label>
-								<input id="kac-limit-${k}" type="number" class="form-control form-control-sm" min="0" value="${(draft.limits as any)[k]}" />
-							</div>
-						`,
-							)
-							.join("")}
-					</div>
-				</div>
-			</div>
-
-			<div class="card mb-2">
-				<div class="card-header small fw-semibold d-flex justify-content-between align-items-center">
-					Notices
-					<button id="kac-notice-add" class="btn btn-outline-primary btn-sm py-0">+ Add</button>
-				</div>
-				<div class="card-body p-0">
-					<div id="kac-notices-list"></div>
-					<div id="kac-notice-form" class="p-3 border-top" style="display:none;">
-						<div class="row g-2 align-items-end">
-							<div class="col">
-								<input id="kac-notice-msg" type="text" class="form-control form-control-sm" placeholder="Message" maxlength="300" />
-							</div>
-							<div class="col-auto">
-								<select id="kac-notice-type" class="form-select form-select-sm">
-									<option value="info">Info</option>
-									<option value="warning">Warning</option>
-								</select>
-							</div>
-							<div class="col-auto">
-								<button id="kac-notice-save" class="btn btn-primary btn-sm">Add</button>
-								<button id="kac-notice-cancel" class="btn btn-secondary btn-sm ms-1">Cancel</button>
-							</div>
-						</div>
-					</div>
-				</div>
-			</div>
-
-			<div class="card mb-2">
-				<div class="card-header small fw-semibold d-flex justify-content-between align-items-center">
-					Feature Flags
-					<button id="kac-flag-add" class="btn btn-outline-primary btn-sm py-0">+ Add Flag</button>
-				</div>
-				<div class="card-body p-0">
-					<div id="kac-flags-list"></div>
-					<div id="kac-flag-form" class="p-3 border-top" style="display:none;">
-						<div class="row g-2 align-items-end">
-							<div class="col">
-								<input id="kac-flag-key" type="text" class="form-control form-control-sm" placeholder="Flag key" />
-							</div>
-							<div class="col-auto">
-								<select id="kac-flag-val" class="form-select form-select-sm">
-									<option value="true">true</option>
-									<option value="false">false</option>
-								</select>
-							</div>
-							<div class="col-auto">
-								<button id="kac-flag-save" class="btn btn-primary btn-sm">Add</button>
-								<button id="kac-flag-cancel" class="btn btn-secondary btn-sm ms-1">Cancel</button>
-							</div>
-						</div>
-					</div>
-				</div>
-			</div>
-
-			<div class="card mb-3">
-				<div class="card-header small fw-semibold">Users</div>
-				<div class="card-body">
-					<label class="form-label small text-muted mb-1">Generative AI User IDs (comma-separated)</label>
-					<input id="kac-ai-users" type="text" class="form-control form-control-sm" value="${draft.users.generativeAI.join(", ")}" />
-				</div>
-			</div>
-
-			<div class="d-flex align-items-center gap-3">
-				<button id="kac-save" class="btn btn-primary btn-sm px-4">Save</button>
-				<span id="kac-status" class="small"></span>
-			</div>
-		`;
-
-		document
-			.getElementById("kac-back")!
-			.addEventListener("click", () => loadConfigPanel());
-
-		function renderNotices() {
-			const list = document.getElementById("kac-notices-list")!;
-			if (draft.notices.length === 0) {
-				list.innerHTML = `<p class="text-muted small px-3 py-2 mb-0">No notices.</p>`;
-				return;
-			}
-			list.innerHTML = draft.notices
-				.map(
-					(n, i) => `
-				<div class="d-flex align-items-center gap-2 px-3 py-2 border-bottom">
-					<span class="badge ${n.type === "warning" ? "bg-warning text-dark" : "bg-primary"}">${n.type}</span>
-					<span class="flex-grow-1 small">${n.message}</span>
-					<button class="btn btn-outline-danger btn-sm py-0" data-notice-delete="${i}">&times;</button>
-				</div>
-			`,
-				)
-				.join("");
-			for (const btn of list.querySelectorAll<HTMLButtonElement>(
-				"[data-notice-delete]",
-			)) {
-				btn.addEventListener("click", () => {
-					draft.notices.splice(Number(btn.dataset.noticeDelete), 1);
-					renderNotices();
-				});
-			}
-		}
-		renderNotices();
-
-		const noticeForm = document.getElementById("kac-notice-form")!;
-		document.getElementById("kac-notice-add")!.addEventListener("click", () => {
-			noticeForm.style.display = "";
-		});
-		document
-			.getElementById("kac-notice-cancel")!
-			.addEventListener("click", () => {
-				noticeForm.style.display = "none";
-			});
-		document
-			.getElementById("kac-notice-save")!
-			.addEventListener("click", () => {
-				const msg = (
-					document.getElementById("kac-notice-msg") as HTMLInputElement
-				).value.trim();
-				if (!msg) return;
-				const type = (
-					document.getElementById("kac-notice-type") as HTMLSelectElement
-				).value as "info" | "warning";
-				draft.notices.push({
-					id: Math.random().toString(36).slice(2, 8),
-					message: msg,
-					type,
-				});
-				(document.getElementById("kac-notice-msg") as HTMLInputElement).value =
-					"";
-				noticeForm.style.display = "none";
-				renderNotices();
-			});
-
-		function renderFlags() {
-			const list = document.getElementById("kac-flags-list")!;
-			const entries = Object.entries(draft.flags);
-			if (entries.length === 0) {
-				list.innerHTML = `<p class="text-muted small px-3 py-2 mb-0">No flags.</p>`;
-				return;
-			}
-			list.innerHTML = entries
-				.map(
-					([key, val]) => `
-				<div class="d-flex align-items-center gap-2 px-3 py-2 border-bottom">
-					<code class="flex-grow-1 small">${key}</code>
-					<div class="form-check form-switch mb-0">
-						<input class="form-check-input" type="checkbox" role="switch" data-flag-key="${key}" ${val ? "checked" : ""} />
-					</div>
-					<button class="btn btn-outline-danger btn-sm py-0" data-flag-delete="${key}">&times;</button>
-				</div>
-			`,
-				)
-				.join("");
-			for (const el of list.querySelectorAll<HTMLInputElement>(
-				"[data-flag-key]",
-			)) {
-				el.addEventListener("change", () => {
-					draft.flags[el.dataset.flagKey!] = el.checked;
-				});
-			}
-			for (const btn of list.querySelectorAll<HTMLButtonElement>(
-				"[data-flag-delete]",
-			)) {
-				btn.addEventListener("click", () => {
-					delete draft.flags[btn.dataset.flagDelete!];
-					renderFlags();
-				});
-			}
-		}
-		renderFlags();
-
-		const flagForm = document.getElementById("kac-flag-form")!;
-		document.getElementById("kac-flag-add")!.addEventListener("click", () => {
-			flagForm.style.display = "";
-		});
-		document
-			.getElementById("kac-flag-cancel")!
-			.addEventListener("click", () => {
-				flagForm.style.display = "none";
-			});
-		document.getElementById("kac-flag-save")!.addEventListener("click", () => {
-			const key = (
-				document.getElementById("kac-flag-key") as HTMLInputElement
-			).value.trim();
-			if (!key || key in draft.flags) return;
-			draft.flags[key] =
-				(document.getElementById("kac-flag-val") as HTMLSelectElement).value ===
-				"true";
-			(document.getElementById("kac-flag-key") as HTMLInputElement).value = "";
-			flagForm.style.display = "none";
-			renderFlags();
-		});
-
-		document.getElementById("kac-save")!.addEventListener("click", async () => {
-			const saveBtn = document.getElementById("kac-save") as HTMLButtonElement;
-			const status = document.getElementById("kac-status")!;
-
-			draft.latestVersion = (
-				document.getElementById("kac-latest-ver") as HTMLInputElement
-			).value.trim();
-			for (const k of apiKeys) {
-				draft.apiAvailability[k] = (
-					document.getElementById(`kac-api-${k}`) as HTMLInputElement
-				).checked;
-			}
-			for (const k of limitKeys) {
-				(draft.limits as any)[k] =
-					Number(
-						(document.getElementById(`kac-limit-${k}`) as HTMLInputElement)
-							.value,
-					) || 0;
-			}
-			const aiRaw = (
-				document.getElementById("kac-ai-users") as HTMLInputElement
-			).value;
-			draft.users.generativeAI = aiRaw
-				.split(",")
-				.map((s) => parseInt(s.trim(), 10))
-				.filter((n) => !Number.isNaN(n));
-
-			saveBtn.disabled = true;
-			status.textContent = "Saving…";
-			status.className = "small text-muted";
-
-			const result = await sendMessage("adminUpdateConfig", {
-				userId,
-				version,
-				patch: draft,
-			});
-			if (result.ok) {
-				status.textContent = "Saved!";
-				status.className = "small text-success";
-				setTimeout(() => {
-					status.textContent = "";
-				}, 3000);
-			} else {
-				status.textContent = `Failed: ${result.message}`;
-				status.className = "small text-danger";
-			}
-			saveBtn.disabled = false;
 		});
 	}
 }
@@ -2124,8 +1690,8 @@ function initDebugTab(container: HTMLElement) {
 		"seenTradeIds",
 		"dismissedNotices",
 	] as const;
-	const SYNC_QUOTA = 102400; // Chrome sync quota: 100 KB
-	const LOCAL_QUOTA = 10485760; // Chrome local quota: 10 MB
+	const SYNC_QUOTA = 102400;
+	const LOCAL_QUOTA = 10485760;
 
 	function formatBytes(bytes: number): string {
 		if (bytes === 0) return "0 B";
@@ -2883,4 +2449,58 @@ export async function checkForVerificationCode(userId: number) {
 			}
 		}
 	}
+}
+
+export async function securityKeyRenaming() {
+	let renames = await _securityKeyNames.getValue();
+	const securityKeys = document.querySelectorAll(".card.mcard.mt-2");
+
+	securityKeys.forEach((keyCard) => {
+		console.log(keyCard);
+		const keyId = +keyCard
+			.querySelector('button[onclick^="deleteSecurityKey"]')!
+			.getAttribute("onclick")!
+			.match(/'(\d+)'/)![1]!;
+
+		const nameElement = keyCard.querySelector(".fw-bold");
+		if (nameElement) {
+			if (keyId && renames[keyId as keyof typeof renames]) {
+				nameElement.textContent = renames[keyId as keyof typeof renames];
+			}
+
+			const deleteButton = keyCard.querySelector(
+				'button[onclick^="deleteSecurityKey"]',
+			);
+			if (deleteButton) {
+				const existingRenameButton = deleteButton.parentElement?.querySelector(
+					".btn-outline-secondary",
+				);
+				if (!existingRenameButton) {
+					const renameButton = document.createElement("button");
+					renameButton.type = "button";
+					renameButton.className = "btn btn-outline-secondary me-2";
+					renameButton.innerHTML = '<i class="fas fa-pen me-1"></i> Rename';
+
+					renameButton.addEventListener("click", async () => {
+						const currentName =
+							renames[keyId as keyof typeof renames] || nameElement.textContent;
+						const result = await sendMessage("showSecurityKeyRenamePrompt", {
+							currentName,
+						});
+						if (!result?.ok || !result.data?.trim()) return;
+						const trimmed = result.data.trim();
+						nameElement.textContent = trimmed;
+						renames[keyId as keyof typeof renames] = trimmed;
+						_securityKeyNames.setValue(renames);
+					});
+
+					deleteButton.parentElement?.insertBefore(renameButton, deleteButton);
+				}
+			}
+		}
+	});
+
+	_securityKeyNames.watch((newValue) => {
+		renames = newValue ?? {};
+	});
 }

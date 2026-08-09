@@ -37,6 +37,11 @@ export default defineContentScript({
 					} else if (window.location.pathname.includes("kiln")) {
 						settings.kilnSettings();
 					} else if (
+						window.location.pathname.includes("account") &&
+						values.enabled.includes("securityKeyRenaming")
+					) {
+						settings.securityKeyRenaming();
+					} else if (
 						window.location.pathname.includes("transactions") &&
 						values.enabled.includes("irlBrickPrice")
 					) {
@@ -70,6 +75,10 @@ export default defineContentScript({
 
 					if (values.enabled.includes("customBodyColorHexCodes")) {
 						avatar.customBodyColorHexCodes();
+					}
+
+					if (values.enabled.includes("outfitManagement")) {
+						avatar.outfitManagement();
 					}
 				}
 			});

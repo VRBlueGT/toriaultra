@@ -72,6 +72,64 @@ function escapeHtml(value: string): string {
 		.replaceAll("'", "&#39;");
 }
 
+type SearchOperators = {
+	cleanQuery: string;
+	fromUser?: string;
+	inCategory?: string;
+	after?: string;
+	before?: string;
+	sort?: string;
+	type?: string;
+};
+
+function parseSearchOperators(query: string): SearchOperators {
+	let cleanQuery = query;
+	let fromUser: string | undefined;
+	let inCategory: string | undefined;
+	let after: string | undefined;
+	let before: string | undefined;
+	let sort: string | undefined;
+	let type: string | undefined;
+
+	const fromMatch = cleanQuery.match(/(?:^|\s)from:(\S+)/);
+	if (fromMatch) {
+		fromUser = fromMatch[1];
+		cleanQuery = cleanQuery.replace(fromMatch[0], "").trim();
+	}
+
+	const inMatch = cleanQuery.match(/(?:^|\s)in:(\S+)/);
+	if (inMatch) {
+		inCategory = inMatch[1];
+		cleanQuery = cleanQuery.replace(inMatch[0], "").trim();
+	}
+
+	const afterMatch = cleanQuery.match(/(?:^|\s)after:(\S+)/);
+	if (afterMatch) {
+		after = afterMatch[1];
+		cleanQuery = cleanQuery.replace(afterMatch[0], "").trim();
+	}
+
+	const beforeMatch = cleanQuery.match(/(?:^|\s)before:(\S+)/);
+	if (beforeMatch) {
+		before = beforeMatch[1];
+		cleanQuery = cleanQuery.replace(beforeMatch[0], "").trim();
+	}
+
+	const sortMatch = cleanQuery.match(/(?:^|\s)sort:(\S+)/);
+	if (sortMatch) {
+		sort = sortMatch[1];
+		cleanQuery = cleanQuery.replace(sortMatch[0], "").trim();
+	}
+
+	const typeMatch = cleanQuery.match(/(?:^|\s)type:(\S+)/);
+	if (typeMatch) {
+		type = typeMatch[1];
+		cleanQuery = cleanQuery.replace(typeMatch[0], "").trim();
+	}
+
+	return { cleanQuery, fromUser, inCategory, after, before, sort, type };
+}
+
 type Chip = { id: number; label: string };
 
 function renderEntry(
@@ -204,9 +262,17 @@ export async function advancedForumSearch(seenThreads: number[]) {
 			const query = new FormData(searchForm).get("q");
 			const trimmed = typeof query === "string" ? query.trim() : "";
 			const basePath = getForumBasePath();
-			const url = trimmed
-				? `${basePath}?kiln-adv-search&q=${encodeURIComponent(trimmed)}`
-				: `${basePath}?kiln-adv-search`;
+			const parsed = parseSearchOperators(trimmed);
+			const params = new URLSearchParams();
+			params.set("kiln-adv-search", "");
+			if (parsed.cleanQuery) params.set("q", parsed.cleanQuery);
+			if (parsed.fromUser) params.set("from", parsed.fromUser);
+			if (parsed.inCategory) params.set("in", parsed.inCategory);
+			if (parsed.after) params.set("after", parsed.after);
+			if (parsed.before) params.set("before", parsed.before);
+			if (parsed.sort) params.set("sort", parsed.sort);
+			if (parsed.type) params.set("type", parsed.type);
+			const url = `${basePath}?${params.toString()}`;
 			window.history.pushState(null, "", url);
 			advancedForumSearch(seenThreads);
 		});
@@ -231,11 +297,14 @@ export async function advancedForumSearch(seenThreads: number[]) {
 	const searchBox = document.createElement("div");
 	searchBox.className = "forum-category-container mb-3 border-secondary";
 	searchBox.innerHTML = `
-		<div class="d-flex align-items-center justify-content-between mb-3">
+		<div class="d-flex align-items-center justify-content-between mb-2">
 			<h2 class="text-shadow mb-0">Advanced Search</h2>
 			<button type="button" class="btn btn-sm btn-outline-secondary" data-kiln="adv-search-back">
 				<i class="fas fa-arrow-left me-1"></i>Back to Forum
 			</button>
+		</div>
+		<div class="small text-muted mb-3">
+			Tip: use <code class="text-info">from:USER</code>, <code class="text-info">in:CATEGORY</code>, <code class="text-info">after:DATE</code>, <code class="text-info">before:DATE</code>, <code class="text-info">sort:VALUE</code>, <code class="text-info">type:thread|reply|both</code> in the search field
 		</div>
 	`;
 	container.prepend(searchBox);
@@ -489,6 +558,7 @@ export async function advancedForumSearch(seenThreads: number[]) {
 		return {
 			element: container,
 			getIds: () => [...chips.keys()],
+			add: (chip: Chip) => addChip(chip),
 			clear: () => {
 				chips.clear();
 				renderChips();
@@ -665,6 +735,55 @@ export async function advancedForumSearch(seenThreads: number[]) {
 	const initialQuery = new URLSearchParams(window.location.search).get("q");
 	if (initialQuery) searchInput.value = initialQuery;
 
+	searchInput.addEventListener("input", () => {
+		const parsed = parseSearchOperators(searchInput.value);
+		if (!parsed.fromUser && !parsed.inCategory && !parsed.after && !parsed.before && !parsed.sort && !parsed.type) return;
+
+		searchInput.value = parsed.cleanQuery;
+
+		if (parsed.fromUser) {
+			resolveAuthor(parsed.fromUser).then((resolved) => {
+				if (resolved) authors.add(resolved);
+			});
+		}
+		if (parsed.inCategory) {
+			const resolved = resolveCategory(parsed.inCategory);
+			if (resolved) categories.add(resolved);
+		}
+		if (parsed.after) postedAfterInput.value = parsed.after;
+		if (parsed.before) postedBeforeInput.value = parsed.before;
+		if (parsed.sort && SORT_OPTIONS.some((o) => o.value === parsed.sort))
+			sortSelect.value = parsed.sort;
+		if (parsed.type && TYPE_OPTIONS.some((o) => o.value === parsed.type))
+			typeSelect.value = parsed.type;
+	});
+
+	const prefillOperators = async () => {
+		const params = new URLSearchParams(window.location.search);
+		const fromParam = params.get("from");
+		const inParam = params.get("in");
+		const afterParam = params.get("after");
+		const beforeParam = params.get("before");
+		const sortParam = params.get("sort");
+		const typeParam = params.get("type");
+
+		if (fromParam) {
+			const resolved = await resolveAuthor(fromParam);
+			if (resolved) authors.add(resolved);
+		}
+		if (inParam) {
+			const resolved = resolveCategory(inParam);
+			if (resolved) categories.add(resolved);
+		}
+		if (afterParam) postedAfterInput.value = afterParam;
+		if (beforeParam) postedBeforeInput.value = beforeParam;
+		if (sortParam && SORT_OPTIONS.some((o) => o.value === sortParam))
+			sortSelect.value = sortParam;
+		if (typeParam && TYPE_OPTIONS.some((o) => o.value === typeParam))
+			typeSelect.value = typeParam;
+	};
+
+	await prefillOperators();
 	runSearch();
 }
 

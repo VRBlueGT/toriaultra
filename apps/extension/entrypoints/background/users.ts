@@ -431,6 +431,54 @@ onMessage("updateBodyColor", async ({ data: { bodyPart, color } }) => {
 	});
 });
 
+onMessage("updateOutfit", ({ data: { id, name } }) =>
+	handle(async () => {
+		const tabs = await browser.tabs.query({
+			active: true,
+			currentWindow: true,
+		});
+		if (!tabs[0]) return;
+
+		await browser.scripting.executeScript({
+			target: { tabId: tabs[0].id! },
+			world: "MAIN",
+			args: [id, name],
+			func: async (outfitId: number, outfitName: string) => {
+				const getCookie = (name: string) => {
+					const value = `; ${document.cookie}`;
+					const parts = value.split(`; ${name}=`);
+					if (parts.length === 2) return parts.pop()!.split(";").shift();
+				};
+
+				const xsrfToken = decodeURIComponent(getCookie("XSRF-TOKEN")!);
+
+				const deleteResponse = await fetch(`/api/avatar/outfits/delete`, {
+					method: "POST",
+					credentials: "include",
+					headers: {
+						"Content-Type": "application/json",
+						"X-XSRF-TOKEN": xsrfToken,
+					},
+					body: JSON.stringify({ id: outfitId }),
+				});
+				if (!deleteResponse.ok) {
+					throw new Error("Failed to delete outfit");
+				}
+
+				await fetch("https://polytoria.com/api/avatar/outfits/create", {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						"X-XSRF-TOKEN": xsrfToken,
+					},
+					body: JSON.stringify({ name: outfitName }),
+					credentials: "include",
+				});
+			},
+		});
+	}),
+);
+
 onMessage("changeUserAlias", ({ data: { userId, currentAlias } }) => {
 	handle(async () => {
 		console.log("aaa");

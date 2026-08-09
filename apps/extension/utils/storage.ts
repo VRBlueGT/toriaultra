@@ -34,7 +34,9 @@ export function isMobileDevice(): boolean {
 }
 
 export function isChrome(): boolean {
-	return /Chrome/i.test(navigator.userAgent) && !/Edg|OPR/i.test(navigator.userAgent);
+	return (
+		/Chrome/i.test(navigator.userAgent) && !/Edg|OPR/i.test(navigator.userAgent)
+	);
 }
 
 const desktopOnlyIds = new Set(
@@ -46,6 +48,12 @@ const desktopOnlyIds = new Set(
 const chromeOnlyIds = new Set(
 	(prefItems as Array<{ id: string; chromeOnly?: boolean }>)
 		.filter((p) => p.chromeOnly)
+		.map((p) => p.id),
+);
+
+const deprecatedHiddenIds = new Set(
+	(prefItems as Array<{ id: string; hide?: boolean; defaultEnabled?: boolean }>)
+		.filter((p) => p.hide && !p.defaultEnabled)
 		.map((p) => p.id),
 );
 
@@ -275,10 +283,13 @@ preferences.getPreferences = async function () {
 	const configResult = await sendMessage("getConfig").catch(() => null);
 	const flags = configResult?.ok ? configResult.data.flags : {};
 	const mobile = isMobileDevice();
+	const chrome = isChrome();
 	const activeEnabled = mergedEnabled.filter(
 		(id) =>
 			flags[`features.${id}.enabled`] !== false &&
-			!(mobile && desktopOnlyIds.has(id)),
+			!(mobile && desktopOnlyIds.has(id)) &&
+			!(!chrome && chromeOnlyIds.has(id)) &&
+			!deprecatedHiddenIds.has(id),
 	);
 
 	return {
@@ -360,3 +371,11 @@ export const _bookmarkedThreads = storage.defineItem<
 	fallback: {},
 	version: 1,
 });
+
+export const _securityKeyNames = storage.defineItem<Record<number, string>>(
+	"local:securityKeyNames",
+	{
+		fallback: {},
+		version: 1,
+	},
+);

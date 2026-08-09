@@ -277,6 +277,7 @@ const GalleryTheme = z.object({
 	navbarColor: z.string(),
 	fontFamily: z.string().nullable().optional(),
 	backgroundImage: z.string().nullable().optional(),
+	thumbnailUrl: z.string().nullable().optional(),
 });
 export const ThemeGalleryApi = z.object({
 	data: z.array(GalleryTheme),
@@ -372,6 +373,17 @@ export const AvatarOutfitsApi = z.object({
 });
 export type AvatarOutfitsApi = z.infer<typeof AvatarOutfitsApi>;
 
+const PlaceReviewReply = z.object({
+	id: z.string(),
+	reviewId: z.string(),
+	userId: z.number(),
+	username: z.string(),
+	thumbnail: z.string().nullable(),
+	body: z.string(),
+	createdAt: z.string(),
+	updatedAt: z.string(),
+});
+
 const PlaceReview = z.object({
 	id: z.string(),
 	placeId: z.number(),
@@ -382,6 +394,7 @@ const PlaceReview = z.object({
 	body: z.string().nullable(),
 	createdAt: z.string(),
 	updatedAt: z.string(),
+	replies: z.array(PlaceReviewReply),
 });
 
 export const PlaceReviewsApi = z.object({
@@ -398,6 +411,11 @@ export const PlaceReviewApi = z.object({
 	data: PlaceReview,
 });
 export type PlaceReviewApi = z.infer<typeof PlaceReviewApi>;
+
+export const PlaceReviewReplyApi = z.object({
+	data: PlaceReviewReply,
+});
+export type PlaceReviewReplyApi = z.infer<typeof PlaceReviewReplyApi>;
 
 const AuthSession = z.object({
 	id: z.string(),
