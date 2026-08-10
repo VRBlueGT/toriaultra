@@ -114,492 +114,72 @@
 					"default": "USD",
 					"options": [
 						{
-							"value": "1INCH",
-							"label": "1INCH (1INCH)"
-						},
-						{
-							"value": "AAVE",
-							"label": "Aave (AAVE)"
-						},
-						{
-							"value": "ADA",
-							"label": "Cardano (ADA)"
-						},
-						{
 							"value": "AED",
 							"label": "UAE Dirham (AED)"
-						},
-						{
-							"value": "AFN",
-							"label": "Afghan Afghani (AFN)"
-						},
-						{
-							"value": "AGIX",
-							"label": "SingularityNET (AGIX)"
-						},
-						{
-							"value": "AKT",
-							"label": "Akash Network (AKT)"
-						},
-						{
-							"value": "ALGO",
-							"label": "Algorand (ALGO)"
-						},
-						{
-							"value": "ALL",
-							"label": "Albanian Lek (ALL)"
-						},
-						{
-							"value": "AMD",
-							"label": "Armenian Dram (AMD)"
-						},
-						{
-							"value": "AMP",
-							"label": "Amp (AMP)"
-						},
-						{
-							"value": "AOA",
-							"label": "Angolan Kwanza (AOA)"
-						},
-						{
-							"value": "APE",
-							"label": "ApeCoin (APE)"
-						},
-						{
-							"value": "APT",
-							"label": "Aptos (APT)"
-						},
-						{
-							"value": "AR",
-							"label": "Arweave (AR)"
-						},
-						{
-							"value": "ARB",
-							"label": "Arbitrum (ARB)"
 						},
 						{
 							"value": "ARS",
 							"label": "Argentine Peso (ARS)"
 						},
 						{
-							"value": "ATOM",
-							"label": "Cosmos (ATOM)"
-						},
-						{
 							"value": "AUD",
 							"label": "Australian Dollar (AUD)"
-						},
-						{
-							"value": "AVAX",
-							"label": "Avalanche (AVAX)"
-						},
-						{
-							"value": "AWG",
-							"label": "Aruban Florin (AWG)"
-						},
-						{
-							"value": "AXS",
-							"label": "Axie Infinity (AXS)"
-						},
-						{
-							"value": "AZN",
-							"label": "Azerbaijani Manat (AZN)"
-						},
-						{
-							"value": "BAKE",
-							"label": "BakeryToken (BAKE)"
-						},
-						{
-							"value": "BAM",
-							"label": "Bosnia-Herzegovina Mark (BAM)"
-						},
-						{
-							"value": "BAT",
-							"label": "Basic Attention Token (BAT)"
-						},
-						{
-							"value": "BBD",
-							"label": "Barbadian Dollar (BBD)"
-						},
-						{
-							"value": "BCH",
-							"label": "Bitcoin Cash (BCH)"
 						},
 						{
 							"value": "BDT",
 							"label": "Bangladeshi Taka (BDT)"
 						},
 						{
-							"value": "BHD",
-							"label": "Bahraini Dinar (BHD)"
-						},
-						{
-							"value": "BIF",
-							"label": "Burundian Franc (BIF)"
-						},
-						{
-							"value": "BMD",
-							"label": "Bermudian Dollar (BMD)"
-						},
-						{
-							"value": "BNB",
-							"label": "BNB (BNB)"
-						},
-						{
-							"value": "BND",
-							"label": "Brunei Dollar (BND)"
-						},
-						{
-							"value": "BOB",
-							"label": "Bolivian Boliviano (BOB)"
-						},
-						{
 							"value": "BRL",
 							"label": "Brazilian Real (BRL)"
-						},
-						{
-							"value": "BSD",
-							"label": "Bahamian Dollar (BSD)"
-						},
-						{
-							"value": "BSV",
-							"label": "Bitcoin SV (BSV)"
-						},
-						{
-							"value": "BSW",
-							"label": "Biswap (BSW)"
-						},
-						{
-							"value": "BTC",
-							"label": "Bitcoin (BTC)"
-						},
-						{
-							"value": "BTG",
-							"label": "Bitcoin Gold (BTG)"
-						},
-						{
-							"value": "BTN",
-							"label": "Bhutanese Ngultrum (BTN)"
-						},
-						{
-							"value": "BTT",
-							"label": "BitTorrent (BTT)"
-						},
-						{
-							"value": "BUSD",
-							"label": "Binance USD (BUSD)"
-						},
-						{
-							"value": "BWP",
-							"label": "Botswanan Pula (BWP)"
-						},
-						{
-							"value": "BYN",
-							"label": "Belarusian Ruble (BYN)"
-						},
-						{
-							"value": "BYR",
-							"label": "Belarusian Ruble (Legacy) (BYR)"
-						},
-						{
-							"value": "BZD",
-							"label": "Belize Dollar (BZD)"
 						},
 						{
 							"value": "CAD",
 							"label": "Canadian Dollar (CAD)"
 						},
 						{
-							"value": "CAKE",
-							"label": "PancakeSwap (CAKE)"
-						},
-						{
-							"value": "CDF",
-							"label": "Congolese Franc (CDF)"
-						},
-						{
-							"value": "CELO",
-							"label": "Celo (CELO)"
-						},
-						{
-							"value": "CFX",
-							"label": "Conflux (CFX)"
-						},
-						{
 							"value": "CHF",
 							"label": "Swiss Franc (CHF)"
-						},
-						{
-							"value": "CHZ",
-							"label": "Chiliz (CHZ)"
 						},
 						{
 							"value": "CLP",
 							"label": "Chilean Peso (CLP)"
 						},
 						{
-							"value": "CNH",
-							"label": "Chinese Yuan (Offshore) (CNH)"
-						},
-						{
 							"value": "CNY",
 							"label": "Chinese Yuan (CNY)"
-						},
-						{
-							"value": "COMP",
-							"label": "Compound (COMP)"
 						},
 						{
 							"value": "COP",
 							"label": "Colombian Peso (COP)"
 						},
 						{
-							"value": "CRC",
-							"label": "Costa Rican Colón (CRC)"
-						},
-						{
-							"value": "CRO",
-							"label": "Cronos (CRO)"
-						},
-						{
-							"value": "CRV",
-							"label": "Curve DAO Token (CRV)"
-						},
-						{
-							"value": "CSPR",
-							"label": "Casper (CSPR)"
-						},
-						{
-							"value": "CUC",
-							"label": "Cuban Convertible Peso (CUC)"
-						},
-						{
-							"value": "CUP",
-							"label": "Cuban Peso (CUP)"
-						},
-						{
-							"value": "CVE",
-							"label": "Cape Verdean Escudo (CVE)"
-						},
-						{
-							"value": "CVX",
-							"label": "Convex Finance (CVX)"
-						},
-						{
 							"value": "CZK",
 							"label": "Czech Koruna (CZK)"
-						},
-						{
-							"value": "DAI",
-							"label": "Dai (DAI)"
-						},
-						{
-							"value": "DASH",
-							"label": "Dash (DASH)"
-						},
-						{
-							"value": "DCR",
-							"label": "Decred (DCR)"
-						},
-						{
-							"value": "DFI",
-							"label": "DeFiChain (DFI)"
-						},
-						{
-							"value": "DJF",
-							"label": "Djiboutian Franc (DJF)"
 						},
 						{
 							"value": "DKK",
 							"label": "Danish Krone (DKK)"
 						},
 						{
-							"value": "DOGE",
-							"label": "Dogecoin (DOGE)"
-						},
-						{
-							"value": "DOP",
-							"label": "Dominican Peso (DOP)"
-						},
-						{
-							"value": "DOT",
-							"label": "Polkadot (DOT)"
-						},
-						{
-							"value": "DYDX",
-							"label": "dYdX (DYDX)"
-						},
-						{
-							"value": "DZD",
-							"label": "Algerian Dinar (DZD)"
-						},
-						{
-							"value": "EGLD",
-							"label": "MultiversX (EGLD)"
-						},
-						{
 							"value": "EGP",
 							"label": "Egyptian Pound (EGP)"
-						},
-						{
-							"value": "ENJ",
-							"label": "Enjin Coin (ENJ)"
-						},
-						{
-							"value": "EOS",
-							"label": "EOS (EOS)"
-						},
-						{
-							"value": "ERN",
-							"label": "Eritrean Nakfa (ERN)"
-						},
-						{
-							"value": "ETB",
-							"label": "Ethiopian Birr (ETB)"
-						},
-						{
-							"value": "ETC",
-							"label": "Ethereum Classic (ETC)"
-						},
-						{
-							"value": "ETH",
-							"label": "Ethereum (ETH)"
 						},
 						{
 							"value": "EUR",
 							"label": "Euro (EUR)"
 						},
 						{
-							"value": "FEI",
-							"label": "Fei USD (FEI)"
-						},
-						{
-							"value": "FIL",
-							"label": "Filecoin (FIL)"
-						},
-						{
-							"value": "FJD",
-							"label": "Fijian Dollar (FJD)"
-						},
-						{
-							"value": "FKP",
-							"label": "Falkland Islands Pound (FKP)"
-						},
-						{
-							"value": "FLOW",
-							"label": "Flow (FLOW)"
-						},
-						{
-							"value": "FLR",
-							"label": "Flare (FLR)"
-						},
-						{
-							"value": "FRAX",
-							"label": "Frax (FRAX)"
-						},
-						{
-							"value": "FTT",
-							"label": "FTX Token (FTT)"
-						},
-						{
-							"value": "GALA",
-							"label": "Gala (GALA)"
-						},
-						{
 							"value": "GBP",
 							"label": "British Pound (GBP)"
-						},
-						{
-							"value": "GEL",
-							"label": "Georgian Lari (GEL)"
-						},
-						{
-							"value": "GGP",
-							"label": "Guernsey Pound (GGP)"
-						},
-						{
-							"value": "GHS",
-							"label": "Ghanaian Cedi (GHS)"
-						},
-						{
-							"value": "GIP",
-							"label": "Gibraltar Pound (GIP)"
-						},
-						{
-							"value": "GMD",
-							"label": "Gambian Dalasi (GMD)"
-						},
-						{
-							"value": "GMX",
-							"label": "GMX (GMX)"
-						},
-						{
-							"value": "GNF",
-							"label": "Guinean Franc (GNF)"
-						},
-						{
-							"value": "GNO",
-							"label": "Gnosis (GNO)"
-						},
-						{
-							"value": "GRT",
-							"label": "The Graph (GRT)"
-						},
-						{
-							"value": "GT",
-							"label": "GateToken (GT)"
-						},
-						{
-							"value": "GTQ",
-							"label": "Guatemalan Quetzal (GTQ)"
-						},
-						{
-							"value": "GUSD",
-							"label": "Gemini Dollar (GUSD)"
-						},
-						{
-							"value": "GYD",
-							"label": "Guyanese Dollar (GYD)"
-						},
-						{
-							"value": "HBAR",
-							"label": "Hedera (HBAR)"
 						},
 						{
 							"value": "HKD",
 							"label": "Hong Kong Dollar (HKD)"
 						},
 						{
-							"value": "HNL",
-							"label": "Honduran Lempira (HNL)"
-						},
-						{
-							"value": "HNT",
-							"label": "Helium (HNT)"
-						},
-						{
-							"value": "HOT",
-							"label": "Holo (HOT)"
-						},
-						{
-							"value": "HRK",
-							"label": "Croatian Kuna (HRK)"
-						},
-						{
-							"value": "HT",
-							"label": "Huobi Token (HT)"
-						},
-						{
-							"value": "HTG",
-							"label": "Haitian Gourde (HTG)"
-						},
-						{
 							"value": "HUF",
 							"label": "Hungarian Forint (HUF)"
-						},
-						{
-							"value": "ICP",
-							"label": "Internet Computer (ICP)"
 						},
 						{
 							"value": "IDR",
@@ -610,232 +190,20 @@
 							"label": "Israeli New Shekel (ILS)"
 						},
 						{
-							"value": "IMP",
-							"label": "Isle of Man Pound (IMP)"
-						},
-						{
-							"value": "IMX",
-							"label": "Immutable X (IMX)"
-						},
-						{
-							"value": "INJ",
-							"label": "Injective (INJ)"
-						},
-						{
 							"value": "INR",
 							"label": "Indian Rupee (INR)"
-						},
-						{
-							"value": "IQD",
-							"label": "Iraqi Dinar (IQD)"
-						},
-						{
-							"value": "IRR",
-							"label": "Iranian Rial (IRR)"
-						},
-						{
-							"value": "ISK",
-							"label": "Icelandic Króna (ISK)"
-						},
-						{
-							"value": "JEP",
-							"label": "Jersey Pound (JEP)"
-						},
-						{
-							"value": "JMD",
-							"label": "Jamaican Dollar (JMD)"
-						},
-						{
-							"value": "JOD",
-							"label": "Jordanian Dinar (JOD)"
 						},
 						{
 							"value": "JPY",
 							"label": "Japanese Yen (JPY)"
 						},
 						{
-							"value": "KAS",
-							"label": "Kaspa (KAS)"
-						},
-						{
-							"value": "KAVA",
-							"label": "Kava (KAVA)"
-						},
-						{
-							"value": "KCS",
-							"label": "KuCoin Token (KCS)"
-						},
-						{
-							"value": "KDA",
-							"label": "Kadena (KDA)"
-						},
-						{
-							"value": "KES",
-							"label": "Kenyan Shilling (KES)"
-						},
-						{
-							"value": "KGS",
-							"label": "Kyrgyzstani Som (KGS)"
-						},
-						{
-							"value": "KHR",
-							"label": "Cambodian Riel (KHR)"
-						},
-						{
-							"value": "KLAY",
-							"label": "Klaytn (KLAY)"
-						},
-						{
-							"value": "KMF",
-							"label": "Comorian Franc (KMF)"
-						},
-						{
-							"value": "KNC",
-							"label": "Kyber Network Crystal (KNC)"
-						},
-						{
-							"value": "KPW",
-							"label": "North Korean Won (KPW)"
-						},
-						{
 							"value": "KRW",
 							"label": "South Korean Won (KRW)"
 						},
 						{
-							"value": "KSM",
-							"label": "Kusama (KSM)"
-						},
-						{
 							"value": "KWD",
 							"label": "Kuwaiti Dinar (KWD)"
-						},
-						{
-							"value": "KYD",
-							"label": "Cayman Islands Dollar (KYD)"
-						},
-						{
-							"value": "KZT",
-							"label": "Kazakhstani Tenge (KZT)"
-						},
-						{
-							"value": "LAK",
-							"label": "Laotian Kip (LAK)"
-						},
-						{
-							"value": "LBP",
-							"label": "Lebanese Pound (LBP)"
-						},
-						{
-							"value": "LDO",
-							"label": "Lido DAO (LDO)"
-						},
-						{
-							"value": "LEO",
-							"label": "UNUS SED LEO (LEO)"
-						},
-						{
-							"value": "LINK",
-							"label": "Chainlink (LINK)"
-						},
-						{
-							"value": "LKR",
-							"label": "Sri Lankan Rupee (LKR)"
-						},
-						{
-							"value": "LRC",
-							"label": "Loopring (LRC)"
-						},
-						{
-							"value": "LRD",
-							"label": "Liberian Dollar (LRD)"
-						},
-						{
-							"value": "LSL",
-							"label": "Lesotho Loti (LSL)"
-						},
-						{
-							"value": "LTC",
-							"label": "Litecoin (LTC)"
-						},
-						{
-							"value": "LTL",
-							"label": "Lithuanian Litas (LTL)"
-						},
-						{
-							"value": "LUNA",
-							"label": "Terra Luna (LUNA)"
-						},
-						{
-							"value": "LUNC",
-							"label": "Terra Classic (LUNC)"
-						},
-						{
-							"value": "LVL",
-							"label": "Latvian Lats (LVL)"
-						},
-						{
-							"value": "LYD",
-							"label": "Libyan Dinar (LYD)"
-						},
-						{
-							"value": "MAD",
-							"label": "Moroccan Dirham (MAD)"
-						},
-						{
-							"value": "MANA",
-							"label": "Decentraland (MANA)"
-						},
-						{
-							"value": "MBX",
-							"label": "MARBLEX (MBX)"
-						},
-						{
-							"value": "MDL",
-							"label": "Moldovan Leu (MDL)"
-						},
-						{
-							"value": "MGA",
-							"label": "Malagasy Ariary (MGA)"
-						},
-						{
-							"value": "MINA",
-							"label": "Mina Protocol (MINA)"
-						},
-						{
-							"value": "MKD",
-							"label": "Macedonian Denar (MKD)"
-						},
-						{
-							"value": "MKR",
-							"label": "Maker (MKR)"
-						},
-						{
-							"value": "MMK",
-							"label": "Myanmar Kyat (MMK)"
-						},
-						{
-							"value": "MNT",
-							"label": "Mongolian Tögrög (MNT)"
-						},
-						{
-							"value": "MOP",
-							"label": "Macanese Pataca (MOP)"
-						},
-						{
-							"value": "MRU",
-							"label": "Mauritanian Ouguiya (MRU)"
-						},
-						{
-							"value": "MUR",
-							"label": "Mauritian Rupee (MUR)"
-						},
-						{
-							"value": "MVR",
-							"label": "Maldivian Rufiyaa (MVR)"
-						},
-						{
-							"value": "MWK",
-							"label": "Malawian Kwacha (MWK)"
 						},
 						{
 							"value": "MXN",
@@ -846,96 +214,24 @@
 							"label": "Malaysian Ringgit (MYR)"
 						},
 						{
-							"value": "MZN",
-							"label": "Mozambican Metical (MZN)"
-						},
-						{
-							"value": "NAD",
-							"label": "Namibian Dollar (NAD)"
-						},
-						{
-							"value": "NEAR",
-							"label": "NEAR Protocol (NEAR)"
-						},
-						{
-							"value": "NEO",
-							"label": "NEO (NEO)"
-						},
-						{
-							"value": "NEXO",
-							"label": "Nexo (NEXO)"
-						},
-						{
-							"value": "NFT",
-							"label": "APENFT (NFT)"
-						},
-						{
 							"value": "NGN",
 							"label": "Nigerian Naira (NGN)"
-						},
-						{
-							"value": "NIO",
-							"label": "Nicaraguan Córdoba (NIO)"
 						},
 						{
 							"value": "NOK",
 							"label": "Norwegian Krone (NOK)"
 						},
 						{
-							"value": "NPR",
-							"label": "Nepalese Rupee (NPR)"
-						},
-						{
 							"value": "NZD",
 							"label": "New Zealand Dollar (NZD)"
-						},
-						{
-							"value": "OKB",
-							"label": "OKB (OKB)"
-						},
-						{
-							"value": "OMR",
-							"label": "Omani Rial (OMR)"
-						},
-						{
-							"value": "ONE",
-							"label": "Harmony (ONE)"
-						},
-						{
-							"value": "OP",
-							"label": "Optimism (OP)"
-						},
-						{
-							"value": "ORDI",
-							"label": "Ordinals (ORDI)"
-						},
-						{
-							"value": "PAB",
-							"label": "Panamanian Balboa (PAB)"
-						},
-						{
-							"value": "PAXG",
-							"label": "PAX Gold (PAXG)"
 						},
 						{
 							"value": "PEN",
 							"label": "Peruvian Sol (PEN)"
 						},
 						{
-							"value": "PEPE",
-							"label": "Pepe (PEPE)"
-						},
-						{
-							"value": "PGK",
-							"label": "Papua New Guinean Kina (PGK)"
-						},
-						{
 							"value": "PHP",
 							"label": "Philippine Peso (PHP)"
-						},
-						{
-							"value": "PI",
-							"label": "Pi Network (PI)"
 						},
 						{
 							"value": "PKR",
@@ -946,72 +242,20 @@
 							"label": "Polish Złoty (PLN)"
 						},
 						{
-							"value": "POL",
-							"label": "POL (POL)"
-						},
-						{
-							"value": "PYG",
-							"label": "Paraguayan Guaraní (PYG)"
-						},
-						{
 							"value": "QAR",
 							"label": "Qatari Rial (QAR)"
-						},
-						{
-							"value": "QNT",
-							"label": "Quant (QNT)"
-						},
-						{
-							"value": "QTUM",
-							"label": "Qtum (QTUM)"
 						},
 						{
 							"value": "RON",
 							"label": "Romanian Leu (RON)"
 						},
 						{
-							"value": "RPL",
-							"label": "Rocket Pool (RPL)"
-						},
-						{
-							"value": "RSD",
-							"label": "Serbian Dinar (RSD)"
-						},
-						{
 							"value": "RUB",
 							"label": "Russian Ruble (RUB)"
 						},
 						{
-							"value": "RUNE",
-							"label": "THORChain (RUNE)"
-						},
-						{
-							"value": "RVN",
-							"label": "Ravencoin (RVN)"
-						},
-						{
-							"value": "RWF",
-							"label": "Rwandan Franc (RWF)"
-						},
-						{
-							"value": "SAND",
-							"label": "The Sandbox (SAND)"
-						},
-						{
 							"value": "SAR",
 							"label": "Saudi Riyal (SAR)"
-						},
-						{
-							"value": "SBD",
-							"label": "Solomon Islands Dollar (SBD)"
-						},
-						{
-							"value": "SCR",
-							"label": "Seychellois Rupee (SCR)"
-						},
-						{
-							"value": "SDG",
-							"label": "Sudanese Pound (SDG)"
 						},
 						{
 							"value": "SEK",
@@ -1022,276 +266,32 @@
 							"label": "Singapore Dollar (SGD)"
 						},
 						{
-							"value": "SHIB",
-							"label": "Shiba Inu (SHIB)"
-						},
-						{
-							"value": "SLE",
-							"label": "Sierra Leonean Leone (SLE)"
-						},
-						{
-							"value": "SNX",
-							"label": "Synthetix (SNX)"
-						},
-						{
-							"value": "SOL",
-							"label": "Solana (SOL)"
-						},
-						{
-							"value": "SOS",
-							"label": "Somali Shilling (SOS)"
-						},
-						{
-							"value": "SRD",
-							"label": "Surinamese Dollar (SRD)"
-						},
-						{
-							"value": "STD",
-							"label": "São Tomé Dobra (Legacy) (STD)"
-						},
-						{
-							"value": "STN",
-							"label": "São Tomé Dobra (STN)"
-						},
-						{
-							"value": "STX",
-							"label": "Stacks (STX)"
-						},
-						{
-							"value": "SUI",
-							"label": "Sui (SUI)"
-						},
-						{
-							"value": "SVC",
-							"label": "Salvadoran Colón (SVC)"
-						},
-						{
-							"value": "SYP",
-							"label": "Syrian Pound (SYP)"
-						},
-						{
-							"value": "SZL",
-							"label": "Swazi Lilangeni (SZL)"
-						},
-						{
 							"value": "THB",
 							"label": "Thai Baht (THB)"
-						},
-						{
-							"value": "THETA",
-							"label": "Theta Network (THETA)"
-						},
-						{
-							"value": "TJS",
-							"label": "Tajikistani Somoni (TJS)"
-						},
-						{
-							"value": "TMT",
-							"label": "Turkmenistani Manat (TMT)"
-						},
-						{
-							"value": "TND",
-							"label": "Tunisian Dinar (TND)"
-						},
-						{
-							"value": "TON",
-							"label": "Toncoin (TON)"
-						},
-						{
-							"value": "TRX",
-							"label": "TRON (TRX)"
 						},
 						{
 							"value": "TRY",
 							"label": "Turkish Lira (TRY)"
 						},
 						{
-							"value": "TTD",
-							"label": "Trinidad & Tobago Dollar (TTD)"
-						},
-						{
-							"value": "TUSD",
-							"label": "TrueUSD (TUSD)"
-						},
-						{
 							"value": "TWD",
 							"label": "New Taiwan Dollar (TWD)"
-						},
-						{
-							"value": "TWT",
-							"label": "Trust Wallet Token (TWT)"
-						},
-						{
-							"value": "TZS",
-							"label": "Tanzanian Shilling (TZS)"
 						},
 						{
 							"value": "UAH",
 							"label": "Ukrainian Hryvnia (UAH)"
 						},
 						{
-							"value": "UGX",
-							"label": "Ugandan Shilling (UGX)"
-						},
-						{
-							"value": "UNI",
-							"label": "Uniswap (UNI)"
-						},
-						{
 							"value": "USD",
 							"label": "United States Dollar (USD)"
-						},
-						{
-							"value": "USDC",
-							"label": "USD Coin (USDC)"
-						},
-						{
-							"value": "USDD",
-							"label": "USDD (USDD)"
-						},
-						{
-							"value": "USDP",
-							"label": "Pax Dollar (USDP)"
-						},
-						{
-							"value": "USDT",
-							"label": "Tether (USDT)"
-						},
-						{
-							"value": "UYU",
-							"label": "Uruguayan Peso (UYU)"
-						},
-						{
-							"value": "UZS",
-							"label": "Uzbekistani Som (UZS)"
-						},
-						{
-							"value": "VES",
-							"label": "Venezuelan Bolívar (VES)"
-						},
-						{
-							"value": "VET",
-							"label": "VeChain (VET)"
 						},
 						{
 							"value": "VND",
 							"label": "Vietnamese Đồng (VND)"
 						},
 						{
-							"value": "VUV",
-							"label": "Vanuatu Vatu (VUV)"
-						},
-						{
-							"value": "WAVES",
-							"label": "Waves (WAVES)"
-						},
-						{
-							"value": "WEMIX",
-							"label": "WEMIX (WEMIX)"
-						},
-						{
-							"value": "WOO",
-							"label": "WOO Network (WOO)"
-						},
-						{
-							"value": "WST",
-							"label": "Samoan Tālā (WST)"
-						},
-						{
-							"value": "XAF",
-							"label": "Central African CFA Franc (XAF)"
-						},
-						{
-							"value": "XAG",
-							"label": "Silver Ounce (XAG)"
-						},
-						{
-							"value": "XAU",
-							"label": "Gold Ounce (XAU)"
-						},
-						{
-							"value": "XAUT",
-							"label": "Tether Gold (XAUT)"
-						},
-						{
-							"value": "XCD",
-							"label": "East Caribbean Dollar (XCD)"
-						},
-						{
-							"value": "XCG",
-							"label": "Caribbean Guilder (XCG)"
-						},
-						{
-							"value": "XCH",
-							"label": "Chia (XCH)"
-						},
-						{
-							"value": "XDC",
-							"label": "XDC Network (XDC)"
-						},
-						{
-							"value": "XDR",
-							"label": "Special Drawing Rights (XDR)"
-						},
-						{
-							"value": "XEC",
-							"label": "eCash (XEC)"
-						},
-						{
-							"value": "XEM",
-							"label": "NEM (XEM)"
-						},
-						{
-							"value": "XLM",
-							"label": "Stellar (XLM)"
-						},
-						{
-							"value": "XMR",
-							"label": "Monero (XMR)"
-						},
-						{
-							"value": "XOF",
-							"label": "West African CFA Franc (XOF)"
-						},
-						{
-							"value": "XPF",
-							"label": "CFP Franc (XPF)"
-						},
-						{
-							"value": "XRP",
-							"label": "XRP (XRP)"
-						},
-						{
-							"value": "XTZ",
-							"label": "Tezos (XTZ)"
-						},
-						{
-							"value": "YER",
-							"label": "Yemeni Rial (YER)"
-						},
-						{
 							"value": "ZAR",
 							"label": "South African Rand (ZAR)"
-						},
-						{
-							"value": "ZEC",
-							"label": "Zcash (ZEC)"
-						},
-						{
-							"value": "ZIL",
-							"label": "Zilliqa (ZIL)"
-						},
-						{
-							"value": "ZMK",
-							"label": "Zambian Kwacha (Legacy) (ZMK)"
-						},
-						{
-							"value": "ZMW",
-							"label": "Zambian Kwacha (ZMW)"
-						},
-						{
-							"value": "ZWL",
-							"label": "Zimbabwean Dollar (ZWL)"
 						}
 					]
 				}
@@ -1602,7 +602,8 @@
 				}
 			],
 			"tags": [
-				"social"
+				"social",
+				"deprecated"
 			],
 			"desktopOnly": true
 		},

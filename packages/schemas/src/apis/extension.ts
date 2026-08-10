@@ -417,6 +417,29 @@ export const PlaceReviewReplyApi = z.object({
 });
 export type PlaceReviewReplyApi = z.infer<typeof PlaceReviewReplyApi>;
 
+const KilnNotification = z.object({
+	id: z.number(),
+	userId: z.number(),
+	type: z.string(),
+	message: z.string(),
+	url: z.string(),
+	avatarUrl: z.string().nullable(),
+	sourceId: z.string(),
+	createdAt: z.string(),
+	seenAt: z.string().nullable(),
+});
+export type KilnNotification = z.infer<typeof KilnNotification>;
+
+export const NotificationsApi = z.object({
+	data: z.array(KilnNotification),
+});
+export type NotificationsApi = z.infer<typeof NotificationsApi>;
+
+export const MarkNotificationSeenApi = z.object({
+	data: KilnNotification,
+});
+export type MarkNotificationSeenApi = z.infer<typeof MarkNotificationSeenApi>;
+
 const AuthSession = z.object({
 	id: z.string(),
 	createdAt: z.string().nullable(),

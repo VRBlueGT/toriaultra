@@ -19,7 +19,7 @@ import metadata from "@/utils/static/metadata.json";
 import { _lastViewedPlaces } from "@/utils/storage";
 import type { CurrencyCode } from "@/utils/types";
 import {
-	fireKilnNotification,
+	formatNotificationRelativeTime,
 	getConfig,
 	markKilnNotificationRead,
 	pullKVCache,
@@ -873,7 +873,7 @@ export function legacyPlaceViewLayout(): void {
 	buttonContainer.className = "row px-3 px-lg-2";
 	buttonContainer.innerHTML = `
       <div class="col px-1">
-        <button class="btn btn-lg btn-game w-100 my-2" id="btn-play" onclick="joinPlace()">
+        <button class="btn btn-lg btn-game w-100 my-2" id="btn-play">
           <i class="fas fa-play"></i>
         </button>
       </div>
@@ -1015,12 +1015,48 @@ export function legacyPlaceViewLayout(): void {
 
 	const mobileNav = document.querySelector<HTMLElement>(".mobile-nav-bottom");
 	if (mobileNav) container.appendChild(mobileNav);
+
+	document.getElementById("btn-play")?.addEventListener("click", async () => {
+		sendMessage("joinPlace", {
+			placeId: placeID,
+			version: document.querySelector(".badge .fa-gamepad") ? 2 : 1,
+		});
+	});
+}
+
+function waitForPlaceTabs(): Promise<{
+	tabList: HTMLElement;
+	tabContent: Element;
+} | null> {
+	return new Promise((resolve) => {
+		const tryResolve = () => {
+			const tabList = document.getElementById("place-tabs");
+			const tabContent = document.querySelector(".card-body.tab-content");
+			if (tabList && tabContent) {
+				resolve({ tabList, tabContent });
+				return true;
+			}
+			return false;
+		};
+
+		if (tryResolve()) return;
+
+		const observer = new MutationObserver(() => {
+			if (tryResolve()) observer.disconnect();
+		});
+		observer.observe(document.body, { childList: true, subtree: true });
+
+		setTimeout(() => {
+			observer.disconnect();
+			resolve(null);
+		}, 15_000);
+	});
 }
 
 export async function detailedPlaceReviews(userId: number) {
-	const tabList = document.getElementById("place-tabs");
-	const tabContent = document.querySelector(".card-body.tab-content");
-	if (!tabList || !tabContent) return;
+	const elements = await waitForPlaceTabs();
+	if (!elements) return;
+	const { tabList, tabContent } = elements;
 
 	const isVerified = !!(await getApiSession(userId));
 
@@ -1031,6 +1067,18 @@ export async function detailedPlaceReviews(userId: number) {
 			html += `<i class="${filled ? "fas" : "far"} fa-star${interactive ? " kiln-review-star" : ""}" data-star="${i}" style="cursor:${interactive ? "pointer" : "default"};color:${filled ? "#f0b429" : "#aaa"};margin-right:2px;"></i>`;
 		}
 		return html;
+	};
+
+	const renderTimestamp = (iso: string) => {
+		const date = new Date(iso);
+		const absolute = date.toLocaleString(undefined, {
+			month: "short",
+			day: "numeric",
+			year: "numeric",
+			hour: "numeric",
+			minute: "2-digit",
+		});
+		return `<span data-bs-toggle="tooltip" data-bs-placement="top" data-bs-original-title="${absolute}">${formatNotificationRelativeTime(date)}</span>`;
 	};
 
 	interface ReviewReply {
@@ -1044,12 +1092,8 @@ export async function detailedPlaceReviews(userId: number) {
 		updatedAt: string;
 	}
 
-	const renderReplyRow = (reply: ReviewReply) => {
-		const date = new Date(reply.createdAt).toLocaleDateString(undefined, {
-			month: "short",
-			day: "numeric",
-			year: "numeric",
-		});
+	const renderReplyRow = (reply: ReviewReply, creatorId: number | null) => {
+		const date = renderTimestamp(reply.createdAt);
 
 		return `
 			<div class="d-flex align-items-start gap-2 mt-2 ps-3 border-start border-secondary" data-reply-id="${reply.id}">
@@ -1057,6 +1101,11 @@ export async function detailedPlaceReviews(userId: number) {
 				<div class="flex-grow-1">
 					<div class="small">
 						<a href="/u/${reply.username}" class="text-reset"><span class="userlink-default">${reply.username}</span></a>
+						${
+							creatorId !== null && reply.userId === creatorId
+								? `<span class="badge bg-primary" style="margin-left:5px;vertical-align:text-top;" data-bs-toggle="tooltip" data-bs-title="This user created this world.">CREATOR</span>`
+								: ""
+						}
 						<span class="text-muted ms-1">${date}</span>
 					</div>
 					<div class="small">${reply.body}</div>
@@ -1070,12 +1119,15 @@ export async function detailedPlaceReviews(userId: number) {
 			`;
 	};
 
-	const renderRepliesSection = (review: {
-		id: string;
-		replies: ReviewReply[];
-	}) => `
+	const renderRepliesSection = (
+		review: {
+			id: string;
+			replies: ReviewReply[];
+		},
+		creatorId: number | null,
+	) => `
 		<div class="mt-2 pt-2 border-top border-secondary kiln-review-replies">
-			${review.replies.map(renderReplyRow).join("")}
+			${review.replies.map((reply) => renderReplyRow(reply, creatorId)).join("")}
 			<div class="d-flex gap-2 mt-2">
 				<textarea class="form-control form-control-sm bg-dark text-light border-secondary kiln-reply-textarea" rows="1" placeholder="Write a reply..." style="resize:vertical;font-size:0.8rem;" data-review-id="${review.id}"></textarea>
 				<button class="btn btn-primary btn-sm kiln-reply-submit" data-review-id="${review.id}"><i class="fas fa-reply"></i></button>
@@ -1083,38 +1135,64 @@ export async function detailedPlaceReviews(userId: number) {
 		</div>
 		`;
 
-	const renderReviewRow = (review: {
-		id: string;
-		username: string;
-		thumbnail: string | null;
-		rating: number;
-		body: string | null;
-		createdAt: string;
-		replies: ReviewReply[];
-	}) => {
-		const date = new Date(review.createdAt).toLocaleDateString(undefined, {
-			month: "short",
-			day: "numeric",
-			year: "numeric",
-		});
+	const renderReviewRow = (
+		review: {
+			id: string;
+			username: string;
+			thumbnail: string | null;
+			rating: number;
+			body: string | null;
+			createdAt: string;
+			replies: ReviewReply[];
+		},
+		creatorId: number | null,
+		isOwn = false,
+		isEditing = false,
+		pendingRating = review.rating,
+	) => {
+		const date = renderTimestamp(review.createdAt);
+
+		const editing = isOwn && isEditing;
 
 		return `
-			<div class="card mcard mb-2">
+			<div class="card mcard mb-2${isOwn ? " border border-primary" : ""}">
 				<div class="card-body p-3">
 					<div class="d-flex align-items-center gap-2 mb-2">
 						<a href="/u/${review.username}" class="flex-shrink-0">
 							<img src="${review.thumbnail}" alt="${review.username}" class="rounded-circle border border-2 border-secondary" width="40" height="40">
 						</a>
-						<div class="min-w-0">
+						<div class="min-w-0 flex-grow-1">
 							<a href="/u/${review.username}" class="text-reset"><span class="userlink-default fw-bold">${review.username}</span></a>
 							<div class="text-muted small">
 								<i class="fad fa-clock me-1"></i>${date}
 							</div>
 						</div>
+						${
+							isOwn
+								? `<button class="btn btn-sm btn-outline-secondary kiln-review-edit flex-shrink-0 px-2 py-1" title="Edit your review"><i class="fas fa-pen"></i></button>
+								<button class="btn btn-sm btn-outline-danger kiln-review-delete flex-shrink-0 px-2 py-1 ms-1" title="Delete your review"><i class="fas fa-trash"></i></button>`
+								: ""
+						}
 					</div>
-					<p class="mb-2 feed-post-text">${review.body}</p>
-					<div>${renderStars(review.rating)}</div>
-					${renderRepliesSection(review)}
+					${
+						editing
+							? `<textarea class="form-control form-control-sm bg-dark text-light border-secondary kiln-review-body mb-2" rows="2" placeholder="Optional comment..." style="resize:vertical;font-size:0.85rem;">${review.body ?? ""}</textarea>`
+							: `<p class="mb-2 feed-post-text">${review.body ?? ""}</p>`
+					}
+					${
+						editing
+							? `<div class="d-flex gap-1 mb-2 kiln-star-picker">${renderStars(pendingRating, true)}</div>`
+							: `<div class="mb-2">${renderStars(review.rating)}</div>`
+					}
+					${
+						editing
+							? `<div class="d-flex gap-2 mb-2">
+								<button class="btn btn-primary btn-sm kiln-review-submit" ${pendingRating === 0 ? "disabled" : ""}>Update</button>
+								<button class="btn btn-outline-secondary btn-sm kiln-review-cancel">Cancel</button>
+							</div>`
+							: ""
+					}
+					${renderRepliesSection(review, creatorId)}
 				</div>
 			</div>
 			`;
@@ -1151,8 +1229,10 @@ export async function detailedPlaceReviews(userId: number) {
 	const avgBadge = navItem.querySelector<HTMLElement>(
 		".kiln-review-avg-badge",
 	)!;
+	avgBadge.innerHTML = `<span class="badge bg-secondary ms-1" style="font-size:0.8rem;">...</span>`;
 
 	if (!isVerified) {
+		avgBadge.innerHTML = "";
 		cardBody.innerHTML = `
 			<p class="text-muted small mb-2"><i class="fa-regular fa-lock me-1"></i> Verify your Kiln account to leave a review.</p>
 			<a href="/my/settings/kiln?tab=sync" class="btn btn-primary btn-sm">Verify Account</a>`;
@@ -1162,7 +1242,7 @@ export async function detailedPlaceReviews(userId: number) {
 	await loadReviews();
 
 	async function loadReviews() {
-		const [result, activityResult, placeResult] = await Promise.all([
+		const results = await Promise.all([
 			sendMessage("getPlaceReviews", { placeId: placeID, userId }),
 			sendMessage("getGameActivity", {
 				userId,
@@ -1171,8 +1251,18 @@ export async function detailedPlaceReviews(userId: number) {
 				pageSize: 25,
 			}),
 			sendMessage("getPlace", placeID),
-		]);
+		]).catch((err) => {
+			console.warn("[Kiln] Failed to load place reviews:", err);
+			return null;
+		});
+		if (!results) {
+			avgBadge.innerHTML = "";
+			cardBody.innerHTML = `<div class="text-muted small fst-italic">Failed to load reviews.</div>`;
+			return;
+		}
+		const [result, activityResult, placeResult] = results;
 		if (!result.ok) {
+			avgBadge.innerHTML = "";
 			cardBody.innerHTML = `<div class="text-muted small fst-italic">Failed to load reviews.</div>`;
 			return;
 		}
@@ -1182,7 +1272,8 @@ export async function detailedPlaceReviews(userId: number) {
 			: null;
 		const hasEnoughPlaytime =
 			totalPlaytimeMs === null || totalPlaytimeMs >= MIN_REVIEW_PLAYTIME_MS;
-		const isCreator = placeResult.ok && placeResult.data.creator.id === userId;
+		const creatorId = placeResult.ok ? placeResult.data.creator.id : null;
+		const isCreator = creatorId !== null && creatorId === userId;
 
 		const formatMinutes = (minutes: number) => {
 			if (minutes < 60) return `${minutes}min${minutes === 1 ? "" : "s"}`;
@@ -1194,21 +1285,7 @@ export async function detailedPlaceReviews(userId: number) {
 		let { reviews, averageRating, totalReviews, myReview } = result.data.data;
 		let pendingRating = myReview?.rating ?? 0;
 		let isSubmitting = false;
-
-		if (myReview) {
-			const placeName = placeResult.ok ? placeResult.data.name : "your world";
-			for (const reply of myReview.replies) {
-				if (reply.userId === userId) continue;
-				await fireKilnNotification({
-					id: `place-review-reply:${reply.id}`,
-					message: `${reply.username} replied to your review of ${placeName}`,
-					date: new Date(reply.createdAt),
-					url: `/places/${placeID}`,
-					avatarUrl: reply.thumbnail ?? "",
-					dedupeValue: reply.id,
-				});
-			}
-		}
+		let isEditing = false;
 
 		const updateAvgBadge = () => {
 			if (averageRating === null || totalReviews === 0) {
@@ -1223,6 +1300,9 @@ export async function detailedPlaceReviews(userId: number) {
 
 			const otherReviews = reviews.filter((r) => r.userId !== userId);
 
+			const showEditor =
+				isEditing || (!myReview && !isCreator && hasEnoughPlaytime);
+
 			const formHTML = isCreator
 				? `
 			<div class="kiln-review-form border-bottom border-secondary pb-3 mb-3">
@@ -1230,22 +1310,8 @@ export async function detailedPlaceReviews(userId: number) {
 					<i class="fa-regular fa-ban me-1"></i> You cannot review your own world.
 				</p>
 			</div>`
-				: hasEnoughPlaytime
+				: !hasEnoughPlaytime
 					? `
-			<div class="kiln-review-form border-bottom border-secondary pb-3 mb-2">
-				<div class="text-muted mb-1 fw-bold">${myReview ? "Your Review" : "Leave a Review"}</div>
-				<div class="d-flex gap-1 mb-2 kiln-star-picker">
-					${renderStars(pendingRating, true)}
-				</div>
-				<textarea class="form-control form-control-sm bg-dark text-light border-secondary kiln-review-body" rows="2" placeholder="Optional comment..." style="resize:vertical;font-size:0.85rem;">${myReview?.body ?? ""}</textarea>
-				<div class="d-flex gap-2 mt-2">
-					<button class="btn btn-primary btn-sm kiln-review-submit" ${pendingRating === 0 ? "disabled" : ""}>
-						${myReview ? "Update" : "Submit"}
-					</button>
-					${myReview ? `<button class="btn btn-outline-danger btn-sm kiln-review-delete">Delete</button>` : ""}
-				</div>
-			</div>`
-					: `
 			<div class="kiln-review-form border-bottom border-secondary pb-3 mb-3">
 				<p class="text-muted mb-0">
 					<i class="fa-regular fa-clock me-1"></i> You need at least 5 minutes of playtime in this world to leave a review${
@@ -1254,19 +1320,39 @@ export async function detailedPlaceReviews(userId: number) {
 							: ""
 					}.
 				</p>
-			</div>`;
+			</div>`
+					: !myReview && showEditor
+						? `
+			<div class="kiln-review-form card mcard mb-2 border border-primary">
+				<div class="card-body p-3">
+					<div class="text-muted mb-2 fw-bold">Leave a Review</div>
+					<textarea class="form-control form-control-sm bg-dark text-light border-secondary kiln-review-body mb-2" rows="2" placeholder="Optional comment..." style="resize:vertical;font-size:0.85rem;"></textarea>
+					<div class="d-flex gap-1 mb-2 kiln-star-picker">
+						${renderStars(pendingRating, true)}
+					</div>
+					<div class="d-flex gap-2">
+						<button class="btn btn-primary btn-sm kiln-review-submit" ${pendingRating === 0 ? "disabled" : ""}>
+							Submit
+						</button>
+					</div>
+				</div>
+			</div>
+			<hr class="border-secondary m-2">`
+						: "";
 
-			const myRepliesHTML =
-				myReview && myReview.replies.length > 0
-					? renderRepliesSection(myReview)
-					: "";
+			const myReviewHTML = myReview
+				? renderReviewRow(myReview, creatorId, true, isEditing, pendingRating)
+				: "";
 
 			const othersHTML =
 				otherReviews.length === 0
-					? `<div class="text-muted fst-italic">No other reviews yet.</div>`
-					: otherReviews.map(renderReviewRow).join("");
+					? myReview
+						? ""
+						: `<div class="text-muted fst-italic">No other reviews yet.</div>`
+					: otherReviews.map((r) => renderReviewRow(r, creatorId)).join("");
 
-			cardBody.innerHTML = formHTML + myRepliesHTML + othersHTML;
+			cardBody.innerHTML = formHTML + myReviewHTML + othersHTML;
+			sendMessage("registerBootstrapElements");
 
 			cardBody
 				.querySelectorAll<HTMLButtonElement>(".kiln-reply-submit")
@@ -1330,7 +1416,57 @@ export async function detailedPlaceReviews(userId: number) {
 					});
 				});
 
-			if (!hasEnoughPlaytime || isCreator) return;
+			cardBody
+				.querySelector<HTMLButtonElement>(".kiln-review-edit")
+				?.addEventListener("click", () => {
+					isEditing = true;
+					pendingRating = myReview?.rating ?? 0;
+					render();
+				});
+
+			cardBody
+				.querySelector<HTMLButtonElement>(".kiln-review-cancel")
+				?.addEventListener("click", () => {
+					isEditing = false;
+					pendingRating = myReview?.rating ?? 0;
+					render();
+				});
+
+			const deleteBtn = cardBody.querySelector<HTMLButtonElement>(
+				".kiln-review-delete",
+			);
+
+			deleteBtn?.addEventListener("click", async () => {
+				if (isSubmitting) return;
+				isSubmitting = true;
+				deleteBtn.disabled = true;
+				deleteBtn.innerHTML = `<span class="spinner-border spinner-border-sm"></span>`;
+
+				const res = await sendMessage("deleteMyPlaceReview", {
+					placeId: placeID,
+					userId,
+				});
+				isSubmitting = false;
+				if (!res.ok) {
+					deleteBtn.disabled = false;
+					deleteBtn.innerHTML = `<i class="fas fa-trash"></i>`;
+					return;
+				}
+
+				reviews = reviews.filter((r) => r.userId !== userId);
+				myReview = null;
+				pendingRating = 0;
+				isEditing = false;
+				totalReviews = Math.max(0, totalReviews - 1);
+				averageRating =
+					reviews.length > 0
+						? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+						: null;
+
+				render();
+			});
+
+			if (!showEditor) return;
 
 			const starPicker =
 				cardBody.querySelector<HTMLElement>(".kiln-star-picker")!;
@@ -1339,9 +1475,6 @@ export async function detailedPlaceReviews(userId: number) {
 			const submitBtn = cardBody.querySelector<HTMLButtonElement>(
 				".kiln-review-submit",
 			)!;
-			const deleteBtn = cardBody.querySelector<HTMLButtonElement>(
-				".kiln-review-delete",
-			);
 
 			starPicker.addEventListener("click", (e) => {
 				const star = (e.target as HTMLElement).closest<HTMLElement>(
@@ -1432,35 +1565,7 @@ export async function detailedPlaceReviews(userId: number) {
 					reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length ||
 					null;
 
-				render();
-			});
-
-			deleteBtn?.addEventListener("click", async () => {
-				if (isSubmitting) return;
-				isSubmitting = true;
-				deleteBtn.disabled = true;
-				deleteBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Deleting...`;
-
-				const res = await sendMessage("deleteMyPlaceReview", {
-					placeId: placeID,
-					userId,
-				});
-				isSubmitting = false;
-				if (!res.ok) {
-					deleteBtn.disabled = false;
-					deleteBtn.textContent = "Delete";
-					return;
-				}
-
-				reviews = reviews.filter((r) => r.userId !== userId);
-				myReview = null;
-				pendingRating = 0;
-				totalReviews = Math.max(0, totalReviews - 1);
-				averageRating =
-					reviews.length > 0
-						? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
-						: null;
-
+				isEditing = false;
 				render();
 			});
 		};

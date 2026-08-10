@@ -57,6 +57,15 @@ const deprecatedHiddenIds = new Set(
 		.map((p) => p.id),
 );
 
+const irlBrickPriceCurrencies = new Set(
+	(
+		prefItems as Array<{
+			id: string;
+			config?: Array<{ options?: Array<{ value: string }> }>;
+		}>
+	).find((p) => p.id === "irlBrickPrice")?.config?.[0]?.options?.map((o) => o.value),
+);
+
 export const defaultPreferences = {
 	enabled: (prefItems as Array<{ id: string; defaultEnabled?: boolean }>)
 		.filter((p) => p.defaultEnabled)
@@ -109,7 +118,7 @@ export const preferences: PreferencesStorageItem = storage.defineItem(
 	"sync:preferences",
 	{
 		fallback: defaultPreferences,
-		version: 4,
+		version: 5,
 		migrations: {
 			3: () => defaultPreferences,
 			4: (oldValue: any) => ({
@@ -118,6 +127,22 @@ export const preferences: PreferencesStorageItem = storage.defineItem(
 					(id) => !((oldValue?.enabled as string[]) ?? []).includes(id),
 				),
 			}),
+			5: (oldValue: any) => {
+				const currency = oldValue?.config?.irlBrickPrice?.currency;
+				if (currency === undefined || irlBrickPriceCurrencies.has(currency)) {
+					return oldValue;
+				}
+				return {
+					...oldValue,
+					config: {
+						...oldValue?.config,
+						irlBrickPrice: {
+							...oldValue?.config?.irlBrickPrice,
+							currency: "USD",
+						},
+					},
+				};
+			},
 		},
 	},
 ) as PreferencesStorageItem;

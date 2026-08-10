@@ -834,6 +834,31 @@ export function getUserDetails(): Promise<UserDetails | null> {
 	});
 }
 
+const periodSeparatorCurrencies = new Set<CurrencyCode>([
+	"EUR",
+	"CHF",
+	"RUB",
+	"TRY",
+	"PLN",
+	"CZK",
+	"HUF",
+	"DKK",
+	"NOK",
+	"SEK",
+	"RON",
+	"UAH",
+	"VND",
+	"IDR",
+]);
+
+function formatCurrencyValue(value: number, currency: CurrencyCode): string {
+	const locale = periodSeparatorCurrencies.has(currency) ? "de-DE" : "en-US";
+	return value.toLocaleString(locale, {
+		minimumFractionDigits: 2,
+		maximumFractionDigits: 2,
+	});
+}
+
 export async function bricksToCurrency(
 	bricks: number,
 	currency: CurrencyCode,
@@ -868,7 +893,7 @@ export async function bricksToCurrency(
 		totalValue *= rate;
 	}
 
-	return `~${totalValue.toFixed(2)} ${currency}`;
+	return `~${formatCurrencyValue(totalValue, currency)} ${currency}`;
 }
 
 function _parseBrickValue(el: Element | null): number {
@@ -987,6 +1012,7 @@ export interface FabricatedNotification {
 	url: string;
 	avatarUrl: string;
 	unread?: boolean;
+	onClick?: () => void;
 }
 
 const notificationRelativeUnits: Array<[string, number]> = [
@@ -1061,6 +1087,10 @@ export function injectNotification(notification: FabricatedNotification): void {
 		</div>
 	`;
 
+	if (notification.onClick) {
+		anchor.addEventListener("click", () => notification.onClick!());
+	}
+
 	if (insertBeforeItem) {
 		popup.insertBefore(anchor, insertBeforeItem);
 	} else {
@@ -1105,7 +1135,7 @@ export async function markKilnNotificationRead(id: string): Promise<void> {
 	}
 }
 
-export async function renderKilnNotifications(): Promise<void> {
+export async function renderKilnNotifications(userId: number): Promise<void> {
 	const popup = document.querySelector<HTMLElement>(".notifications-popup");
 	if (!popup) return;
 
@@ -1133,6 +1163,30 @@ export async function renderKilnNotifications(): Promise<void> {
 			url: notification.url,
 			avatarUrl: notification.avatarUrl,
 			unread: !notification.read,
+		});
+	}
+
+	const serverResult = await sendMessage("getKilnNotifications", userId).catch(
+		() => null,
+	);
+	if (!serverResult?.ok) return;
+
+	for (const notification of serverResult.data.data) {
+		const date = new Date(notification.createdAt);
+		if (oldestExistingDate !== null && date < oldestExistingDate) continue;
+
+		injectNotification({
+			message: notification.message,
+			date,
+			url: notification.url,
+			avatarUrl: notification.avatarUrl ?? "",
+			unread: notification.seenAt === null,
+			onClick: () => {
+				sendMessage("markKilnNotificationSeen", {
+					userId,
+					notificationId: notification.id,
+				});
+			},
 		});
 	}
 }

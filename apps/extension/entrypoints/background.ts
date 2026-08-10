@@ -30,6 +30,7 @@ import "./background/config";
 import "./background/users";
 import "./background/items";
 import "./background/places";
+import "./background/notifications";
 import "./background/trades";
 import "./background/auth";
 import "./background/extension";

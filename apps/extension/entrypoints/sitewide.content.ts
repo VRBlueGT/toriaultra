@@ -112,7 +112,7 @@ export default defineContentScript({
 				if (import.meta.env.MODE == "development")
 					console.info("[Kiln] Logged in as: ", user);
 
-				renderKilnNotifications();
+				renderKilnNotifications(user.userId);
 
 				getApiSession(user.userId).then((state) => {
 					if (state == null) {
@@ -1197,7 +1197,7 @@ function streakFreezeDisplay(): void {
 
 		streakSpan.insertAdjacentHTML(
 			"afterend",
-			`<small class="text-primary" style="margin-left: 10px;"><i class="fas fa-snowflake me-1"></i>${freezeCount}</small>`,
+			`<small class="text-primary" style="margin-left: 10px; white-space: nowrap;"><i class="fas fa-snowflake me-1"></i>${freezeCount}</small>`,
 		);
 
 		if (!raw) return;

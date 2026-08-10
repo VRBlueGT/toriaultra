@@ -304,6 +304,14 @@ export interface ProtocolMap {
 		replyId: string;
 	}): Promise<Result<null>>;
 
+	getKilnNotifications(
+		userId: number,
+	): Promise<Result<Extension.NotificationsApi>>;
+	markKilnNotificationSeen(data: {
+		userId: number;
+		notificationId: number;
+	}): Promise<Result<Extension.MarkNotificationSeenApi>>;
+
 	getRetroItems(page?: number): Promise<Result<Extension.RetroItemsApi>>;
 	getEventForItem(itemId: number): Promise<Result<Extension.EventForItemApi>>;
 	getEvents(): Promise<Result<Extension.EventsListApi>>;
