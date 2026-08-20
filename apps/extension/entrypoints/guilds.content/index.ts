@@ -14,14 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import { preferences } from "@/utils/storage";
+import { _showKilnDisclosures, preferences } from "@/utils/storage";
 import * as discovery from "./discovery";
 import * as view from "./view";
 
 export default defineContentScript({
 	matches: ["https://polytoria.com/guilds/*", "https://polytoria.com/"],
 	main() {
-		preferences.getPreferences().then(async (values) => {
+		Promise.all([
+			preferences.getPreferences(),
+			_showKilnDisclosures.getValue(),
+		]).then(async ([values, showDisclosures]) => {
 			const user = await getUserDetails();
 			if (!user) {
 				console.warn("[Kiln] Failure to get logged in user details.");
@@ -36,7 +39,7 @@ export default defineContentScript({
 				}
 
 				if (values.enabled.includes("condensedJoinedGuildsList")) {
-					discovery.condensedJoinedGuildsList();
+					discovery.condensedJoinedGuildsList(showDisclosures);
 				}
 			} else if (!Number.isNaN(Number(second))) {
 				if (import.meta.env.MODE == "development") {
@@ -47,7 +50,7 @@ export default defineContentScript({
 					values.enabled.includes("creatorCommentLabels") &&
 					values.config.creatorCommentLabels.guilds
 				) {
-					view.creatorCommentLabels();
+					view.creatorCommentLabels(showDisclosures);
 				}
 			}
 		});

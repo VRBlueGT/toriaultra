@@ -14,12 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import errorIcon from "@/assets/error.svg";
 import type { CurrencyCode, FormattedHoarder } from "@/utils/types";
-import { bricksToCurrency, createModal } from "@/utils/utilities";
+import {
+	applyKilnDisclosureTitle,
+	bricksToCurrency,
+	createKilnDisclosureBadge,
+	createModal,
+	kilnDisclosureBadgeHtml,
+} from "@/utils/utilities";
 
 const itemID = window.location.pathname.split("/")[2];
 
-export async function irlBrickPrice(irlCurrency: CurrencyCode) {
+export async function irlBrickPrice(
+	irlCurrency: CurrencyCode,
+	showDisclosures: boolean,
+) {
 	try {
 		const purchaseBtn = document.querySelector(
 			'button[onclick^="buy"], button[data-price]',
@@ -35,6 +45,11 @@ export async function irlBrickPrice(irlCurrency: CurrencyCode) {
 			spanTag.style.fontSize = "0.7rem";
 			spanTag.style.fontWeight = "lighter";
 			spanTag.innerText = ` (${currency})`;
+			applyKilnDisclosureTitle(
+				spanTag,
+				showDisclosures,
+				"IRL currency conversion",
+			);
 			purchaseBtn.appendChild(spanTag);
 		}
 	} catch (_e) {
@@ -57,6 +72,11 @@ export async function irlBrickPrice(irlCurrency: CurrencyCode) {
 				spanTag.style.fontSize = "0.7rem";
 				spanTag.style.fontWeight = "lighter";
 				spanTag.innerText = ` (${currency})`;
+				applyKilnDisclosureTitle(
+					spanTag,
+					showDisclosures,
+					"IRL currency conversion",
+				);
 				price.appendChild(spanTag);
 			}
 		}
@@ -80,7 +100,7 @@ export async function irlBrickPrice(irlCurrency: CurrencyCode) {
 	}
 }
 
-export async function accurateOwnerCount() {
+export async function accurateOwnerCount(showDisclosures: boolean) {
 	const counter = document.querySelectorAll(".col.text-center")[2]!;
 	if (!counter || counter.children[1].textContent!.trim() != "0") return;
 
@@ -99,9 +119,18 @@ export async function accurateOwnerCount() {
 	(counter.children[0] as HTMLHeadingElement).innerText = "Owners";
 	(counter.children[1] as HTMLHeadingElement).innerText =
 		owners.toLocaleString();
+	applyKilnDisclosureTitle(
+		counter as HTMLElement,
+		showDisclosures,
+		"Accurate owner count",
+	);
 }
 
-export function hoardersList(minCopies: number, showAvatars: boolean) {
+export function hoardersList(
+	minCopies: number,
+	showAvatars: boolean,
+	showDisclosures: boolean,
+) {
 	if (document.getElementById("resellers") === null) {
 		return;
 	}
@@ -123,7 +152,7 @@ export function hoardersList(minCopies: number, showAvatars: boolean) {
 	tab.innerHTML = `
 	<a class="nav-link">
 		<i class="fas fa-calculator me-1"></i>
-		<span class="d-none d-sm-inline">Hoarders</span>
+		<span class="d-none d-sm-inline">Hoarders${kilnDisclosureBadgeHtml(showDisclosures)}</span>
 	</a>
 	`;
 	tabs2.appendChild(tab);
@@ -382,7 +411,7 @@ export function hoardersList(minCopies: number, showAvatars: boolean) {
 	});
 }
 
-export async function mySerial(userId: number) {
+export async function mySerial(userId: number, showDisclosures: boolean) {
 	const salesCounter = document.querySelectorAll(".col.text-center")[2]!;
 	if (!salesCounter) return;
 
@@ -401,14 +430,14 @@ export async function mySerial(userId: number) {
 	const counter = document.createElement("div");
 	counter.classList.add("col", "text-center");
 	counter.innerHTML = `
-	<h6>My Serial</h6>
+	<h6>My Serial${kilnDisclosureBadgeHtml(showDisclosures)}</h6>
 	<h3 class="small">#${copy.serial}</h3>
 	`;
 
 	salesCounter.parentElement!.appendChild(counter);
 }
 
-export async function nftItems(userId: number) {
+export async function nftItems(userId: number, showDisclosures: boolean) {
 	const config = await getConfig();
 
 	const MAX_NFT_ITEMS = config.limits.maxNFTItems;
@@ -428,6 +457,8 @@ export async function nftItems(userId: number) {
 		button.innerHTML = `<i class="fa-regular fa-lock me-1"></i><span>Verify to Mark NFT</span>`;
 	}
 
+	applyKilnDisclosureTitle(button, showDisclosures, "Not for Trade");
+
 	favoriteBtn.parentElement!.appendChild(button);
 
 	const modal = createModal();
@@ -435,7 +466,7 @@ export async function nftItems(userId: number) {
 	const renderModal = async () => {
 		modal.innerHTML = `
 		<div class="d-flex justify-content-between align-items-center mb-2">
-			<h5 class="mb-0" style="color: #fff;">Not for Trade Items</h5>
+			<h5 class="mb-0" style="color: #fff;">Not for Trade Items${kilnDisclosureBadgeHtml(showDisclosures)}</h5>
 			<button class="btn btn-sm btn-secondary" id="p-nft-close">✕</button>
 		</div>
 		<p class="text-muted mb-3" style="font-size: 0.8rem;">
@@ -649,6 +680,279 @@ export async function nftItems(userId: number) {
 	});
 }
 
+export async function ownerCheck(showDisclosures: boolean) {
+	const favoriteBtn = document.getElementById("favorite-btn");
+	if (!favoriteBtn) return;
+
+	const button = document.createElement("button");
+	button.classList.add("btn", "btn-outline-secondary", "btn-sm", "ms-2");
+	button.innerHTML = `<i class="fa-regular fa-magnifying-glass me-1"></i><span>Owner Check</span>`;
+	applyKilnDisclosureTitle(button, showDisclosures, "Owner Check");
+
+	favoriteBtn.parentElement!.appendChild(button);
+
+	const modal = createModal();
+	modal.style.overflow = "visible";
+	modal.innerHTML = `
+	<div class="d-flex justify-content-between align-items-center mb-2">
+		<h5 class="mb-0" style="color: #fff;">Owner Check${kilnDisclosureBadgeHtml(showDisclosures)}</h5>
+		<button class="btn btn-sm btn-secondary" id="p-owner-close">✕</button>
+	</div>
+	<p class="text-muted mb-3" style="font-size: 0.8rem;">
+		Check whether a user owns this item, and their serial if so.
+	</p>
+	<div class="position-relative mb-2">
+		<div class="input-group">
+			<input type="text" class="form-control" id="p-owner-input" placeholder="Username..." autocomplete="off">
+			<button class="btn btn-primary" id="p-owner-check" disabled>Check</button>
+		</div>
+		<div class="list-group position-absolute w-100 mt-1 shadow-sm d-none" id="p-owner-suggestions" style="z-index: 1000; max-height: 220px; overflow-y: auto;"></div>
+	</div>
+	<div id="p-owner-result" style="font-size: 0.85rem;"></div>
+	<hr class="my-3" style="border-color: #333;">
+	<p class="text-muted mb-2" style="font-size: 0.8rem;">
+		Or look up who owns a specific serial.
+	</p>
+	<div class="input-group mb-2">
+		<span class="input-group-text bg-dark">#</span>
+		<input type="number" min="1" class="form-control" id="p-owner-serial-input" placeholder="Serial...">
+		<button class="btn btn-primary" id="p-owner-serial-check">Find</button>
+	</div>
+	<div id="p-owner-serial-result" style="font-size: 0.85rem;"></div>
+	`;
+
+	document
+		.getElementById("p-owner-close")!
+		.addEventListener("click", () => modal.close());
+
+	const input = document.getElementById("p-owner-input") as HTMLInputElement;
+	const checkBtn = document.getElementById(
+		"p-owner-check",
+	) as HTMLButtonElement;
+	const suggestions = document.getElementById("p-owner-suggestions")!;
+	const result = document.getElementById("p-owner-result")!;
+
+	let selectedUserId: number | null = null;
+	let selectedUsername = "";
+
+	const hideSuggestions = () => {
+		suggestions.classList.add("d-none");
+		suggestions.innerHTML = "";
+	};
+
+	const selectUser = (userId: number, username: string) => {
+		selectedUserId = userId;
+		selectedUsername = username;
+		input.value = username;
+		checkBtn.disabled = false;
+		hideSuggestions();
+		checkBtn.click();
+	};
+
+	let requestId = 0;
+	let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+	input.addEventListener("input", () => {
+		selectedUserId = null;
+		checkBtn.disabled = true;
+		result.innerHTML = "";
+		clearTimeout(debounceTimer);
+
+		const query = input.value.trim();
+		if (query.length < 2) {
+			hideSuggestions();
+			return;
+		}
+
+		debounceTimer = setTimeout(async () => {
+			const thisRequest = ++requestId;
+			const searchResult = await sendMessage("searchUsersByActivity", query);
+			if (thisRequest !== requestId) return;
+
+			if (!searchResult.ok || searchResult.data.length === 0) {
+				hideSuggestions();
+				return;
+			}
+
+			suggestions.innerHTML = "";
+			for (const user of searchResult.data.slice(0, 5)) {
+				const item = document.createElement("button");
+				item.type = "button";
+				item.className =
+					"list-group-item list-group-item-action py-1 px-2 d-flex align-items-center gap-2";
+
+				const img = document.createElement("img");
+				img.src = user.thumbnailUrl ?? errorIcon;
+				img.width = 24;
+				img.height = 24;
+				img.className = "rounded";
+
+				const span = document.createElement("span");
+				span.textContent = user.username;
+
+				item.append(img, span);
+				item.addEventListener("mousedown", (event) => {
+					event.preventDefault();
+					selectUser(user.userId, user.username);
+				});
+				suggestions.appendChild(item);
+			}
+			suggestions.classList.remove("d-none");
+		}, 250);
+	});
+
+	input.addEventListener("blur", () => hideSuggestions());
+
+	checkBtn.addEventListener("click", async () => {
+		if (selectedUserId === null) return;
+
+		const checkingUserId = selectedUserId;
+		const checkingUsername = selectedUsername;
+		input.value = "";
+
+		checkBtn.disabled = true;
+		const originalText = checkBtn.innerHTML;
+		checkBtn.innerHTML = "Checking...";
+		result.innerHTML = "";
+
+		const ownerResult = await sendMessage("getItemCopy", {
+			itemId: parseInt(itemID, 10),
+			userId: checkingUserId,
+		});
+
+		checkBtn.disabled = selectedUserId === null;
+		checkBtn.innerHTML = originalText;
+
+		result.innerHTML = "";
+		const icon = document.createElement("i");
+		const text = document.createElement("span");
+		text.append(`${checkingUsername} `);
+
+		if (!ownerResult.ok) {
+			icon.className = "fa-solid fa-triangle-exclamation me-1";
+			text.append("Failed to check owner. Try again later.");
+			result.className = "text-danger";
+		} else if (ownerResult.data.owned && ownerResult.data.inventory) {
+			icon.className = "fa-solid fa-circle-check me-1";
+			text.append(
+				`owns this item! Serial: #${ownerResult.data.inventory.serial}`,
+			);
+			result.className = "text-success";
+		} else {
+			icon.className = "fa-regular fa-circle-xmark me-1";
+			text.append("does not own this item.");
+			result.className = "text-muted";
+		}
+
+		result.append(icon, text);
+	});
+
+	const serialInput = document.getElementById(
+		"p-owner-serial-input",
+	) as HTMLInputElement;
+	const serialCheckBtn = document.getElementById(
+		"p-owner-serial-check",
+	) as HTMLButtonElement;
+	const serialResult = document.getElementById("p-owner-serial-result")!;
+
+	const findSerialOwner = async () => {
+		const serial = parseInt(serialInput.value, 10);
+
+		serialResult.innerHTML = "";
+		if (!Number.isInteger(serial) || serial < 1) {
+			serialResult.className = "text-danger";
+			serialResult.textContent = "Enter a valid serial number.";
+			return;
+		}
+
+		serialCheckBtn.disabled = true;
+		const originalText = serialCheckBtn.innerHTML;
+		serialCheckBtn.innerHTML = "Searching...";
+
+		const totalResult = await sendMessage("getItemOwners", {
+			itemId: parseInt(itemID, 10),
+			limit: 1,
+		});
+
+		if (!totalResult.ok) {
+			serialCheckBtn.disabled = false;
+			serialCheckBtn.innerHTML = originalText;
+			serialResult.className = "text-danger";
+			serialResult.textContent = "Failed to look up owner. Try again later.";
+			return;
+		}
+
+		const total = totalResult.data.total;
+		if (serial > total) {
+			serialCheckBtn.disabled = false;
+			serialCheckBtn.innerHTML = originalText;
+			serialResult.className = "text-danger";
+			serialResult.textContent = `This item only has ${total} cop${total === 1 ? "y" : "ies"}.`;
+			return;
+		}
+
+		const page = Math.ceil(serial / 100);
+		const pageResult = await sendMessage("getItemOwners", {
+			itemId: parseInt(itemID, 10),
+			limit: 100,
+			page,
+		});
+
+		serialCheckBtn.disabled = false;
+		serialCheckBtn.innerHTML = originalText;
+
+		if (!pageResult.ok) {
+			serialResult.className = "text-danger";
+			serialResult.textContent = "Failed to look up owner. Try again later.";
+			return;
+		}
+
+		const owner = pageResult.data.inventories.find(
+			(inv) => inv.serial === serial,
+		);
+
+		serialResult.innerHTML = "";
+		const icon = document.createElement("i");
+		const text = document.createElement("span");
+
+		if (owner) {
+			icon.className = "fa-solid fa-circle-check me-1";
+			text.append(`Serial #${serial} is owned by `);
+			const link = document.createElement("a");
+			link.href = `/u/${owner.user.username}`;
+			link.className = "text-reset";
+			link.textContent = owner.user.username;
+			text.append(link);
+			serialResult.className = "text-success";
+		} else {
+			icon.className = "fa-regular fa-circle-question me-1";
+			text.append(`Couldn't find who owns serial #${serial}.`);
+			serialResult.className = "text-muted";
+		}
+
+		serialResult.append(icon, text);
+	};
+
+	serialCheckBtn.addEventListener("click", findSerialOwner);
+	serialInput.addEventListener("keydown", (event) => {
+		if (event.key === "Enter") {
+			event.preventDefault();
+			findSerialOwner();
+		}
+	});
+
+	button.addEventListener("click", () => {
+		input.value = "";
+		selectedUserId = null;
+		selectedUsername = "";
+		checkBtn.disabled = true;
+		result.innerHTML = "";
+		hideSuggestions();
+		serialInput.value = "";
+		serialResult.innerHTML = "";
+		modal.showModal();
+	});
+}
+
 export async function pinnedAchievements(userId: number) {
 	const favoriteBtn = document.getElementById("favorite-btn");
 	if (!favoriteBtn) return;
@@ -713,7 +1017,7 @@ const CLOTHING_PREVIEW_BODIES: { id: number | null; name: string }[] = [
 	{ id: 137758, name: "Slim" },
 ];
 
-export async function clothing3DPreview() {
+export async function clothing3DPreview(showDisclosures: boolean) {
 	const hero = document.querySelector<HTMLElement>(".item-hero");
 	if (!hero) return;
 
@@ -730,7 +1034,7 @@ export async function clothing3DPreview() {
 	btn.addEventListener("click", async () => {
 		modal.innerHTML = `
 		<div class="d-flex justify-content-between align-items-center mb-2">
-			<h5 class="mb-0" style="color: #fff;">Clothing Preview</h5>
+			<h5 class="mb-0" style="color: #fff;">Clothing Preview${kilnDisclosureBadgeHtml(showDisclosures)}</h5>
 			<button class="btn btn-sm btn-secondary" id="p-back-close">✕</button>
 		</div>
 		<p class="text-muted mb-1" style="font-size: 0.8rem;">
@@ -829,14 +1133,14 @@ export async function clothing3DPreview() {
 	});
 }
 
-export async function loveIntegration() {
+export async function loveIntegration(showDisclosures: boolean) {
 	const tabs = document.getElementById("store-tabs")!;
 
 	const section = document.createElement("div");
 	section.classList = "mb-3";
 	section.innerHTML = `
 	<h6 class="section-title mt-3 mt-lg-0 mb-3 px-2">
-		Valuation <a href="https://polytoria.trade/store/${itemID}" target="_blank">(data from polytoria.trade)</a>
+		Valuation${kilnDisclosureBadgeHtml(showDisclosures)} <a href="https://polytoria.trade/store/${itemID}" target="_blank">(data from polytoria.trade)</a>
 	</h6>
 	<div class="card" id="kiln_valuation_card">
 		<div class="card-body">
@@ -964,6 +1268,7 @@ export async function loveIntegration() {
 export async function collectibleOwnerLabels(
 	inactiveDays: number,
 	ogYear: number,
+	showDisclosures: boolean,
 ) {
 	const container = document.getElementById("owners-container");
 	if (!container) return;
@@ -1003,14 +1308,14 @@ export async function collectibleOwnerLabels(
 				if (!info.active) {
 					nameEl.insertAdjacentHTML(
 						"beforeend",
-						`<span class="badge bg-secondary ms-1" style="font-size:0.65rem;vertical-align:middle;" data-bs-toggle="tooltip" data-bs-title="Hasn't been seen online in the last ${inactiveDays} days">Inactive</span>`,
+						`<span class="badge bg-secondary ms-1" style="font-size:0.65rem;vertical-align:middle;" data-bs-toggle="tooltip" data-bs-title="Hasn't been seen online in the last ${inactiveDays} days">Inactive</span>${kilnDisclosureBadgeHtml(showDisclosures)}`,
 					);
 				}
 
 				if (info.registeredAt && info.registeredAt.slice(0, 10) < OG_CUTOFF) {
 					nameEl.insertAdjacentHTML(
 						"beforeend",
-						`<span class="badge bg-warning text-dark ms-1" style="font-size:0.65rem;vertical-align:middle;" data-bs-toggle="tooltip" data-bs-title="Joined during ${ogYear} or earlier">OG</span>`,
+						`<span class="badge bg-warning text-dark ms-1" style="font-size:0.65rem;vertical-align:middle;" data-bs-toggle="tooltip" data-bs-title="Joined during ${ogYear} or earlier">OG</span>${kilnDisclosureBadgeHtml(showDisclosures)}`,
 					);
 				}
 			}
@@ -1032,7 +1337,10 @@ export async function collectibleOwnerLabels(
 	}).observe(container, { childList: true });
 }
 
-export function creatorCommentLabels(creatorId: number) {
+export function creatorCommentLabels(
+	creatorId: number,
+	showDisclosures: boolean,
+) {
 	const container = document.getElementById("comments")!;
 
 	const tag = (Card: Element): void => {
@@ -1057,6 +1365,8 @@ export function creatorCommentLabels(creatorId: number) {
 		badge.setAttribute("data-bs-title", "This user created this item.");
 
 		usernameElement.appendChild(badge);
+		if (showDisclosures)
+			usernameElement.appendChild(createKilnDisclosureBadge());
 		sendMessage("registerBootstrapElements");
 	};
 
@@ -1070,7 +1380,7 @@ export function creatorCommentLabels(creatorId: number) {
 	}).observe(container, { attributes: false, childList: true, subtree: false });
 }
 
-export function legacyStoreLayout(): void {
+export function legacyStoreLayout(showDisclosures: boolean): void {
 	if (!location.pathname.match(/^\/store\/\d+/)) return;
 
 	function esc(str: unknown): string {
@@ -1205,6 +1515,11 @@ export function legacyStoreLayout(): void {
 			".text-success.fw-semibold.small",
 		);
 
+		let stockP: HTMLElement | null = null;
+		mainCont.querySelectorAll<HTMLElement>("p.text-danger").forEach((p) => {
+			if (!stockP && p.querySelector(".fa-boxes-stacked")) stockP = p;
+		});
+
 		const timerP = mainCont.querySelector<HTMLElement>(
 			"p.text-danger.fw-semibold",
 		);
@@ -1277,7 +1592,7 @@ export function legacyStoreLayout(): void {
                             <a class="text-muted" href="/store">Store</a>
                         </li>
                         <li class="breadcrumb-item active" aria-current="page">
-                            <span class="text-light">${esc(pageTitleText)}</span>
+                            <span class="text-light">${esc(pageTitleText)}</span>${kilnDisclosureBadgeHtml(showDisclosures)}
                         </li>
                     </ol>
                 </nav>
@@ -1437,6 +1752,7 @@ export function legacyStoreLayout(): void {
 			buyInner.appendChild(highestBuyEl);
 		}
 
+		if (stockP) buyInner.appendChild(stockP);
 		if (timerP) {
 			buyInner.appendChild(timerP);
 			if (timerScript) buyInner.appendChild(timerScript);
@@ -1691,7 +2007,7 @@ export function legacyStoreLayout(): void {
 	}
 }
 
-export async function recentTransactions() {
+export async function recentTransactions(showDisclosures: boolean) {
 	if (document.getElementById("resellers") === null) {
 		return;
 	}
@@ -1711,7 +2027,7 @@ export async function recentTransactions() {
 	tab.innerHTML = `
 <a class="nav-link">
 	<i class="fas fa-history me-1"></i>
-	<span class="d-none d-sm-inline">Recent Transactions</span>
+	<span class="d-none d-sm-inline">Recent Transactions${kilnDisclosureBadgeHtml(showDisclosures)}</span>
 </a>
 `;
 	tabs2.appendChild(tab);

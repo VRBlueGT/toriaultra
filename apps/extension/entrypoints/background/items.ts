@@ -76,11 +76,11 @@ onMessage("getAssetAudio", ({ data: id }) =>
 	}),
 );
 
-onMessage("getItemOwners", ({ data: { itemId, limit } }) =>
+onMessage("getItemOwners", ({ data: { itemId, limit, page } }) =>
 	handle(async () => {
 		const config = await withApi("public_api", "public");
 		const cacheKey =
-			limit !== undefined ? `${itemId}-${limit}` : `${itemId}-all`;
+			limit !== undefined ? `${itemId}-${limit}-${page ?? 1}` : `${itemId}-all`;
 		return pullKVCache(
 			"ownerCount",
 			cacheKey,
@@ -89,7 +89,7 @@ onMessage("getItemOwners", ({ data: { itemId, limit } }) =>
 
 				if (limit !== undefined && limit <= BATCH_LIMIT) {
 					return safeFetch(
-						`${config.resolvedUrls.public}store/${itemId}/owners?limit=${limit}`,
+						`${config.resolvedUrls.public}store/${itemId}/owners?limit=${limit}&page=${page ?? 1}`,
 						Polytoria.OwnersApiSchema,
 					);
 				}

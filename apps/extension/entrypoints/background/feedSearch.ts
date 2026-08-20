@@ -14,32 +14,24 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import z from "zod";
+import { PolyTrack } from "@kiln/schemas";
 import { onMessage } from "@/utils/messaging";
-import { _errorLog } from "@/utils/storage";
-import { checkRateLimit, handle, KILN_API_BASE, safeFetch } from "./shared";
+import { handle, safeFetch } from "./shared";
 
-const MAX_ERRORS_SENT = 15;
-
-onMessage("submitFeedback", ({ data }) =>
+onMessage("getFeedSearch", ({ data: filters }) =>
 	handle(async () => {
-		checkRateLimit("feedback", 5);
-
-		const diagnostics =
-			data.type === "bug"
-				? {
-						userAgent: navigator.userAgent,
-						errors: (await _errorLog.getValue()).slice(-MAX_ERRORS_SENT),
-					}
-				: undefined;
+		const query = new URLSearchParams({ page: String(filters.page) });
+		if (filters.search) query.set("search", filters.search);
+		if (filters.sort) query.set("sort", filters.sort);
+		if (filters.kind) query.set("kind", filters.kind);
+		if (filters.authorIds.length)
+			query.set("authorIds", filters.authorIds.join(","));
+		if (filters.postedAfter) query.set("postedAfter", filters.postedAfter);
+		if (filters.postedBefore) query.set("postedBefore", filters.postedBefore);
 
 		return safeFetch(
-			`${KILN_API_BASE}feedback`,
-			z.object({ ok: z.boolean() }),
-			{
-				method: "POST",
-				body: JSON.stringify({ ...data, diagnostics }),
-			},
+			`https://polytrack.top/api/feed?${query.toString()}`,
+			PolyTrack.FeedSearchApiSchema,
 		);
 	}),
 );

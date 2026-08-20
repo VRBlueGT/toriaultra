@@ -20,7 +20,8 @@ import fallbackConfig from "@/utils/static/fallbackConfig.json";
 import metadata from "@/utils/static/metadata.json";
 import { apiSessions } from "@/utils/storage";
 import type { ApiTypes, Result } from "@/utils/types";
-import { getFlag, pullCache } from "@/utils/utilities";
+import { getFlag, pullCache, withJitter } from "@/utils/utilities";
+import { logError } from "./errors";
 
 export const KILN_API_BASE = metadata.endpoints.extension;
 
@@ -97,14 +98,24 @@ export async function safeFetch<T>(
 	blob: boolean = false,
 	allowErrorResponse: boolean = false,
 ): Promise<T> {
-	const response = await fetch(url, {
-		...options,
-		credentials: "include",
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
-	});
+	let response: Response;
+	try {
+		response = await fetch(url, {
+			...options,
+			credentials: "include",
+			headers: {
+				"Content-Type": "application/json",
+				...options.headers,
+			},
+		});
+	} catch (err) {
+		logError({
+			type: "network",
+			message: err instanceof Error ? err.message : String(err),
+			source: url,
+		});
+		throw err;
+	}
 
 	if (!response.ok && !allowErrorResponse) {
 		let apiCode: string | undefined;
@@ -116,12 +127,28 @@ export async function safeFetch<T>(
 			apiCode = errJson.error?.code;
 			apiMessage = errJson.error?.message;
 		} catch {}
-		throw new ApiHttpError(
+
+		if (
+			!apiMessage &&
+			response.status >= 500 &&
+			url.includes("polytrack.top")
+		) {
+			apiMessage = `Polytrack returned an error (${response.status} ${response.statusText}). This is an issue with Polytrack, not Kiln.`;
+		}
+
+		const httpError = new ApiHttpError(
 			response.status,
 			response.statusText,
 			apiCode,
 			apiMessage,
 		);
+		logError({
+			type: "network",
+			message: httpError.message,
+			source: url,
+			url: `${response.status} ${response.statusText}`,
+		});
+		throw httpError;
 	}
 
 	if (schema) {
@@ -164,7 +191,7 @@ export async function fetchConfig(): Promise<FetchedConfig> {
 					return { ...fallbackConfig, resolvedUrls };
 				}
 			},
-			30 * 60 * 1000,
+			withJitter(30 * 60 * 1000),
 			false,
 		),
 	);

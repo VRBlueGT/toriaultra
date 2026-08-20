@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-export async function audioPreviews() {
+export async function audioPreviews(showDisclosures: boolean) {
 	const activeAudio: { current: HTMLAudioElement | null } = { current: null };
 
 	const getSelectedTab = (): string | null => {
@@ -44,7 +44,9 @@ export async function audioPreviews() {
 			sizedWrapper.style.width = maxWidth;
 		}
 
-		thumbnail.replaceWith(createAudioPlayButton(+assetId, activeAudio));
+		const playButton = createAudioPlayButton(+assetId, activeAudio);
+		applyKilnDisclosureTitle(playButton, showDisclosures, "Audio preview");
+		thumbnail.replaceWith(playButton);
 	};
 
 	const assetGrid = document.getElementById("assets");

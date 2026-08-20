@@ -14,8 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-export async function userLabels(inactiveDays: number, ogYear: number) {
-	const container = document.querySelector<HTMLElement>(".col-12:has(.user-entry)");
+import { kilnDisclosureBadgeHtml } from "@/utils/utilities";
+
+export async function userLabels(
+	inactiveDays: number,
+	ogYear: number,
+	showDisclosures: boolean,
+) {
+	const container = document.querySelector<HTMLElement>(
+		".col-12:has(.user-entry)",
+	);
 	if (!container) return;
 
 	const processed = new Set<number>();
@@ -48,14 +56,14 @@ export async function userLabels(inactiveDays: number, ogYear: number) {
 				if (!info.active) {
 					nameLink.insertAdjacentHTML(
 						"afterend",
-						`<span class="badge bg-secondary ms-1" style="font-size:0.65rem;vertical-align:middle;" data-bs-toggle="tooltip" data-bs-title="Hasn't been seen online in the last ${inactiveDays} days">Inactive</span>`,
+						`<span class="badge bg-secondary ms-1" style="font-size:0.65rem;vertical-align:middle;" data-bs-toggle="tooltip" data-bs-title="Hasn't been seen online in the last ${inactiveDays} days">Inactive</span>${kilnDisclosureBadgeHtml(showDisclosures)}`,
 					);
 				}
 
 				if (info.registeredAt && info.registeredAt.slice(0, 10) < OG_CUTOFF) {
 					nameLink.insertAdjacentHTML(
 						"afterend",
-						`<span class="badge bg-warning text-dark ms-1" style="font-size:0.65rem;vertical-align:middle;" data-bs-toggle="tooltip" data-bs-title="Joined during ${ogYear} or earlier">OG</span>`,
+						`<span class="badge bg-warning text-dark ms-1" style="font-size:0.65rem;vertical-align:middle;" data-bs-toggle="tooltip" data-bs-title="Joined during ${ogYear} or earlier">OG</span>${kilnDisclosureBadgeHtml(showDisclosures)}`,
 					);
 				}
 			}

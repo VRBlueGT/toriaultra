@@ -17,8 +17,15 @@
 import type { Extension, PolyTrack, Polytoria } from "@kiln/schemas";
 import { _savedThemes, _userNotes, preferences } from "@/utils/storage";
 import { applyKilnTheme, THEME_PRESETS } from "@/utils/theme";
+import {
+	applyKilnDisclosureTitle,
+	kilnDisclosureBadgeHtml,
+} from "@/utils/utilities";
 
-export async function pinnedAchievements(userId: number) {
+export async function pinnedAchievements(
+	userId: number,
+	showDisclosures: boolean,
+) {
 	const result = await sendMessage("getPinnedAchievements", userId);
 	if (!result.ok || result.data.data.length === 0) return;
 
@@ -57,6 +64,10 @@ export async function pinnedAchievements(userId: number) {
 				: "Pinned Achievements",
 		),
 	);
+	titleEl.insertAdjacentHTML(
+		"beforeend",
+		kilnDisclosureBadgeHtml(showDisclosures),
+	);
 
 	const grid = section.querySelector<HTMLDivElement>(".row")!;
 	for (const item of items) {
@@ -86,6 +97,7 @@ export async function userLabels(
 	userId: number,
 	inactiveDays: number,
 	ogYear: number,
+	showDisclosures: boolean,
 ) {
 	const card = document.getElementById("user-stats-card");
 	if (!card) return;
@@ -111,18 +123,22 @@ export async function userLabels(
 	if (isInactive)
 		cardBody.insertAdjacentHTML(
 			"beforeend",
-			`<span class="badge bg-secondary ms-1" data-bs-toggle="tooltip" data-bs-title="Hasn't been seen online in the last ${inactiveDays} days">Inactive</span>`,
+			`<span class="badge bg-secondary ms-1" data-bs-toggle="tooltip" data-bs-title="Hasn't been seen online in the last ${inactiveDays} days">Inactive</span>${kilnDisclosureBadgeHtml(showDisclosures)}`,
 		);
 	if (isOG)
 		cardBody.insertAdjacentHTML(
 			"beforeend",
-			`<span class="badge bg-warning text-dark ms-1" data-bs-toggle="tooltip" data-bs-title="Joined during ${ogYear} or earlier">OG</span>`,
+			`<span class="badge bg-warning text-dark ms-1" data-bs-toggle="tooltip" data-bs-title="Joined during ${ogYear} or earlier">OG</span>${kilnDisclosureBadgeHtml(showDisclosures)}`,
 		);
 
 	sendMessage("registerBootstrapElements");
 }
 
-export async function displayId(userId: number, blocked: boolean = false) {
+export async function displayId(
+	userId: number,
+	blocked: boolean = false,
+	showDisclosures: boolean = false,
+) {
 	const card = !blocked
 		? document.getElementById("user-stats-card")
 		: document.querySelector(".card-body:has(.fa-ban)");
@@ -133,7 +149,7 @@ export async function displayId(userId: number, blocked: boolean = false) {
 	row.innerHTML = `
     <b>
         <i class="fa fa-hashtag text-center d-inline-block" style="width:1.3em"></i>
-        Player ID
+        Player ID${kilnDisclosureBadgeHtml(showDisclosures)}
     </b>
     <span class="float-end">
         ${userId}
@@ -180,10 +196,16 @@ export async function outfitCost(
 	userId: number,
 	includeIRLRevenue: boolean,
 	irlCurrency: CurrencyCode,
+	showDisclosures: boolean,
 ) {
 	const calculateBtn = document.createElement("small");
 	calculateBtn.classList.add("fw-normal");
 	calculateBtn.style.letterSpacing = "0px";
+	applyKilnDisclosureTitle(
+		calculateBtn,
+		showDisclosures,
+		"Avatar cost calculator",
+	);
 
 	const calculate = async () => {
 		const outfit = {
@@ -258,7 +280,10 @@ export async function outfitCost(
 }
 
 // TODO: Make this just replace Historical Records section
-export async function greatDivideStats(userId: number) {
+export async function greatDivideStats(
+	userId: number,
+	showDisclosures: boolean,
+) {
 	const section = document.createElement("div");
 	section.innerHTML = `
 	<div class="d-grid mt-2 mb-4"></div>
@@ -273,6 +298,11 @@ export async function greatDivideStats(userId: number) {
 		</div>
 	</div>
 	`;
+	applyKilnDisclosureTitle(
+		section.querySelector("h6")!,
+		showDisclosures,
+		"THE DIVIDE",
+	);
 
 	const card = section.getElementsByClassName("card")[0]! as HTMLDivElement;
 	const cardBody = card.children[0] as HTMLDivElement;
@@ -430,7 +460,10 @@ export async function greatDivideStats(userId: number) {
 	sendMessage("registerBootstrapElements");
 }
 
-export async function basicBlockedInfo(userId: number) {
+export async function basicBlockedInfo(
+	userId: number,
+	showDisclosures: boolean,
+) {
 	const formatDate = (dateStr: string) => {
 		const d = new Date(dateStr);
 		return `${
@@ -459,7 +492,7 @@ export async function basicBlockedInfo(userId: number) {
 	const creationDateRow = document.createElement("div");
 	creationDateRow.classList.add("mb-1", "text-start");
 	creationDateRow.innerHTML = `
-	<b><i class="fad fa-calendar text-center d-inline-block" style="width:1.2em"></i> Join date</b>
+	<b><i class="fad fa-calendar text-center d-inline-block" style="width:1.2em"></i> Join date${kilnDisclosureBadgeHtml(showDisclosures)}</b>
 	<span class="float-end">
 		${formatDate(registeredAt)}
 	</span>
@@ -468,7 +501,7 @@ export async function basicBlockedInfo(userId: number) {
 	card.appendChild(creationDateRow);
 }
 
-export async function avatarVersions(userId: number) {
+export async function avatarVersions(userId: number, showDisclosures: boolean) {
 	const profileVersions = await sendMessage("getProfileVersions", userId);
 	if (!profileVersions.ok) return;
 
@@ -498,6 +531,7 @@ export async function avatarVersions(userId: number) {
 		width: "80%",
 	});
 	toggle.textContent = "Avatar Versions";
+	applyKilnDisclosureTitle(toggle, showDisclosures, "Avatar Versions");
 
 	const menu = document.createElement("ul");
 	menu.classList.add("dropdown-menu");
@@ -1061,6 +1095,7 @@ export async function creationsTab(userId: number) {
 export async function userAliases(
 	userId: number,
 	aliases: Record<number, string>,
+	showDisclosures: boolean,
 ) {
 	const dropdown = document.getElementsByClassName(
 		"dropdown-menu dropdown-menu-right",
@@ -1105,10 +1140,15 @@ export async function userAliases(
 		}
 
 		username.innerText = aliases[userId];
+		applyKilnDisclosureTitle(
+			username,
+			showDisclosures,
+			"Display name overridden by a Kiln alias",
+		);
 	}
 }
 
-export async function userNotes(userId: number) {
+export async function userNotes(userId: number, showDisclosures: boolean) {
 	const tabList = document.getElementById("user-info-tabs");
 	const tabContent = document.querySelector(
 		"#user-menu-tabs-card .tab-content",
@@ -1124,6 +1164,11 @@ export async function userNotes(userId: number) {
 			<i class="fad fa-sticky-note me-1"></i> Notes
 		</a>
 	`;
+	applyKilnDisclosureTitle(
+		navItem.querySelector("a")!,
+		showDisclosures,
+		"Private notes (only visible to you)",
+	);
 	tabList.appendChild(navItem);
 
 	const pane = document.createElement("div");
@@ -1232,7 +1277,10 @@ export async function avatarMeshDownloader(userId: number) {
 	});
 }
 
-export async function rankingPositions(userId: number) {
+export async function rankingPositions(
+	userId: number,
+	showDisclosures: boolean,
+) {
 	const chartResults = await sendMessage("getUserCharts", userId);
 	const charts = chartResults.ok
 		? (chartResults.data as PolyTrack.UserChartsApi)
@@ -1280,7 +1328,7 @@ export async function rankingPositions(userId: number) {
 	const section = document.createElement("div");
 	section.innerHTML = `
 	<h6 class="section-title px-3 px-lg-0 mt-4">
-		<i class="fas fa-ranking-star me-1"></i> Ranking Positions
+		<i class="fas fa-ranking-star me-1"></i> Ranking Positions${kilnDisclosureBadgeHtml(showDisclosures)}
 	</h6>
 	<div class="card mcard card-themed mb-4">
 		<div class="card-body">

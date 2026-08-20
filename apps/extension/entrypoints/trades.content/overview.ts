@@ -17,9 +17,14 @@
 import sadFace from "@/assets/sad-face.webp";
 import { _seenTradeIds } from "@/utils/storage";
 import type { UserDetails } from "@/utils/types";
-import { createModal, parseTrade } from "@/utils/utilities";
+import {
+	applyKilnDisclosureTitle,
+	createModal,
+	kilnDisclosureBadgeHtml,
+	parseTrade,
+} from "@/utils/utilities";
 
-export async function quickCancelOutboundTrades() {
+export async function quickCancelOutboundTrades(showDisclosures: boolean) {
 	const container = document.querySelector(".col:has(.card-inbox)")!;
 	const cards = container.querySelectorAll(".card-inbox");
 
@@ -31,7 +36,7 @@ export async function quickCancelOutboundTrades() {
 
 		const cancelBtn = document.createElement("button");
 		cancelBtn.classList.add("btn", "btn-danger", "px-4", "me-2");
-		cancelBtn.innerText = "Cancel";
+		cancelBtn.innerHTML = `Cancel${kilnDisclosureBadgeHtml(showDisclosures)}`;
 
 		cancelBtn.addEventListener("click", async () => {
 			cancelBtn.disabled = true;
@@ -43,7 +48,7 @@ export async function quickCancelOutboundTrades() {
 	}
 }
 
-export async function quickCounterTrades() {
+export async function quickCounterTrades(showDisclosures: boolean) {
 	const container = document.querySelector(".col:has(.card-inbox)")!;
 	const cards = container.querySelectorAll(".card-inbox");
 
@@ -55,7 +60,7 @@ export async function quickCounterTrades() {
 
 		const counterBtn = document.createElement("button");
 		counterBtn.classList.add("btn", "btn-success", "px-4", "me-2");
-		counterBtn.innerText = "Counter";
+		counterBtn.innerHTML = `Counter${kilnDisclosureBadgeHtml(showDisclosures)}`;
 
 		const userId = +new URL(
 			(card.querySelector('a[href^="/users/"]')! as HTMLLinkElement).href,
@@ -72,7 +77,7 @@ export async function quickCounterTrades() {
 	}
 }
 
-export async function nftItems(user: UserDetails) {
+export async function nftItems(user: UserDetails, showDisclosures: boolean) {
 	const FETCH_DELAY_MS = 500;
 
 	const container = document.querySelector(".col:has(.card-inbox)")!;
@@ -123,12 +128,15 @@ export async function nftItems(user: UserDetails) {
 				badge.setAttribute("data-bs-toggle", "tooltip");
 				badge.setAttribute(
 					"data-bs-title",
-					"Includes an item marked Not for Trade",
+					showDisclosures
+						? "Includes an item marked Not for Trade (This is a Kiln extension feature, not part of Polytoria.)"
+						: "Includes an item marked Not for Trade",
 				);
 				break;
 			case "failed":
 				badge.classList.add("bg-warning", "text-dark");
 				badge.textContent = "⚠ Could not reject";
+				applyKilnDisclosureTitle(badge, showDisclosures);
 				break;
 			default:
 				break;
@@ -268,7 +276,10 @@ export async function nftItems(user: UserDetails) {
 	await _seenTradeIds.setValue(updated.slice(-500));
 }
 
-export async function blockedTraders(user: UserDetails) {
+export async function blockedTraders(
+	user: UserDetails,
+	showDisclosures: boolean,
+) {
 	const blockedResult = await sendMessage("getBlockedTraders", user.userId);
 	if (!blockedResult.ok) return;
 
@@ -299,12 +310,15 @@ export async function blockedTraders(user: UserDetails) {
 				badge.setAttribute("data-bs-toggle", "tooltip");
 				badge.setAttribute(
 					"data-bs-title",
-					"Sender is blocked from trading with you",
+					showDisclosures
+						? "Sender is blocked from trading with you (This is a Kiln extension feature, not part of Polytoria.)"
+						: "Sender is blocked from trading with you",
 				);
 				break;
 			case "failed":
 				badge.classList.add("bg-warning", "text-dark");
 				badge.textContent = "⚠ Could not reject";
+				applyKilnDisclosureTitle(badge, showDisclosures);
 				break;
 		}
 
@@ -764,7 +778,9 @@ export async function tradeManager(user: UserDetails) {
 
 		if (scrapingCompleted && activeTab === "completed") {
 			const progressPct = completedProgress.total
-				? Math.round((completedProgress.current / completedProgress.total) * 100)
+				? Math.round(
+						(completedProgress.current / completedProgress.total) * 100,
+					)
 				: 0;
 			modal.innerHTML = `
 				<span class="badge bg-warning mb-2">KILN</span>
@@ -926,7 +942,8 @@ export async function tradeManager(user: UserDetails) {
 				<div style="display:flex;align-items:center;gap:10px;">
 					<small style="color:#555;">${sorted.length} ${activeTab} trades</small>
 					${
-						hasSelection && !isReadOnlyType(activeTab as ScrapedTrade["tradeType"])
+						hasSelection &&
+						!isReadOnlyType(activeTab as ScrapedTrade["tradeType"])
 							? `
 						<button id="kiln-ts-decline-selected" class="btn btn-danger btn-sm px-3">
 							${activeTab === "outbound" ? "Cancel" : "Decline"} selected (${selectedIds.size})
@@ -1346,7 +1363,10 @@ export async function tradeManager(user: UserDetails) {
 	}
 }
 
-export async function tradeViewedIndicators(tradeIds: number[]) {
+export async function tradeViewedIndicators(
+	tradeIds: number[],
+	showDisclosures: boolean,
+) {
 	const container = document.querySelector(".col:has(.card-inbox)")!;
 	const cards = container.querySelectorAll(".card-inbox");
 
@@ -1359,6 +1379,11 @@ export async function tradeViewedIndicators(tradeIds: number[]) {
 
 		if (tradeIds.includes(tradeId)) {
 			(card as HTMLDivElement).style.opacity = "50%";
+			applyKilnDisclosureTitle(
+				card as HTMLDivElement,
+				showDisclosures,
+				"Already viewed",
+			);
 		}
 	}
 }

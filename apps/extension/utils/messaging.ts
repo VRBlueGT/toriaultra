@@ -18,9 +18,11 @@ import type { Extension, LOVE, PolyTrack, Polytoria } from "@kiln/schemas";
 import { defineExtensionMessaging } from "@webext-core/messaging";
 import type { PolytoriaTradeOwnerHistory } from "../../../packages/schemas/src/apis/love";
 import type {
-	AvatarSandboxOutfit,
+	AvatarIFrameState,
 	FeedApi,
+	FeedSearchFilters,
 	ForumSearchFilters,
+	KilnErrorLogEntry,
 	PlacesListingApi,
 	PlacesListingFilters,
 	Result,
@@ -49,6 +51,9 @@ export interface ProtocolMap {
 	): Promise<Result<PolyTrack.ForumSearchApi>>;
 	getForumReplyRedirect(replyId: number): Promise<Result<string>>;
 	showHiddenCategoryAlert(): void;
+	getFeedSearch(
+		filters: FeedSearchFilters,
+	): Promise<Result<PolyTrack.FeedSearchApi>>;
 	openCreator(version: 1 | 2): void;
 	changeUserAlias(data: { userId: number; currentAlias?: string }): void;
 
@@ -115,6 +120,7 @@ export interface ProtocolMap {
 	getItemOwners(data: {
 		itemId: number;
 		limit?: number;
+		page?: number;
 	}): Promise<Result<Polytoria.OwnersApi>>;
 	getItemCopy(data: {
 		itemId: number;
@@ -273,11 +279,23 @@ export interface ProtocolMap {
 		version: string;
 		username: string;
 	}): Promise<Result<{ ok: boolean }>>;
+	reportError(entry: Omit<KilnErrorLogEntry, "timestamp">): void;
 
 	getAvatarOutfits(userId: number): Promise<Result<Extension.AvatarOutfitsApi>>;
-	saveAvatarOutfits(data: {
+	createAvatarOutfit(data: {
 		userId: number;
-		outfits: AvatarSandboxOutfit[];
+		name: string;
+		avatarData: AvatarIFrameState;
+	}): Promise<Result<Extension.AvatarOutfitApi>>;
+	updateAvatarOutfit(data: {
+		userId: number;
+		outfitId: string;
+		name?: string;
+		avatarData?: AvatarIFrameState;
+	}): Promise<Result<Extension.AvatarOutfitApi>>;
+	deleteAvatarOutfit(data: {
+		userId: number;
+		outfitId: string;
 	}): Promise<Result<{ success: boolean }>>;
 
 	getPlaceReviews(data: {

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import { preferences } from "@/utils/storage";
+import { _showKilnDisclosures, preferences } from "@/utils/storage";
 import * as avatar from "./avatar";
 import * as friends from "./friends";
 import * as settings from "./settings";
@@ -23,7 +23,10 @@ import * as transactions from "./transactions";
 export default defineContentScript({
 	matches: ["https://polytoria.com/my/*"],
 	main() {
-		preferences.getPreferences().then((values) => {
+		Promise.all([
+			preferences.getPreferences(),
+			_showKilnDisclosures.getValue(),
+		]).then(([values, showDisclosures]) => {
 			getUserDetails().then((user) => {
 				if (!user) {
 					console.warn("[Kiln] Failure to get logged in user details.");
@@ -45,13 +48,16 @@ export default defineContentScript({
 						window.location.pathname.includes("transactions") &&
 						values.enabled.includes("irlBrickPrice")
 					) {
-						transactions.irlBrickPrice(values.config.irlBrickPrice.currency);
+						transactions.irlBrickPrice(
+							values.config.irlBrickPrice.currency,
+							showDisclosures,
+						);
 					} else {
 						settings.checkForVerificationCode(user.userId);
 					}
 				} else if (window.location.pathname.includes("friends")) {
 					if (values.enabled.includes("improvedFriendLists")) {
-						friends.actions();
+						friends.actions(showDisclosures);
 					}
 				} else if (window.location.pathname.includes("avatar")) {
 					if (values.enabled.includes("avatarSandbox")) {
@@ -74,11 +80,11 @@ export default defineContentScript({
 					}
 
 					if (values.enabled.includes("customBodyColorHexCodes")) {
-						avatar.customBodyColorHexCodes();
+						avatar.customBodyColorHexCodes(showDisclosures);
 					}
 
 					if (values.enabled.includes("outfitManagement")) {
-						avatar.outfitManagement();
+						avatar.outfitManagement(showDisclosures);
 					}
 				}
 			});

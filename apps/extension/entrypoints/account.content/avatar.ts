@@ -22,7 +22,11 @@ import type {
 	AvatarIFrameState,
 	AvatarSandboxOutfit,
 } from "@/utils/types";
-import { createModal, getUserDetails } from "@/utils/utilities";
+import {
+	applyKilnDisclosureTitle,
+	createModal,
+	getUserDetails,
+} from "@/utils/utilities";
 import { AvatarRenderer } from "./avatarRenderer";
 
 interface CreatorInfo {
@@ -86,7 +90,7 @@ const DEFAULT_TRANSFORM: AccessoryTransform = {
 	scale: 1,
 };
 
-export function customBodyColorHexCodes() {
+export function customBodyColorHexCodes(showDisclosures: boolean) {
 	const bodyPartButtons = document.querySelectorAll<HTMLButtonElement>(
 		".avatarAction.bodypart",
 	);
@@ -120,6 +124,11 @@ export function customBodyColorHexCodes() {
 				label.htmlFor = "hex-code-input";
 				label.textContent = "Hex:";
 				label.style.cssText = "font-weight: 600; font-size: 14px;";
+				applyKilnDisclosureTitle(
+					label,
+					showDisclosures,
+					"Custom hex color input",
+				);
 
 				const input = document.createElement("input");
 				input.type = "text";
@@ -503,7 +512,7 @@ export function avatarSandbox(
 	)!;
 
 	let renameTargetIndex = -1;
-	outfitRenameButton.addEventListener("click", () => {
+	outfitRenameButton.addEventListener("click", async () => {
 		const renameInput =
 			outfitRenameButton.previousElementSibling as HTMLInputElement;
 		let outfitName = renameInput.value.trim();
@@ -524,21 +533,19 @@ export function avatarSandbox(
 			return;
 		}
 
-		outfitRenameModal.close();
-		outfits![renameTargetIndex].name = outfitName;
-		if (tabSelected === "outfit") loadItems();
-		persistOutfits();
-	});
+		if (kilnUserId === null) return;
+		const target = outfits![renameTargetIndex];
+		const result = await sendMessage("updateAvatarOutfit", {
+			userId: kilnUserId,
+			outfitId: target.id,
+			name: outfitName,
+		});
+		if (!result.ok) return;
 
-	function persistOutfits(): void {
-		_avatarSandboxOutfits.setValue(outfits!);
-		if (isVerified && kilnUserId !== null) {
-			sendMessage("saveAvatarOutfits", {
-				userId: kilnUserId,
-				outfits: outfits!,
-			});
-		}
-	}
+		outfitRenameModal.close();
+		target.name = outfitName;
+		if (tabSelected === "outfit") loadItems();
+	});
 
 	(async () => {
 		const userDetails = await getUserDetails();
@@ -555,20 +562,8 @@ export function avatarSandbox(
 		const outfitsResult = await sendMessage("getAvatarOutfits", kilnUserId);
 		if (!outfitsResult.ok) return;
 
-		const apiOutfits = outfitsResult.data.data;
-		const localOutfits = await _avatarSandboxOutfits.getValue();
-
-		if (apiOutfits.length === 0 && localOutfits.length > 0) {
-			outfits = localOutfits;
-			sendMessage("saveAvatarOutfits", {
-				userId: kilnUserId,
-				outfits: localOutfits,
-			});
-		} else if (apiOutfits.length > 0) {
-			outfits = apiOutfits;
-			_avatarSandboxOutfits.setValue(apiOutfits);
-			if (tabSelected === "outfit") loadItems();
-		}
+		outfits = outfitsResult.data.data;
+		if (tabSelected === "outfit") loadItems();
 	})();
 
 	updateAvatar();
@@ -804,7 +799,7 @@ export function avatarSandbox(
 		},
 	);
 
-	outfitCreateButton.addEventListener("click", () => {
+	outfitCreateButton.addEventListener("click", async () => {
 		const nameInput =
 			outfitCreateButton.previousElementSibling as HTMLInputElement;
 		let outfitName = nameInput.value.trim();
@@ -825,11 +820,18 @@ export function avatarSandbox(
 			return;
 		}
 
+		if (kilnUserId === null) return;
+		const result = await sendMessage("createAvatarOutfit", {
+			userId: kilnUserId,
+			name: outfitName,
+			avatarData: avatar,
+		});
+		if (!result.ok) return;
+
 		outfitCreateModal.close();
 		outfits ??= [];
-		outfits.push({ name: outfitName, createdAt: Date.now(), data: avatar });
+		outfits.push(result.data.data);
 		if (tabSelected === "outfit") loadItems();
-		persistOutfits();
 	});
 
 	document.getElementById("view-cache")!.addEventListener("click", () => {
@@ -1166,19 +1168,43 @@ export function avatarSandbox(
 				total: cache.total,
 			};
 		} else if (tabSelected === "outfit") {
-			pageCount = 1;
-			updatePaginationState();
-			document.getElementById("pagination-current")!.innerText = "1";
-			const inv = document.getElementById("inventory")!;
-			inv.classList.remove("itemgrid");
-			inv.innerHTML = `
+			if (!isVerified) {
+				pageCount = 1;
+				updatePaginationState();
+				document.getElementById("pagination-current")!.innerText = "1";
+				const inv = document.getElementById("inventory")!;
+				inv.classList.remove("itemgrid");
+				inv.innerHTML = `
 <div class="card mcard w-100">
   <div class="card-body text-center p-4">
     <img class="m-2" src="${sadFace}" width="75" height="75" style="filter: grayscale(1)">
-    <p class="text-muted mb-0">Outfits are temporarily unavailable.</p>
+    <p class="text-muted mb-0"><a href="/account">Verify your Kiln account</a> to save and sync outfits across devices.</p>
   </div>
 </div>`;
-			return;
+				return;
+			}
+			if (!outfits || outfits.length === 0) {
+				pageCount = 1;
+				updatePaginationState();
+				document.getElementById("pagination-current")!.innerText = "1";
+				const inv = document.getElementById("inventory")!;
+				inv.classList.remove("itemgrid");
+				inv.innerHTML = `
+<div class="card mcard w-100">
+  <div class="card-body text-center p-4">
+    <img class="m-2" src="${sadFace}" width="75" height="75" style="filter: grayscale(1)">
+    <p class="text-muted mb-0">You haven't saved any outfits yet!</p>
+  </div>
+</div>`;
+				return;
+			}
+			const outfitsClone = structuredClone(outfits!);
+			const groups: AvatarSandboxOutfit[][] = [];
+			while (outfitsClone.length > 0) groups.push(outfitsClone.splice(0, 12));
+			items = {
+				assets: groups[page - 1] as unknown as StoreApiItem[],
+				pages: groups.length,
+			};
 		} else {
 			pageCount = 1;
 			updatePaginationState();
@@ -1329,11 +1355,16 @@ export function avatarSandbox(
 								"p+outfit_overwrite_button",
 							)[0] as HTMLElement,
 							"Overwrite",
-							() => {
-								if (!isVerified) return;
+							async () => {
+								if (!isVerified || kilnUserId === null) return;
+								const result = await sendMessage("updateAvatarOutfit", {
+									userId: kilnUserId,
+									outfitId: outfit.id,
+									avatarData: avatar,
+								});
+								if (!result.ok) return;
 								outfits![index].data = avatar;
 								if (tabSelected === "outfit") loadItems();
-								persistOutfits();
 							},
 						);
 
@@ -1342,11 +1373,15 @@ export function avatarSandbox(
 								"p+outfit_delete_button",
 							)[0] as HTMLElement,
 							"Delete",
-							() => {
-								if (!isVerified) return;
+							async () => {
+								if (!isVerified || kilnUserId === null) return;
+								const result = await sendMessage("deleteAvatarOutfit", {
+									userId: kilnUserId,
+									outfitId: outfit.id,
+								});
+								if (!result.ok) return;
 								outfits!.splice(index, 1);
 								if (tabSelected === "outfit") loadItems();
-								persistOutfits();
 							},
 						);
 					},
@@ -1541,13 +1576,9 @@ export function avatarSandbox(
 		}
 		return `by <a class="text-muted" href="/u/${item.creator!.name}">${item.creator!.name}</a>`;
 	}
-
-	_avatarSandboxOutfits.watch((newValue) => {
-		outfits = newValue ?? [];
-	});
 }
 
-export function outfitManagement() {
+export function outfitManagement(showDisclosures: boolean) {
 	const outfitsTab = document.getElementById("outfits-tab");
 	if (!outfitsTab) return;
 
@@ -1594,6 +1625,12 @@ export function outfitManagement() {
     <li><a class="dropdown-item text-warning kiln-outfit-update" href="#"><i class="fa-solid fa-upload"></i> Update</a></li>
   </ul>
 </div>`;
+
+			applyKilnDisclosureTitle(
+				imageCard.querySelector<HTMLElement>(".kiln-outfit-dropdown")!,
+				showDisclosures,
+				"Kiln outfit actions",
+			);
 
 			imageCard
 				.querySelector<HTMLElement>(".kiln-outfit-rename")!

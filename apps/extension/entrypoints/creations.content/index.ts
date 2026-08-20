@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import { preferences } from "@/utils/storage";
+import { _showKilnDisclosures, preferences } from "@/utils/storage";
 import * as discovery from "./discovery";
 import * as models from "./models";
 import * as worlds from "./worlds";
@@ -27,7 +27,10 @@ export default defineContentScript({
 		"https://polytoria.com/create/place*",
 	],
 	main() {
-		preferences.getPreferences().then((values) => {
+		Promise.all([
+			preferences.getPreferences(),
+			_showKilnDisclosures.getValue(),
+		]).then(([values, showDisclosures]) => {
 			getUserDetails().then((user) => {
 				if (!user) {
 					console.warn("[Kiln] Failure to get logged in user details.");
@@ -36,15 +39,15 @@ export default defineContentScript({
 
 				if (window.location.pathname.includes("library")) {
 					if (values.enabled.includes("audioToolboxPreviews")) {
-						discovery.audioPreviews();
+						discovery.audioPreviews(showDisclosures);
 					}
 				} else if (window.location.pathname.includes("models")) {
 					if (values.enabled.includes("modelTreeInspector")) {
-						models.modelTreeInspector();
+						models.modelTreeInspector(showDisclosures);
 					}
 				} else {
 					if (values.enabled.includes("v2WorldLabels")) {
-						worlds.v2WorldLabels();
+						worlds.v2WorldLabels(showDisclosures);
 					}
 				}
 			});

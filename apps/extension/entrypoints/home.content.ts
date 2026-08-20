@@ -14,15 +14,24 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import type { Polytoria } from "@kiln/schemas";
+import type { PolyTrack, Polytoria } from "@kiln/schemas";
 import errorIcon from "@/assets/error.svg";
 import sadFace from "@/assets/sad-face.webp";
-import { _bestFriends, _lastViewedPlaces, isChrome, preferences } from "@/utils/storage";
+import {
+	_bestFriends,
+	_lastViewedPlaces,
+	_showKilnDisclosures,
+	isChrome,
+	preferences,
+} from "@/utils/storage";
 import type { CurrencyCode, FeedPost } from "@/utils/types";
 import {
+	applyKilnDisclosureTitle,
+	createKilnDisclosureBadge,
 	fireKilnNotification,
 	formatNotificationRelativeTime,
 	getUserDetails,
+	kilnDisclosureBadgeHtml,
 	openVerificationModal,
 } from "@/utils/utilities";
 import { sendMessage } from "../utils/messaging";
@@ -30,36 +39,52 @@ import { sendMessage } from "../utils/messaging";
 export default defineContentScript({
 	matches: ["https://polytoria.com/", "https://polytoria.com/home"],
 	main() {
-		preferences.getPreferences().then((values) => {
+		Promise.all([
+			preferences.getPreferences(),
+			_showKilnDisclosures.getValue(),
+		]).then(([values, showDisclosures]) => {
 			if (values.enabled.includes("favoritedPlaces"))
-				favoritedPlaces(values.config.favoritedPlaces.notifyOnUpdate);
-			if (values.enabled.includes("bestFriends")) bestFriends();
+				favoritedPlaces(
+					values.config.favoritedPlaces.notifyOnUpdate,
+					showDisclosures,
+				);
+			if (values.enabled.includes("bestFriends")) bestFriends(showDisclosures);
 			if (values.enabled.includes("irlBrickPrice"))
-				irlBrickPrice(values.config.irlBrickPrice.currency as CurrencyCode);
-			if (values.enabled.includes("homeFriendJoins")) homeJoinFriendsButton();
+				irlBrickPrice(
+					values.config.irlBrickPrice.currency as CurrencyCode,
+					showDisclosures,
+				);
+			if (values.enabled.includes("homeFriendJoins"))
+				homeJoinFriendsButton(showDisclosures);
 
 			if (values.enabled.includes("quickCreatorLaunchBtns"))
-				quickCreatorLaunchBtns();
+				quickCreatorLaunchBtns(showDisclosures);
 
 			if (values.enabled.includes("dailyChallengesRefreshing") && isChrome())
-				dailyChallengesRefreshing();
+				dailyChallengesRefreshing(showDisclosures);
 
 			if (
 				values.enabled.includes("disableInfiniteScrolling") &&
 				values.config.disableInfiniteScrolling.feed
 			)
-				disableInfiniteScrolling();
+				disableInfiniteScrolling(showDisclosures);
+
+			if (values.enabled.includes("myFeedPosts")) myFeedPosts();
+			if (values.enabled.includes("searchFeedPosts")) searchFeedPosts();
 		});
 	},
 });
 
-async function favoritedPlaces(notifyOnUpdate: boolean) {
+async function favoritedPlaces(
+	notifyOnUpdate: boolean,
+	showDisclosures: boolean,
+) {
 	const container = document.createElement("div");
 	container.innerHTML = `
       <div class="row reqFadeAnim px-2 px-lg-0">
         <div class="col">
           <h6 class="dash-ctitle2">Jump right back into your favorite worlds</h6>
-          <h5 class="dash-ctitle">Pinned Worlds</h5>
+          <h5 class="dash-ctitle">Pinned Worlds${kilnDisclosureBadgeHtml(showDisclosures)}</h5>
         </div>
       </div>
       <div class="card card-dash mcard mb-3">
@@ -298,7 +323,7 @@ async function favoritedPlaces(notifyOnUpdate: boolean) {
 	);
 }
 
-function bestFriends() {
+function bestFriends(showDisclosures: boolean) {
 	const friendsRow = document.querySelector(
 		".card:has(.friendsPopup) .d-flex",
 	)!;
@@ -334,6 +359,20 @@ function bestFriends() {
     </div>
     `;
 
+		if (showDisclosures) {
+			headshot.style.position = "relative";
+			const badge = createKilnDisclosureBadge();
+			Object.assign(badge.style, {
+				position: "absolute",
+				top: "0",
+				right: "0",
+				fontSize: "0.45rem",
+				padding: "1px 3px",
+				zIndex: "10",
+			});
+			headshot.appendChild(badge);
+		}
+
 		friendsRow.prepend(headshot);
 		return headshot;
 	};
@@ -349,7 +388,10 @@ function bestFriends() {
 	});
 }
 
-async function irlBrickPrice(irlCurrency: CurrencyCode) {
+async function irlBrickPrice(
+	irlCurrency: CurrencyCode,
+	showDisclosures: boolean,
+) {
 	const trendingItems = Array.from(
 		document.querySelectorAll('a[href^="/store"]:has(.place-card)'),
 	);
@@ -368,13 +410,18 @@ async function irlBrickPrice(irlCurrency: CurrencyCode) {
 				spanTag.style.fontSize = "0.7rem";
 				spanTag.style.fontWeight = "lighter";
 				spanTag.innerText = ` (${currency})`;
+				applyKilnDisclosureTitle(
+					spanTag,
+					showDisclosures,
+					"IRL currency conversion",
+				);
 				priceTag.appendChild(spanTag);
 			}
 		}
 	}
 }
 
-function homeJoinFriendsButton() {
+function homeJoinFriendsButton(showDisclosures: boolean) {
 	const friendsPopup = document.getElementById("friend-name")!;
 
 	const observer = new MutationObserver((records) => {
@@ -392,6 +439,11 @@ function homeJoinFriendsButton() {
 					margin: "3px",
 				});
 				joinButton.innerHTML = '<i class="fas fa-play"></i>';
+				applyKilnDisclosureTitle(
+					joinButton,
+					showDisclosures,
+					"Join friend's game",
+				);
 				node.parentElement?.parentElement?.appendChild(joinButton);
 
 				joinButton.addEventListener("click", async () => {
@@ -417,7 +469,7 @@ function homeJoinFriendsButton() {
 	observer.observe(friendsPopup, { childList: true, subtree: true });
 }
 
-function quickCreatorLaunchBtns() {
+function quickCreatorLaunchBtns(showDisclosures: boolean) {
 	const stickySection = document.querySelector(".dashboardAvatarShadow + *");
 
 	const btnGroup = document.createElement("div");
@@ -432,7 +484,15 @@ function quickCreatorLaunchBtns() {
 	btn2.innerText = "Open 1.0 Creator";
 
 	btnGroup.append(btn, btn2);
-	stickySection?.prepend(btnGroup);
+
+	if (showDisclosures) {
+		const label = document.createElement("div");
+		label.className = "small text-muted mb-1";
+		label.innerHTML = `Quick Creator Launch${kilnDisclosureBadgeHtml(true)}`;
+		stickySection?.prepend(label, btnGroup);
+	} else {
+		stickySection?.prepend(btnGroup);
+	}
 
 	btn.addEventListener("click", () => {
 		console.log("aaa");
@@ -519,7 +579,7 @@ function renderFeedPost(post: FeedPost): HTMLElement {
 	return card;
 }
 
-function disableInfiniteScrolling() {
+function disableInfiniteScrolling(showDisclosures: boolean) {
 	sendMessage("disableFeedAutoScroll");
 
 	const feedPosts = document.getElementById("feed-posts");
@@ -532,7 +592,7 @@ function disableInfiniteScrolling() {
 	const button = document.createElement("button");
 	button.type = "button";
 	button.className = "btn btn-outline-secondary w-100 mb-3";
-	button.textContent = "Load More";
+	button.innerHTML = `Load More${kilnDisclosureBadgeHtml(showDisclosures)}`;
 	feedPosts.insertAdjacentElement("afterend", button);
 
 	const setButtonState = (state: "idle" | "loading" | "error") => {
@@ -542,7 +602,7 @@ function disableInfiniteScrolling() {
 				? `<span class="spinner-border spinner-border-sm"></span> Loading...`
 				: state === "error"
 					? "Failed to load more, click to retry"
-					: "Load More";
+					: `Load More${kilnDisclosureBadgeHtml(showDisclosures)}`;
 	};
 
 	button.addEventListener("click", async () => {
@@ -572,7 +632,7 @@ function disableInfiniteScrolling() {
 	});
 }
 
-function dailyChallengesRefreshing() {
+function dailyChallengesRefreshing(showDisclosures: boolean) {
 	const card = document.querySelector(".daily-challenge-card");
 	if (!card) return;
 
@@ -584,7 +644,7 @@ function dailyChallengesRefreshing() {
 	refreshBtn.type = "button";
 	refreshBtn.className =
 		"btn btn-sm btn-outline-secondary kiln-challenges-refresh-btn";
-	refreshBtn.title = "Refresh challenges";
+	applyKilnDisclosureTitle(refreshBtn, showDisclosures, "Refresh challenges");
 	refreshBtn.innerHTML = `<i class="fas fa-sync-alt"></i>`;
 	header.appendChild(refreshBtn);
 
@@ -623,4 +683,784 @@ function dailyChallengesRefreshing() {
 			refreshBtn.innerHTML = `<i class="fas fa-sync-alt"></i>`;
 		}
 	});
+}
+
+async function myFeedPosts() {
+	const findFeedToolbar = (): {
+		toolbar: HTMLElement;
+		container: HTMLElement;
+	} | null => {
+		const headingRow = Array.from(
+			document.querySelectorAll<HTMLElement>("h5.dash-ctitle"),
+		)
+			.find((h) => h.textContent?.trim() === "Feed")
+			?.closest<HTMLElement>(".row");
+		if (!headingRow) return null;
+
+		let container: HTMLElement | null = headingRow;
+		while (
+			container &&
+			!Array.from(container.classList).some((c) => c.startsWith("container"))
+		) {
+			container = container.parentElement;
+		}
+		if (!container) return null;
+
+		let toolbar = headingRow.querySelector<HTMLElement>(
+			'[data-kiln="feed-toolbar"]',
+		);
+		if (!toolbar) {
+			toolbar = document.createElement("div");
+			toolbar.dataset.kiln = "feed-toolbar";
+			toolbar.className = "col-auto d-flex align-items-center gap-2";
+			headingRow.appendChild(toolbar);
+		}
+
+		return { toolbar, container };
+	};
+
+	const found = findFeedToolbar();
+	if (!found) return;
+	const { toolbar, container } = found;
+
+	const escapeHtml = (value: string): string =>
+		value
+			.replaceAll("&", "&amp;")
+			.replaceAll("<", "&lt;")
+			.replaceAll(">", "&gt;")
+			.replaceAll('"', "&quot;")
+			.replaceAll("'", "&#39;");
+
+	const renderFeedEntry = (entry: PolyTrack.FeedEntry): HTMLElement => {
+		const isReply = entry.kind === "reply";
+		const preview = entry.content.replace(/\s+/g, " ").trim();
+		const truncatedPreview =
+			preview.length > 150 ? `${preview.slice(0, 147)}...` : preview;
+
+		const card = document.createElement("div");
+		card.className = "card card-dash mcard mb-3";
+		card.innerHTML = `
+			<div class="card-body">
+				<div class="row small">
+					<div class="col-auto">
+						<a href="/users/${entry.author.polytoriaId}">
+							<img src="${escapeHtml(entry.author.avatarUrl)}" width="52" height="52" class="img-fluid rounded-circle border border-2 border-secondary">
+						</a>
+					</div>
+					<div class="col">
+						<p class="mb-1">
+							<a href="/users/${entry.author.polytoriaId}" class="text-reset fw-semibold">${escapeHtml(entry.author.username)}</a>
+							<span class="text-muted ms-2" data-bs-toggle="tooltip" data-bs-title="${escapeHtml(new Date(entry.postedAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }))}">
+								<i class="fa-duotone fa-clock me-1"></i>${formatNotificationRelativeTime(new Date(entry.postedAt))}
+							</span>
+						</p>
+						${
+							entry.parent
+								? `<blockquote class="blockquote mb-1 text-muted small"><i class="fas fa-quote-left me-1"></i>${escapeHtml(entry.parent.content.replace(/\s+/g, " ").trim().slice(0, 100))}<i class="fas fa-quote-right ms-1"></i></blockquote>`
+								: isReply && entry.parentUnavailable
+									? `<p class="mb-1 text-muted small fst-italic"><i class="fas fa-triangle-exclamation me-1"></i>Original post unavailable</p>`
+									: ""
+						}
+						<p class="mb-1">
+							<a data-kiln="feed-link" class="text-reset">${escapeHtml(truncatedPreview)}</a>
+						</p>
+						${
+							entry.mediaUrl
+								? `<img src="${escapeHtml(entry.mediaUrl)}" class="img-fluid rounded-3 my-2" style="max-height:200px;">`
+								: ""
+						}
+						<div class="text-muted small">
+							<i class="far fa-comment me-1"></i>${entry.replyCount ?? "-"}
+						</div>
+					</div>
+				</div>
+			</div>
+			`;
+
+		const link = card.querySelector<HTMLAnchorElement>(
+			'[data-kiln="feed-link"]',
+		)!;
+		if (entry.parentUnavailable) {
+			link.href = "#";
+			link.style.pointerEvents = "none";
+			link.style.opacity = "0.7";
+		} else {
+			link.href = `/feed/${isReply ? (entry.parentId ?? entry.id) : entry.id}`;
+		}
+
+		return card;
+	};
+
+	const setLoadMoreState = (
+		btn: HTMLButtonElement,
+		state: "idle" | "loading" | "error" | "done" | "hidden",
+	) => {
+		btn.classList.toggle("d-none", state === "hidden");
+		btn.classList.toggle("d-block", state !== "hidden");
+		btn.disabled = state === "loading" || state === "done";
+		btn.innerHTML =
+			state === "loading"
+				? `<span class="spinner-border spinner-border-sm"></span> Loading...`
+				: state === "error"
+					? "Failed to load more, click to retry"
+					: state === "done"
+						? "No more results"
+						: "Load More";
+	};
+
+	const button = document.createElement("button");
+	button.type = "button";
+	button.className = "btn btn-outline-secondary btn-sm";
+	button.textContent = "My Feed Posts";
+	toolbar.appendChild(button);
+
+	const showMyFeedPosts = async () => {
+		const user = await getUserDetails();
+		if (!user) return;
+		const userId = user.userId;
+
+		const existingChildren = Array.from(container.children) as HTMLElement[];
+		for (const child of existingChildren) child.style.display = "none";
+		toolbar.style.display = "none";
+
+		const kilnBadge = document.createElement("span");
+		kilnBadge.classList.add("badge", "bg-warning", "mb-2");
+		kilnBadge.innerText = "Kiln";
+
+		const header = document.createElement("div");
+		header.className = "d-flex align-items-center justify-content-between mb-3";
+		header.innerHTML = `
+			<h2 class="text-shadow mb-0">My Feed Posts</h2>
+			<div class="d-flex align-items-center gap-3">
+				<div class="form-check mb-0">
+					<input class="form-check-input" type="checkbox" id="kiln-my-feed-posts-replies" data-kiln="my-feed-posts-replies">
+					<label class="form-check-label" for="kiln-my-feed-posts-replies">Include replies</label>
+				</div>
+				<select class="form-select form-select-sm w-auto" data-kiln="my-feed-posts-sort">
+					<option value="newest">Newest to oldest</option>
+					<option value="oldest">Oldest to newest</option>
+				</select>
+				<button type="button" class="btn btn-sm btn-outline-secondary" data-kiln="my-feed-back">
+					<i class="fas fa-arrow-left me-1"></i>Back to Home
+				</button>
+			</div>
+		`;
+		container.prepend(header);
+		container.prepend(kilnBadge);
+
+		const resultsContainer = document.createElement("div");
+		resultsContainer.className = "kiln-feed-results mt-3";
+
+		const loadMoreButton = document.createElement("button");
+		loadMoreButton.type = "button";
+		loadMoreButton.className =
+			"btn btn-outline-secondary w-75 mx-auto mt-3 mb-3 d-none";
+		loadMoreButton.textContent = "Load More";
+
+		header.insertAdjacentElement("afterend", resultsContainer);
+		resultsContainer.insertAdjacentElement("afterend", loadMoreButton);
+
+		header
+			.querySelector<HTMLButtonElement>('[data-kiln="my-feed-back"]')!
+			.addEventListener("click", () => {
+				window.history.pushState(null, "", window.location.pathname);
+				kilnBadge.remove();
+				header.remove();
+				resultsContainer.remove();
+				loadMoreButton.remove();
+				toolbar.style.display = "";
+				for (const child of existingChildren) child.style.display = "";
+			});
+
+		const repliesCheckbox = header.querySelector<HTMLInputElement>(
+			'[data-kiln="my-feed-posts-replies"]',
+		)!;
+		const sortSelect = header.querySelector<HTMLSelectElement>(
+			'[data-kiln="my-feed-posts-sort"]',
+		)!;
+
+		let nextPage: number | null = null;
+
+		const loadPage = async (page: number) => {
+			const result = await sendMessage("getFeedSearch", {
+				page,
+				search: "",
+				sort: sortSelect.value,
+				kind: repliesCheckbox.checked ? "both" : "parents",
+				authorIds: [userId],
+				postedAfter: "",
+				postedBefore: "",
+			});
+
+			if (!result.ok) {
+				if (page === 1) {
+					resultsContainer.innerHTML = `<div class="alert alert-danger">Failed to load your feed posts: ${escapeHtml(result.message)}</div>`;
+				} else {
+					setLoadMoreState(loadMoreButton, "error");
+				}
+				return;
+			}
+
+			if (page === 1) {
+				resultsContainer.innerHTML =
+					result.data.entries.length === 0
+						? `<div class="text-center text-muted border border-secondary rounded p-2">You haven't posted anything on the feed yet.</div>`
+						: "";
+			}
+
+			for (const entry of result.data.entries) {
+				resultsContainer.appendChild(renderFeedEntry(entry));
+			}
+			sendMessage("registerBootstrapElements");
+
+			nextPage = result.data.nextPage;
+			setLoadMoreState(loadMoreButton, nextPage === null ? "done" : "idle");
+		};
+
+		const runSearch = async () => {
+			resultsContainer.innerHTML = `<div class="text-center text-muted p-4"><span class="spinner-border spinner-border-sm"></span> Loading your feed posts...</div>`;
+			setLoadMoreState(loadMoreButton, "hidden");
+			await loadPage(1);
+		};
+
+		repliesCheckbox.addEventListener("change", runSearch);
+		sortSelect.addEventListener("change", runSearch);
+
+		await runSearch();
+
+		loadMoreButton.addEventListener("click", async () => {
+			if (nextPage === null) return;
+			setLoadMoreState(loadMoreButton, "loading");
+			await loadPage(nextPage);
+		});
+	};
+
+	button.addEventListener("click", () => {
+		window.history.pushState(
+			null,
+			"",
+			`${window.location.pathname}?my-feed-posts`,
+		);
+		showMyFeedPosts();
+	});
+
+	if (new URLSearchParams(window.location.search).has("my-feed-posts")) {
+		await showMyFeedPosts();
+	}
+}
+
+async function searchFeedPosts() {
+	const SORT_OPTIONS = [
+		{ value: "relevance", label: "Relevance" },
+		{ value: "newest", label: "Newest" },
+		{ value: "oldest", label: "Oldest" },
+	];
+	const KIND_OPTIONS = [
+		{ value: "both", label: "Posts and replies" },
+		{ value: "parents", label: "Posts" },
+		{ value: "replies", label: "Replies" },
+	];
+	const DEFAULT_SORT = "relevance";
+	const DEFAULT_KIND = "both";
+
+	type Chip = { id: number; label: string };
+
+	const findFeedToolbar = (): {
+		toolbar: HTMLElement;
+		container: HTMLElement;
+	} | null => {
+		const headingRow = Array.from(
+			document.querySelectorAll<HTMLElement>("h5.dash-ctitle"),
+		)
+			.find((h) => h.textContent?.trim() === "Feed")
+			?.closest<HTMLElement>(".row");
+		if (!headingRow) return null;
+
+		let container: HTMLElement | null = headingRow;
+		while (
+			container &&
+			!Array.from(container.classList).some((c) => c.startsWith("container"))
+		) {
+			container = container.parentElement;
+		}
+		if (!container) return null;
+
+		let toolbar = headingRow.querySelector<HTMLElement>(
+			'[data-kiln="feed-toolbar"]',
+		);
+		if (!toolbar) {
+			toolbar = document.createElement("div");
+			toolbar.dataset.kiln = "feed-toolbar";
+			toolbar.className = "col-auto d-flex align-items-center gap-2";
+			headingRow.appendChild(toolbar);
+		}
+
+		return { toolbar, container };
+	};
+
+	const found = findFeedToolbar();
+	if (!found) return;
+	const { toolbar, container } = found;
+
+	const escapeHtml = (value: string): string =>
+		value
+			.replaceAll("&", "&amp;")
+			.replaceAll("<", "&lt;")
+			.replaceAll(">", "&gt;")
+			.replaceAll('"', "&quot;")
+			.replaceAll("'", "&#39;");
+
+	const renderFeedEntry = (entry: PolyTrack.FeedEntry): HTMLElement => {
+		const isReply = entry.kind === "reply";
+		const preview = entry.content.replace(/\s+/g, " ").trim();
+		const truncatedPreview =
+			preview.length > 150 ? `${preview.slice(0, 147)}...` : preview;
+
+		const card = document.createElement("div");
+		card.className = "card card-dash mcard mb-3";
+		card.innerHTML = `
+			<div class="card-body">
+				<div class="row small">
+					<div class="col-auto">
+						<a href="/users/${entry.author.polytoriaId}">
+							<img src="${escapeHtml(entry.author.avatarUrl)}" width="52" height="52" class="img-fluid rounded-circle border border-2 border-secondary">
+						</a>
+					</div>
+					<div class="col">
+						<p class="mb-1">
+							<a href="/users/${entry.author.polytoriaId}" class="text-reset fw-semibold">${escapeHtml(entry.author.username)}</a>
+							<span class="text-muted ms-2" data-bs-toggle="tooltip" data-bs-title="${escapeHtml(new Date(entry.postedAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }))}">
+								<i class="fa-duotone fa-clock me-1"></i>${formatNotificationRelativeTime(new Date(entry.postedAt))}
+							</span>
+						</p>
+						${
+							entry.parent
+								? `<blockquote class="blockquote mb-1 text-muted small"><i class="fas fa-quote-left me-1"></i>${escapeHtml(entry.parent.content.replace(/\s+/g, " ").trim().slice(0, 100))}<i class="fas fa-quote-right ms-1"></i></blockquote>`
+								: isReply && entry.parentUnavailable
+									? `<p class="mb-1 text-muted small fst-italic"><i class="fas fa-triangle-exclamation me-1"></i>Original post unavailable</p>`
+									: ""
+						}
+						<p class="mb-1">
+							<a data-kiln="feed-link" class="text-reset">${escapeHtml(truncatedPreview)}</a>
+						</p>
+						${
+							entry.mediaUrl
+								? `<img src="${escapeHtml(entry.mediaUrl)}" class="img-fluid rounded-3 my-2" style="max-height:200px;">`
+								: ""
+						}
+						<div class="text-muted small">
+							<i class="far fa-comment me-1"></i>${entry.replyCount ?? "-"}
+						</div>
+					</div>
+				</div>
+			</div>
+			`;
+
+		const link = card.querySelector<HTMLAnchorElement>(
+			'[data-kiln="feed-link"]',
+		)!;
+		if (entry.parentUnavailable) {
+			link.href = "#";
+			link.style.pointerEvents = "none";
+			link.style.opacity = "0.7";
+		} else {
+			link.href = `/feed/${isReply ? (entry.parentId ?? entry.id) : entry.id}`;
+		}
+
+		return card;
+	};
+
+	const setLoadMoreState = (
+		btn: HTMLButtonElement,
+		state: "idle" | "loading" | "error" | "done" | "hidden",
+	) => {
+		btn.classList.toggle("d-none", state === "hidden");
+		btn.classList.toggle("d-block", state !== "hidden");
+		btn.disabled = state === "loading" || state === "done";
+		btn.innerHTML =
+			state === "loading"
+				? `<span class="spinner-border spinner-border-sm"></span> Loading...`
+				: state === "error"
+					? "Failed to load more, click to retry"
+					: state === "done"
+						? "No more results"
+						: "Load More";
+	};
+
+	const button = document.createElement("button");
+	button.type = "button";
+	button.className = "btn btn-outline-secondary btn-sm";
+	button.textContent = "Search Feed Posts";
+	toolbar.appendChild(button);
+
+	const showSearchFeedPosts = async () => {
+		const existingChildren = Array.from(container.children) as HTMLElement[];
+		for (const child of existingChildren) child.style.display = "none";
+		toolbar.style.display = "none";
+
+		const kilnBadge = document.createElement("span");
+		kilnBadge.classList.add("badge", "bg-warning", "mb-2");
+		kilnBadge.innerText = "Kiln";
+		container.prepend(kilnBadge);
+
+		const searchBox = document.createElement("div");
+		searchBox.className = "forum-category-container mb-3 border-secondary";
+		searchBox.innerHTML = `
+			<div class="d-flex align-items-center justify-content-between mb-2">
+				<h2 class="text-shadow mb-0">Search Feed</h2>
+				<button type="button" class="btn btn-sm btn-outline-secondary" data-kiln="feed-search-back">
+					<i class="fas fa-arrow-left me-1"></i>Back to Home
+				</button>
+			</div>
+		`;
+		container.prepend(searchBox);
+
+		const panel = document.createElement("div");
+		panel.className = "row g-3";
+		panel.innerHTML = `
+			<div class="col-lg-8 col-12">
+				<label class="small text-muted mb-1 d-block">Text</label>
+				<div class="input-group">
+					<span class="input-group-text bg-dark"><i class="fas fa-search"></i></span>
+					<input type="search" class="form-control" data-kiln="text" placeholder="Search feed post content">
+				</div>
+			</div>
+			<div class="col-lg-4 col-12">
+				<label class="small text-muted mb-1 d-block">Sort</label>
+				<select class="form-select" data-kiln="sort">
+					${SORT_OPTIONS.map((o) => `<option value="${o.value}"${o.value === DEFAULT_SORT ? " selected" : ""}>${o.label}</option>`).join("")}
+				</select>
+			</div>
+			<div class="col-lg-6 col-12">
+				<label class="small text-muted mb-1 d-block">Posted by</label>
+				<div data-kiln="authors-slot"></div>
+			</div>
+			<div class="col-lg-6 col-12">
+				<label class="small text-muted mb-1 d-block">Feed post type</label>
+				<select class="form-select" data-kiln="kind">
+					${KIND_OPTIONS.map((o) => `<option value="${o.value}"${o.value === DEFAULT_KIND ? " selected" : ""}>${o.label}</option>`).join("")}
+				</select>
+			</div>
+			<div class="col-md-6 col-12">
+				<label class="small text-muted mb-1 d-block">Posted after</label>
+				<input type="date" class="form-control" data-kiln="posted-after">
+			</div>
+			<div class="col-md-6 col-12">
+				<label class="small text-muted mb-1 d-block">Posted before</label>
+				<input type="date" class="form-control" data-kiln="posted-before">
+			</div>
+			<div class="col-12 d-flex flex-column flex-sm-row justify-content-sm-end gap-2">
+				<button type="button" class="btn btn-outline-secondary" data-kiln="clear">Clear</button>
+				<button type="submit" class="btn btn-primary" data-kiln="submit">
+					<i class="fas fa-search me-1"></i>Search
+				</button>
+			</div>
+		`;
+
+		const form = document.createElement("form");
+		form.append(panel);
+		searchBox.appendChild(form);
+
+		const suggestAuthors = async (text: string): Promise<Chip[]> => {
+			const trimmed = text.trim();
+			if (trimmed.length < 2) return [];
+
+			const result = await sendMessage("searchUsersByActivity", trimmed);
+			if (!result.ok) return [];
+			return result.data.map((u) => ({ id: u.userId, label: u.username }));
+		};
+
+		const resolveAuthor = async (text: string): Promise<Chip | null> => {
+			const trimmed = text.trim();
+			if (!trimmed) return null;
+			if (/^\d+$/.test(trimmed))
+				return { id: Number(trimmed), label: `#${trimmed}` };
+
+			const result = await sendMessage("findUserByUsername", trimmed);
+			if (!result.ok) return null;
+			return { id: result.data, label: trimmed };
+		};
+
+		const createAuthorInput = () => {
+			const wrapContainer = document.createElement("div");
+			wrapContainer.className = "position-relative";
+
+			const wrapper = document.createElement("div");
+			wrapper.className =
+				"form-control d-flex flex-wrap align-items-center gap-1 h-auto";
+			wrapContainer.appendChild(wrapper);
+
+			const chipList = document.createElement("div");
+			chipList.className = "d-flex flex-wrap gap-1";
+
+			const input = document.createElement("input");
+			input.type = "search";
+			input.className = "border-0 flex-grow-1 p-0 bg-transparent";
+			input.style.outline = "none";
+			input.style.minWidth = "140px";
+			input.placeholder = "Username or user ID";
+
+			const chips = new Map<number, string>();
+
+			const renderChips = () => {
+				chipList.innerHTML = "";
+				for (const [id, label] of chips) {
+					const chip = document.createElement("span");
+					chip.className =
+						"badge bg-secondary d-inline-flex align-items-center gap-1";
+					chip.append(label);
+
+					const remove = document.createElement("button");
+					remove.type = "button";
+					remove.className = "btn-close btn-close-black";
+					remove.style.fontSize = "0.55em";
+					remove.setAttribute("aria-label", "Remove");
+					remove.addEventListener("click", () => {
+						chips.delete(id);
+						renderChips();
+					});
+
+					chip.appendChild(remove);
+					chipList.appendChild(chip);
+				}
+				input.placeholder =
+					chips.size === 0 ? "Username or user ID" : "Add another";
+			};
+
+			const addChip = (chip: Chip) => {
+				if (!chips.has(chip.id)) {
+					chips.set(chip.id, chip.label);
+					renderChips();
+				}
+				input.value = "";
+			};
+
+			let pending = false;
+			const tryAdd = async () => {
+				const text = input.value;
+				if (!text.trim() || pending) return;
+				pending = true;
+				try {
+					const resolved = await resolveAuthor(text);
+					if (resolved) addChip(resolved);
+				} finally {
+					pending = false;
+					input.value = "";
+				}
+			};
+
+			const dropdown = document.createElement("div");
+			dropdown.className =
+				"list-group position-absolute w-100 mt-1 shadow-sm d-none";
+			dropdown.style.zIndex = "1000";
+			dropdown.style.maxHeight = "220px";
+			dropdown.style.overflowY = "auto";
+			wrapContainer.appendChild(dropdown);
+
+			const hideSuggestions = () => {
+				dropdown.classList.add("d-none");
+				dropdown.innerHTML = "";
+			};
+
+			let suggestRequestId = 0;
+			let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+			input.addEventListener("input", () => {
+				clearTimeout(debounceTimer);
+				const text = input.value;
+				if (!text.trim()) {
+					hideSuggestions();
+					return;
+				}
+				debounceTimer = setTimeout(async () => {
+					const requestId = ++suggestRequestId;
+					const results = await suggestAuthors(text);
+					if (requestId !== suggestRequestId) return;
+					if (!results.length) {
+						hideSuggestions();
+						return;
+					}
+
+					dropdown.innerHTML = "";
+					for (const candidate of results) {
+						const item = document.createElement("button");
+						item.type = "button";
+						item.className = "list-group-item list-group-item-action py-1 px-2";
+						item.textContent = candidate.label;
+						item.addEventListener("mousedown", (event) => {
+							event.preventDefault();
+							addChip(candidate);
+							hideSuggestions();
+						});
+						dropdown.appendChild(item);
+					}
+					dropdown.classList.remove("d-none");
+				}, 250);
+			});
+
+			input.addEventListener("keydown", (event) => {
+				if (event.key === "Enter") {
+					event.preventDefault();
+					tryAdd();
+					hideSuggestions();
+				} else if (
+					event.key === "Backspace" &&
+					input.value === "" &&
+					chips.size > 0
+				) {
+					const lastKey = [...chips.keys()].pop();
+					if (lastKey !== undefined) {
+						chips.delete(lastKey);
+						renderChips();
+					}
+				}
+			});
+			input.addEventListener("blur", () => {
+				tryAdd();
+				hideSuggestions();
+			});
+
+			wrapper.append(chipList, input);
+			renderChips();
+
+			return {
+				element: wrapContainer,
+				getIds: () => [...chips.keys()],
+				clear: () => {
+					chips.clear();
+					renderChips();
+					hideSuggestions();
+				},
+			};
+		};
+
+		const authors = createAuthorInput();
+		panel
+			.querySelector('[data-kiln="authors-slot"]')!
+			.replaceWith(authors.element);
+
+		const resultsContainer = document.createElement("div");
+		resultsContainer.className = "kiln-feed-results mt-3";
+
+		const loadMoreButton = document.createElement("button");
+		loadMoreButton.type = "button";
+		loadMoreButton.className = "btn btn-outline-secondary w-100 mb-3 d-none";
+		loadMoreButton.textContent = "Load More";
+
+		searchBox.insertAdjacentElement("afterend", resultsContainer);
+		resultsContainer.insertAdjacentElement("afterend", loadMoreButton);
+
+		searchBox
+			.querySelector<HTMLButtonElement>('[data-kiln="feed-search-back"]')!
+			.addEventListener("click", () => {
+				window.history.pushState(null, "", window.location.pathname);
+				kilnBadge.remove();
+				searchBox.remove();
+				resultsContainer.remove();
+				loadMoreButton.remove();
+				toolbar.style.display = "";
+				for (const child of existingChildren) child.style.display = "";
+			});
+
+		const textInput =
+			panel.querySelector<HTMLInputElement>('[data-kiln="text"]')!;
+		const sortSelect =
+			panel.querySelector<HTMLSelectElement>('[data-kiln="sort"]')!;
+		const kindSelect =
+			panel.querySelector<HTMLSelectElement>('[data-kiln="kind"]')!;
+		const postedAfterInput = panel.querySelector<HTMLInputElement>(
+			'[data-kiln="posted-after"]',
+		)!;
+		const postedBeforeInput = panel.querySelector<HTMLInputElement>(
+			'[data-kiln="posted-before"]',
+		)!;
+		const clearButton = panel.querySelector<HTMLButtonElement>(
+			'[data-kiln="clear"]',
+		)!;
+
+		let nextPage: number | null = null;
+
+		const readFilters = (targetPage: number) => ({
+			page: targetPage,
+			search: textInput.value.trim(),
+			sort: sortSelect.value,
+			kind: kindSelect.value,
+			authorIds: authors.getIds(),
+			postedAfter: postedAfterInput.value,
+			postedBefore: postedBeforeInput.value,
+		});
+
+		const runSearch = async () => {
+			resultsContainer.innerHTML = `<div class="text-center text-muted p-4"><span class="spinner-border spinner-border-sm"></span> Searching...</div>`;
+			setLoadMoreState(loadMoreButton, "hidden");
+
+			const result = await sendMessage("getFeedSearch", readFilters(1));
+			if (!result.ok) {
+				resultsContainer.innerHTML = `<div class="alert alert-danger">Failed to search the feed: ${escapeHtml(result.message)}</div>`;
+				return;
+			}
+
+			resultsContainer.innerHTML = "";
+			if (result.data.entries.length === 0) {
+				resultsContainer.innerHTML = `<div class="text-center text-danger border border-danger rounded p-2">No feed posts matched your search.</div>`;
+				return;
+			}
+
+			for (const entry of result.data.entries) {
+				resultsContainer.appendChild(renderFeedEntry(entry));
+			}
+			sendMessage("registerBootstrapElements");
+
+			nextPage = result.data.nextPage;
+			setLoadMoreState(loadMoreButton, nextPage === null ? "done" : "idle");
+		};
+
+		loadMoreButton.addEventListener("click", async () => {
+			if (nextPage === null) return;
+			setLoadMoreState(loadMoreButton, "loading");
+
+			const result = await sendMessage("getFeedSearch", readFilters(nextPage));
+			if (!result.ok) {
+				setLoadMoreState(loadMoreButton, "error");
+				return;
+			}
+
+			for (const entry of result.data.entries) {
+				resultsContainer.appendChild(renderFeedEntry(entry));
+			}
+			sendMessage("registerBootstrapElements");
+
+			nextPage = result.data.nextPage;
+			setLoadMoreState(loadMoreButton, nextPage === null ? "done" : "idle");
+		});
+
+		form.addEventListener("submit", (event) => {
+			event.preventDefault();
+			runSearch();
+		});
+
+		clearButton.addEventListener("click", () => {
+			textInput.value = "";
+			sortSelect.value = DEFAULT_SORT;
+			kindSelect.value = DEFAULT_KIND;
+			postedAfterInput.value = "";
+			postedBeforeInput.value = "";
+			authors.clear();
+			runSearch();
+		});
+
+		await runSearch();
+	};
+
+	button.addEventListener("click", () => {
+		window.history.pushState(
+			null,
+			"",
+			`${window.location.pathname}?kiln-feed-search`,
+		);
+		showSearchFeedPosts();
+	});
+
+	if (new URLSearchParams(window.location.search).has("kiln-feed-search")) {
+		await showSearchFeedPosts();
+	}
 }

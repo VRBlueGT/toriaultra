@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import { preferences } from "@/utils/storage";
+import { _showKilnDisclosures, preferences } from "@/utils/storage";
 import * as discovery from "./discovery";
 import * as manage from "./manage";
 import * as view from "./view";
@@ -26,7 +26,10 @@ export default defineContentScript({
 		"https://polytoria.com/create/place/*",
 	],
 	main() {
-		preferences.getPreferences().then(async (values) => {
+		Promise.all([
+			preferences.getPreferences(),
+			_showKilnDisclosures.getValue(),
+		]).then(async ([values, showDisclosures]) => {
 			const user = await getUserDetails();
 			if (!user) {
 				console.warn("[Kiln] Failure to get logged in user details.");
@@ -47,42 +50,45 @@ export default defineContentScript({
 					creatorAnchor?.getAttribute("href")?.split("/")[2] ?? null;
 
 				if (values.enabled.includes("legacyWorldViewLayout")) {
-					view.legacyPlaceViewLayout();
+					view.legacyPlaceViewLayout(showDisclosures);
 				}
 				if (values.enabled.includes("favoritedPlaces")) {
-					view.favoritedPlaces(user.userId);
+					view.favoritedPlaces(user.userId, showDisclosures);
 				}
 				if (values.enabled.includes("placeRevenue")) {
 					view.approxPlaceRevenue(
 						values.enabled.includes("irlBrickPrice"),
 						values.config.irlBrickPrice.currency,
+						showDisclosures,
 					);
 				}
 				if (values.enabled.includes("playtimeTracking")) {
-					view.playtimeTracking(user.userId);
+					view.playtimeTracking(user.userId, showDisclosures);
 				}
 				if (values.enabled.includes("activeChallengesDisplay")) {
-					view.activeChallenges();
+					view.activeChallenges(showDisclosures);
 				}
 				if (values.enabled.includes("improvedAchievements")) {
 					if (values.config.improvedAchievements.progressBar) {
-						view.achievementsProgressBar();
+						view.achievementsProgressBar(showDisclosures);
 					}
 					if (values.config.improvedAchievements.opacity) {
 						view.fadedUnearnedAchievements();
 					}
 					if (values.config.improvedAchievements.percentages) {
-						view.achievementEarnedPercentages();
+						view.achievementEarnedPercentages(showDisclosures);
 					}
 				}
 				if (values.enabled.includes("serverShareLinks")) {
-					view.serverShareLinks();
+					view.serverShareLinks(showDisclosures);
 				}
 				if (values.enabled.includes("serverRefreshing")) {
 					view.serverRefreshing(
 						values.enabled.includes("serverShareLinks")
-							? (serverList) => view.attachServerShareButtons(serverList)
+							? (serverList) =>
+									view.attachServerShareButtons(serverList, showDisclosures)
 							: undefined,
+						showDisclosures,
 					);
 				}
 
@@ -97,13 +103,14 @@ export default defineContentScript({
 				if (values.enabled.includes("autoRefreshData")) {
 					view.autoRefreshData(
 						values.config.autoRefreshData.interval as "30s" | "1m" | "5m",
+						showDisclosures,
 					);
 				}
 				if (values.enabled.includes("detailedPlaceReviews")) {
-					view.detailedPlaceReviews(user.userId);
+					view.detailedPlaceReviews(user.userId, showDisclosures);
 				}
 				if (values.enabled.includes("placeConsumablesTab") && creatorId) {
-					view.placeConsumablesTab(creatorId);
+					view.placeConsumablesTab(creatorId, showDisclosures);
 				}
 				if (values.enabled.includes("favoritedPlaces")) {
 					view.recordPlaceView();
@@ -119,14 +126,14 @@ export default defineContentScript({
 							window.location.pathname.split("/").length == 4) &&
 						values.config.placeManagement.download
 					) {
-						manage.placeFileExport();
+						manage.placeFileExport(showDisclosures);
 					}
 
 					if (
 						window.location.pathname.includes("access") &&
 						values.config.placeManagement.bulkWhitelist
 					) {
-						manage.bulkWhitelist();
+						manage.bulkWhitelist(showDisclosures);
 					}
 
 					if (
@@ -142,18 +149,21 @@ export default defineContentScript({
 				}
 
 				if (values.enabled.includes("subtleV2Labels")) {
-					discovery.subtleV2Labels(values.config.subtleV2Labels.mode);
+					discovery.subtleV2Labels(
+						values.config.subtleV2Labels.mode,
+						showDisclosures,
+					);
 				}
 
 				if (values.enabled.includes("randomPlace")) {
-					discovery.randomPlace();
+					discovery.randomPlace(showDisclosures);
 				}
 
 				if (
 					values.enabled.includes("disableInfiniteScrolling") &&
 					values.config.disableInfiniteScrolling.places
 				) {
-					discovery.disableInfiniteScrolling();
+					discovery.disableInfiniteScrolling(showDisclosures);
 				}
 			}
 		});

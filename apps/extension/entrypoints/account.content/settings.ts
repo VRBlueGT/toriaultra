@@ -19,7 +19,9 @@ import data from "@/public/preferences.json";
 import type { FeatureId } from "@/utils/featureIds.generated";
 import { sendMessage } from "@/utils/messaging";
 import {
+	_errorLog,
 	_savedThemes,
+	_showKilnDisclosures,
 	apiSessions,
 	cache,
 	type defaultPreferences,
@@ -204,16 +206,28 @@ export async function kilnSettings() {
 					<h4 class="mb-1">Kiln</h4>
 					<p class="text-muted small mb-3">v${version} &middot; Made by <a href="https://polytoria.com/u/Index" target="_blank">Index</a></p>
 					<p class="mb-3">50+ features. Everything Polytoria should have built in.</p>
-					<div class="d-flex gap-2">
-						<a href="https://discord.gg/dczBuRDKPX" target="_blank" class="btn btn-primary btn-sm" data-bs-toggle="toolip" data-bs-title="Discord is 13+.">
+					<div class="d-flex flex-column gap-2">
+						<a href="https://discord.gg/dczBuRDKPX" target="_blank" class="btn btn-primary btn-sm align-self-start"
+						data-bs-toggle="tooltip" data-bs-title="Join the Discord to get the latest news on Kiln and participate in polls to shape the extension! Discord is 13+.">
 							<i class="fab fa-discord me-1"></i> Join the Discord
 						</a>
-						<a href="https://github.com/indexxing/kiln-extension" target="_blank" class="btn btn-outline-secondary btn-sm">
-							<i class="fab fa-github me-1"></i> Github
-						</a>
-						<a href="https://kiln.indexx.dev/privacy" target="_blank" class="btn btn-outline-secondary btn-sm">
-							Privacy Policy
-						</a>
+
+						<div class="d-flex gap-3 small">
+							<a href="https://kiln.indexx.dev" target="_blank" class="text-muted text-decoration-none">
+								<i class="fa-solid fa-globe me-1"></i>Website
+							</a>
+							<!--
+							<a href="#" target="_blank" class="text-muted text-decoration-none">
+								<i class="fa-solid fa-list-timeline me-1"></i>Roadmap
+							</a>
+							-->
+							<a href="https://github.com/indexxing/kiln-extension" target="_blank" class="text-muted text-decoration-none">
+								<i class="fab fa-github me-1"></i>Github
+							</a>
+							<a href="https://kiln.indexx.dev/privacy" target="_blank" class="text-muted text-decoration-none">
+								Privacy Policy
+							</a>
+						</div>
 					</div>
 				</div>
 			</div>
@@ -280,12 +294,10 @@ export async function kilnSettings() {
 						<i class="fas fa-info-circle me-1"></i>
 						Please keep feedback related to Kiln, not Polytoria.
 					</div>
-					<div class="mb-1">
-						<select id="kiln-feedback-type" class="form-select form-select-sm bg-dark" style="max-width:220px;">
-							<option value="feature">Feature Suggestion</option>
-							<option value="general">General</option>
-							<option value="bug">Bug Report</option>
-						</select>
+					<div class="d-flex gap-2 mb-2" id="kiln-feedback-type-group">
+						<button type="button" class="btn btn-primary btn-sm flex-grow-1" data-type="general">General</button>
+						<button type="button" class="btn btn-secondary btn-sm flex-grow-1" data-type="feature">Suggestion</button>
+						<button type="button" class="btn btn-secondary btn-sm flex-grow-1" data-type="bug">Bug Report</button>
 					</div>
 					<div>
 						<textarea id="kiln-feedback-message" class="form-control form-control-sm bg-dark" rows="5" maxlength="2000" placeholder="Describe your suggestion, feedback, or bug..."></textarea>
@@ -294,11 +306,14 @@ export async function kilnSettings() {
 					<div class="d-flex align-items-center gap-2">
 						<button id="kiln-feedback-submit" class="btn btn-primary btn-sm">Submit</button>
 						<span id="kiln-feedback-status" class="small"></span>
+						<div id="kiln-feedback-bug-notice" class="alert border-danger small py-1 px-2 mb-0 d-none">
+							<i class="fas fa-info-circle me-1"></i>Includes diagnostic info (browser, recent errors) to track down the issue.
+						</div>
 					</div>
 				</div>
 			</div>
 			<div class="card mt-2">
-				<div class="card-header small fw-semibold">Notifications</div>
+				<div class="card-header small fw-semibold">Misc. Preferences</div>
 				<div class="card-body py-2">
 					<div class="form-check form-switch mb-0">
 						<input class="form-check-input" type="checkbox" id="kiln-update-notices-toggle">
@@ -308,9 +323,15 @@ export async function kilnSettings() {
 						<input class="form-check-input" type="checkbox" id="kiln-post-update-notices-toggle">
 						<label class="form-check-label small" for="kiln-post-update-notices-toggle">Show "Kiln has updated" banners</label>
 					</div>
+					<div class="form-check form-switch mb-0 mt-2">
+						<input class="form-check-input" type="checkbox" id="kiln-show-disclosures-toggle">
+						<label class="form-check-label small" for="kiln-show-disclosures-toggle">Clearly label every feature as added by Kiln</label>
+					</div>
 				</div>
 			</div>
 		`;
+
+		sendMessage("registerBootstrapElements");
 
 		const services = [
 			{ name: "Polytoria API", url: "https://api.polytoria.com/v1/users/2782" },
@@ -443,6 +464,14 @@ export async function kilnSettings() {
 					]);
 				}
 			}
+		});
+
+		const showDisclosuresToggle = document.getElementById(
+			"kiln-show-disclosures-toggle",
+		) as HTMLInputElement;
+		showDisclosuresToggle.checked = await _showKilnDisclosures.getValue();
+		showDisclosuresToggle.addEventListener("change", async () => {
+			await _showKilnDisclosures.setValue(showDisclosuresToggle.checked);
 		});
 
 		const config = await getConfig();
@@ -1627,14 +1656,38 @@ async function initFeedbackTab() {
 
 	const user = await getUserDetails();
 
+	const typeButtons = Array.from(
+		document.querySelectorAll<HTMLButtonElement>(
+			"#kiln-feedback-type-group [data-type]",
+		),
+	);
+	const bugNotice = document.getElementById(
+		"kiln-feedback-bug-notice",
+	) as HTMLElement;
+	let feedbackType: "feature" | "general" | "bug" = "general";
+
+	function updateTypeButtons() {
+		for (const btn of typeButtons) {
+			const isActive = btn.dataset.type === feedbackType;
+			btn.className = `btn btn-sm flex-grow-1 ${isActive ? "btn-primary" : "btn-secondary"}`;
+		}
+		bugNotice.classList.toggle("d-none", feedbackType !== "bug");
+	}
+	updateTypeButtons();
+
+	for (const btn of typeButtons) {
+		btn.addEventListener("click", () => {
+			feedbackType = btn.dataset.type as "feature" | "general" | "bug";
+			updateTypeButtons();
+		});
+	}
+
 	textarea.addEventListener("input", () => {
 		chars.textContent = String(textarea.value.length);
 	});
 
 	submitBtn.addEventListener("click", async () => {
-		const type = (
-			document.getElementById("kiln-feedback-type") as HTMLSelectElement
-		).value as "feature" | "general" | "bug";
+		const type = feedbackType;
 		const message = textarea.value.trim();
 
 		if (!message) {
@@ -1689,6 +1742,7 @@ function initDebugTab(container: HTMLElement) {
 		"kilnSessions",
 		"seenTradeIds",
 		"dismissedNotices",
+		"errorLog",
 	] as const;
 	const SYNC_QUOTA = 102400;
 	const LOCAL_QUOTA = 10485760;
@@ -1761,6 +1815,17 @@ function initDebugTab(container: HTMLElement) {
 					<button id="kd-reset-dismissed" class="btn btn-sm btn-outline-warning">Reset</button>
 				</div>
 				<pre id="kd-dismissed-out" class="mx-3 mb-3 p-2 rounded bg-black text-success" style="display:none;max-height:220px;overflow:auto;font-size:0.72rem;"></pre>
+			</div>
+		</div>
+		<div class="col-12">
+			<div class="card border-secondary">
+				<div class="card-header fw-semibold">Error Log</div>
+				<div class="card-body d-flex gap-2 flex-wrap">
+					<button id="kd-view-errors" class="btn btn-sm btn-outline-secondary">View</button>
+					<button id="kd-clear-errors" class="btn btn-sm btn-outline-danger">Clear</button>
+					<button id="kd-throw-test-error" class="btn btn-sm btn-outline-warning">Throw Test Error</button>
+				</div>
+				<pre id="kd-errors-out" class="mx-3 mb-3 p-2 rounded bg-black text-success" style="display:none;max-height:220px;overflow:auto;font-size:0.72rem;"></pre>
 			</div>
 		</div>
 	`;
@@ -1978,6 +2043,29 @@ function initDebugTab(container: HTMLElement) {
 		.getElementById("kd-view-config")!
 		.addEventListener("click", async () => {
 			toggle("kd-config-out", await getConfig());
+		});
+
+	document
+		.getElementById("kd-view-errors")!
+		.addEventListener("click", async () => {
+			toggle("kd-errors-out", await _errorLog.getValue());
+		});
+
+	document
+		.getElementById("kd-clear-errors")!
+		.addEventListener("click", async (e) => {
+			await _errorLog.setValue([]);
+			flash(e.currentTarget as HTMLElement, "Cleared!");
+			loadStorageOverview();
+		});
+
+	document
+		.getElementById("kd-throw-test-error")!
+		.addEventListener("click", (e) => {
+			flash(e.currentTarget as HTMLElement, "Thrown!");
+			setTimeout(() => {
+				throw new Error("[Kiln] Debug test error");
+			}, 0);
 		});
 }
 

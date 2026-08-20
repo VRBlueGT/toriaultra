@@ -154,3 +154,34 @@ export const ForumSearchApiSchema = z.object({
 		.transform((value) => value ?? null),
 });
 export type ForumSearchApi = z.infer<typeof ForumSearchApiSchema>;
+
+export const FeedEntryParentSchema = z.object({
+	id: z.number().int(),
+	content: z.string(),
+});
+export type FeedEntryParent = z.infer<typeof FeedEntryParentSchema>;
+
+export const FeedEntrySchema = z.object({
+	id: z.number().int(),
+	parentId: z.number().int().nullable(),
+	parentUnavailable: z.boolean(),
+	kind: z.enum(["parent", "reply"]),
+	content: z.string(),
+	mediaUrl: z.string().nullable(),
+	replyCount: z.number().int().nullable(),
+	postedAt: z.string(),
+	author: ForumAuthorSchema,
+	parent: FeedEntryParentSchema.nullable(),
+});
+export type FeedEntry = z.infer<typeof FeedEntrySchema>;
+
+export const FeedSearchApiSchema = z.object({
+	entries: z.array(FeedEntrySchema),
+	nextPage: z
+		.number()
+		.int()
+		.nullable()
+		.optional()
+		.transform((value) => value ?? null),
+});
+export type FeedSearchApi = z.infer<typeof FeedSearchApiSchema>;

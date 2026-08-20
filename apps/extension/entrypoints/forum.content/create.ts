@@ -14,7 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import { getProfanityFilter } from "@/utils/utilities";
+import {
+	createKilnDisclosureBadge,
+	getProfanityFilter,
+} from "@/utils/utilities";
 
 const DEFAULT_MAX_CHARS = 5000;
 const FILTER_HIGHLIGHTING_ENABLED = false;
@@ -24,6 +27,7 @@ export function improvedForumComposer(
 	showMarkdownBtns: boolean,
 	autoShowPreview: boolean,
 	highlightFilteredWords: boolean,
+	showDisclosures: boolean,
 ) {
 	const textarea = document.querySelector<HTMLTextAreaElement>(
 		'textarea[name="content"]',
@@ -106,6 +110,12 @@ export function improvedForumComposer(
 		textarea.addEventListener("input", updateCounter);
 		updateCounter();
 		toolbar.appendChild(counter);
+	}
+
+	if (showDisclosures) {
+		const badge = createKilnDisclosureBadge();
+		if (!showCharacterCount) badge.classList.add("ms-auto");
+		toolbar.appendChild(badge);
 	}
 	textarea.parentElement?.insertBefore(toolbar, textarea);
 

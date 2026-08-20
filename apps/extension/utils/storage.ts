@@ -20,9 +20,9 @@ import type { FeatureId } from "./featureIds.generated";
 import { sendMessage } from "./messaging";
 import type {
 	ApiSession,
-	AvatarSandboxOutfit,
 	CacheInterface,
 	EvalProfile,
+	KilnErrorLogEntry,
 	ThemeEffect,
 } from "./types";
 
@@ -191,14 +191,6 @@ export const _kilnNotifications = storage.defineItem<
 	fallback: {},
 	version: 1,
 });
-
-export const _avatarSandboxOutfits = storage.defineItem<AvatarSandboxOutfit[]>(
-	"sync:avatarSandboxOutfits",
-	{
-		fallback: [],
-		version: 1,
-	},
-);
 
 export type SavedTheme = {
 	id: string;
@@ -382,6 +374,14 @@ export const dismissedNotices = storage.defineItem<string[]>(
 	},
 );
 
+export const _showKilnDisclosures = storage.defineItem<boolean>(
+	"local:showKilnDisclosures",
+	{
+		fallback: false,
+		version: 1,
+	},
+);
+
 export interface BookmarkedThread {
 	threadId: number;
 	categoryId?: number;
@@ -401,6 +401,14 @@ export const _securityKeyNames = storage.defineItem<Record<number, string>>(
 	"local:securityKeyNames",
 	{
 		fallback: {},
+		version: 1,
+	},
+);
+
+export const _errorLog = storage.defineItem<KilnErrorLogEntry[]>(
+	"local:errorLog",
+	{
+		fallback: [],
 		version: 1,
 	},
 );

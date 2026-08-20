@@ -14,12 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import { preferences } from "@/utils/storage";
+import { _showKilnDisclosures, preferences } from "@/utils/storage";
+import { createKilnDisclosureBadge } from "@/utils/utilities";
 
 export default defineContentScript({
 	matches: ["https://polytoria.com/inbox"],
 	main() {
-		preferences.getPreferences().then((values) => {
+		Promise.all([
+			preferences.getPreferences(),
+			_showKilnDisclosures.getValue(),
+		]).then(([values, showDisclosures]) => {
 			getUserDetails().then((user) => {
 				if (!user) {
 					console.warn("[Kiln] Failure to get logged in user details.");
@@ -27,14 +31,14 @@ export default defineContentScript({
 				}
 
 				if (values.enabled.includes("messagePreviewExpand")) {
-					expandMessages();
+					expandMessages(showDisclosures);
 				}
 			});
 		});
 	},
 });
 
-function expandMessages() {
+function expandMessages(showDisclosures: boolean) {
 	const messages = document.getElementById("messages")!;
 	for (const message of messages.children) {
 		let expanded = false;
@@ -61,6 +65,7 @@ function expandMessages() {
 				div.classList = "card card-body bg-dark py-2 mt-3";
 				div.style.borderRadius = "0px";
 				div.innerText = fullText;
+				if (showDisclosures) div.appendChild(createKilnDisclosureBadge());
 				message.appendChild(div);
 			}
 			expanded = !expanded;

@@ -15,10 +15,12 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import type { CurrencyCode, ParsedTrade } from "@/utils/types";
+import { applyKilnDisclosureTitle } from "@/utils/utilities";
 
 export async function irlBrickPrice(
 	trade: ParsedTrade,
 	currency: CurrencyCode,
+	showDisclosures: boolean,
 ) {
 	const cards = document.querySelectorAll(".card");
 	if (cards.length < 2) return;
@@ -45,7 +47,16 @@ export async function irlBrickPrice(
 			if (bricks <= 0 || seen.has(span)) continue;
 			seen.add(span);
 			const converted = await bricksToCurrency(bricks, currency);
-			if (converted) span.innerHTML += ` (${converted})`;
+			if (converted) {
+				const convertedSpan = document.createElement("span");
+				convertedSpan.textContent = ` (${converted})`;
+				applyKilnDisclosureTitle(
+					convertedSpan,
+					showDisclosures,
+					"IRL currency conversion",
+				);
+				span.appendChild(convertedSpan);
+			}
 		}
 	}
 }

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import { preferences } from "@/utils/storage";
+import { _showKilnDisclosures, preferences } from "@/utils/storage";
 import { getUserDetails, parseTrade } from "@/utils/utilities";
 import * as newTrade from "./newTrade";
 import * as overview from "./overview";
@@ -42,7 +42,10 @@ function parseTradePage(): TradePage {
 export default defineContentScript({
 	matches: ["https://polytoria.com/trade/*"],
 	main() {
-		preferences.getPreferences().then((values) => {
+		Promise.all([
+			preferences.getPreferences(),
+			_showKilnDisclosures.getValue(),
+		]).then(([values, showDisclosures]) => {
 			getUserDetails().then((user) => {
 				if (!user) {
 					console.warn("[Kiln] Failure to get logged in user details.");
@@ -56,7 +59,7 @@ export default defineContentScript({
 				}
 
 				if (page.type === "new") {
-					newTrade.nftItems();
+					newTrade.nftItems(showDisclosures);
 				} else if (page.type === "view") {
 					const trade = parseTrade(document);
 
@@ -68,20 +71,24 @@ export default defineContentScript({
 					});
 
 					if (values.enabled.includes("irlBrickPrice")) {
-						view.irlBrickPrice(trade, values.config.irlBrickPrice.currency);
+						view.irlBrickPrice(
+							trade,
+							values.config.irlBrickPrice.currency,
+							showDisclosures,
+						);
 					}
 				} else if (page.type === "overview") {
 					if (page.tab === "received") {
 						if (values.enabled.includes("blockedTraders")) {
-							overview.blockedTraders(user);
+							overview.blockedTraders(user, showDisclosures);
 						}
 
 						if (values.enabled.includes("nftItems")) {
-							overview.nftItems(user);
+							overview.nftItems(user, showDisclosures);
 						}
 
 						if (values.enabled.includes("quickCounterTrades")) {
-							overview.quickCounterTrades();
+							overview.quickCounterTrades(showDisclosures);
 						}
 					}
 
@@ -89,7 +96,7 @@ export default defineContentScript({
 						page.tab === "sent" &&
 						values.enabled.includes("quickCancelOutboundTrades")
 					) {
-						overview.quickCancelOutboundTrades();
+						overview.quickCancelOutboundTrades(showDisclosures);
 					}
 
 					if (values.enabled.includes("tradeManager")) {
@@ -102,7 +109,9 @@ export default defineContentScript({
 					) {
 						_viewedTradeIds
 							.getValue()
-							.then((tradeIds) => overview.tradeViewedIndicators(tradeIds));
+							.then((tradeIds) =>
+								overview.tradeViewedIndicators(tradeIds, showDisclosures),
+							);
 					}
 				}
 			});

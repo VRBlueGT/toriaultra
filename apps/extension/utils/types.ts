@@ -41,6 +41,15 @@ export type ApiSession = {
 	phrase?: string;
 };
 
+export type KilnErrorLogEntry = {
+	type: "content" | "network";
+	message: string;
+	source?: string;
+	stack?: string;
+	url?: string;
+	timestamp: number;
+};
+
 export type CurrencyCode = string;
 
 export type UserDetails = {
@@ -85,8 +94,9 @@ export type FormattedHoarder = {
 };
 
 export type AvatarSandboxOutfit = {
+	id: string;
 	name: string;
-	createdAt: number;
+	createdAt: string;
 	data: AvatarIFrameState;
 };
 
@@ -249,6 +259,16 @@ export type ForumSearchFilters = {
 	type: string;
 	authorIds: number[];
 	categoryIds: number[];
+	postedAfter: string;
+	postedBefore: string;
+};
+
+export type FeedSearchFilters = {
+	page: number;
+	search: string;
+	sort: string;
+	kind: string;
+	authorIds: number[];
 	postedAfter: string;
 	postedBefore: string;
 };

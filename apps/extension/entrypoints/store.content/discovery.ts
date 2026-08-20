@@ -20,12 +20,18 @@ import type {
 	StoreListingItem,
 } from "@/utils/types";
 import {
+	applyKilnDisclosureTitle,
 	bricksToCurrency,
+	createKilnDisclosureBadge,
 	createModal,
+	kilnDisclosureBadgeHtml,
 	parseFormattedNumber,
 } from "@/utils/utilities";
 
-export function irlBrickPrice(irlCurrency: CurrencyCode) {
+export function irlBrickPrice(
+	irlCurrency: CurrencyCode,
+	showDisclosures: boolean,
+) {
 	const addPrice = async (item: HTMLElement) => {
 		const brickCounterEl = item.getElementsByClassName("text-success")[0] as
 			| HTMLElement
@@ -47,6 +53,11 @@ export function irlBrickPrice(irlCurrency: CurrencyCode) {
 			span.style.fontSize = "0.7rem";
 			span.style.fontWeight = "lighter";
 			span.textContent = ` (${currency})`;
+			applyKilnDisclosureTitle(
+				span,
+				showDisclosures,
+				"IRL currency conversion",
+			);
 			brickCounterEl.appendChild(span);
 		}
 	};
@@ -99,7 +110,7 @@ type EventWithItems = {
 	items: { id: number; name: string; thumbnailUrl: string }[];
 };
 
-export async function eventItems() {
+export async function eventItems(showDisclosures: boolean) {
 	const eventsResult = await sendMessage("getEvents");
 	if (!eventsResult.ok || eventsResult.data.data.length === 0) return;
 
@@ -115,7 +126,7 @@ export async function eventItems() {
 
 	modal.innerHTML = `
 	<div class="d-flex justify-content-between align-items-center mb-3">
-		<h5 class="mb-0" style="color:#fff;"><i class="fad fa-party-horn me-2"></i>Event Items</h5>
+		<h5 class="mb-0" style="color:#fff;"><i class="fad fa-party-horn me-2"></i>Event Items${kilnDisclosureBadgeHtml(showDisclosures)}</h5>
 		<button class="btn btn-sm btn-secondary" id="p-ei-close">✕</button>
 	</div>
 	<div id="p-ei-body">
@@ -252,7 +263,7 @@ export async function eventItems() {
 
 	const button = document.createElement("button");
 	button.classList.add("btn", "btn-outline-secondary", "btn-sm");
-	button.innerHTML = `<i class="fad fa-party-horn me-1"></i>Event Items`;
+	button.innerHTML = `<i class="fad fa-party-horn me-1"></i>Event Items${kilnDisclosureBadgeHtml(showDisclosures)}`;
 	button.addEventListener("click", async () => {
 		modal.showModal();
 		await loadAll();
@@ -274,7 +285,7 @@ export async function eventItems() {
 	}
 }
 
-export async function ownedTags(userId: number) {
+export async function ownedTags(userId: number, showDisclosures: boolean) {
 	const ownedResult = await sendMessage("getOwnedAssetMap", userId);
 
 	if (!ownedResult.ok) {
@@ -331,6 +342,19 @@ export async function ownedTags(userId: number) {
 
 		const image = item.getElementsByTagName("img")[0]!;
 		image.parentElement!.appendChild(tag);
+
+		if (showDisclosures) {
+			const disclosureBadge = createKilnDisclosureBadge();
+			Object.assign(disclosureBadge.style, {
+				position: "absolute",
+				top: "0",
+				right: "0",
+				fontSize: "0.55rem",
+				padding: "2px 4px",
+				zIndex: "10",
+			});
+			image.parentElement!.appendChild(disclosureBadge);
+		}
 	};
 
 	const processCard = (item: HTMLElement) => {
@@ -555,7 +579,7 @@ function renderStoreItem(asset: StoreListingItem): HTMLElement {
 	return wrapper;
 }
 
-export function disableInfiniteScrolling() {
+export function disableInfiniteScrolling(showDisclosures: boolean) {
 	const itemsContainer = document.getElementById("store-items");
 	if (!itemsContainer) return;
 
@@ -568,7 +592,7 @@ export function disableInfiniteScrolling() {
 	const button = document.createElement("button");
 	button.type = "button";
 	button.className = "btn btn-outline-secondary w-100 mb-3";
-	button.textContent = "Load More";
+	button.innerHTML = `Load More${kilnDisclosureBadgeHtml(showDisclosures)}`;
 	itemsContainer.insertAdjacentElement("afterend", button);
 
 	const setButtonState = (state: "idle" | "loading" | "error" | "done") => {
@@ -580,7 +604,7 @@ export function disableInfiniteScrolling() {
 					? "Failed to load more, click to retry"
 					: state === "done"
 						? "No more items"
-						: "Load More";
+						: `Load More${kilnDisclosureBadgeHtml(showDisclosures)}`;
 	};
 
 	new MutationObserver((records) => {
@@ -1184,7 +1208,7 @@ function injectDiscoveryStyles(): void {
 	document.head.appendChild(style);
 }
 
-export function legacyStoreLayout(): void {
+export function legacyStoreLayout(showDisclosures: boolean): void {
 	function findMainContainer(): HTMLElement | null {
 		const exact = document.querySelector<HTMLElement>(
 			'div[style*="min-height: 60vh"]',
@@ -1199,25 +1223,38 @@ export function legacyStoreLayout(): void {
 
 	function replaceContainer(container: HTMLElement): void {
 		container.innerHTML = LEGACY_DISCOVERY_HTML;
+		if (showDisclosures) {
+			container
+				.querySelector(".store-title")
+				?.insertAdjacentHTML("beforeend", kilnDisclosureBadgeHtml(true));
+		}
 		injectDiscoveryStyles();
 		wireLegacyDiscovery(container);
 	}
 
 	function apply(): void {
-		const container = findMainContainer();
-		if (container) {
-			replaceContainer(container);
-			return;
-		}
+		let appliedContainer: HTMLElement | null = null;
 
-		const observer = new MutationObserver(() => {
+		const tryApply = (): void => {
 			const found = findMainContainer();
-			if (found) {
-				observer.disconnect();
+			if (
+				found &&
+				(found !== appliedContainer || !found.querySelector("#store-items"))
+			) {
+				appliedContainer = found;
 				replaceContainer(found);
 			}
+		};
+
+		tryApply();
+
+		const observer = new MutationObserver(tryApply);
+		observer.observe(document.body, {
+			childList: true,
+			subtree: true,
+			attributes: true,
+			attributeFilter: ["style"],
 		});
-		observer.observe(document.body, { childList: true, subtree: true });
 	}
 
 	if (document.readyState === "loading") {

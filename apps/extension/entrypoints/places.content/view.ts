@@ -19,8 +19,10 @@ import metadata from "@/utils/static/metadata.json";
 import { _lastViewedPlaces } from "@/utils/storage";
 import type { CurrencyCode } from "@/utils/types";
 import {
+	applyKilnDisclosureTitle,
 	formatNotificationRelativeTime,
 	getConfig,
+	kilnDisclosureBadgeHtml,
 	markKilnNotificationRead,
 	pullKVCache,
 } from "@/utils/utilities";
@@ -41,7 +43,10 @@ export async function recordPlaceView() {
 	await markKilnNotificationRead(`place-update:${placeID}`);
 }
 
-export async function favoritedPlaces(userId: number) {
+export async function favoritedPlaces(
+	userId: number,
+	showDisclosures: boolean,
+) {
 	const config = await getConfig();
 
 	const button = document.createElement("button");
@@ -50,13 +55,18 @@ export async function favoritedPlaces(userId: number) {
 	button.innerHTML = `
 	<i class="fa-regular fa-star me-2"></i><span>Pin</span>
 	`;
+	applyKilnDisclosureTitle(button, showDisclosures, "Pin this world");
 
 	const infoCard = document.querySelector(".card-body:has(.fa-calendar)")!;
 	infoCard.appendChild(button);
 
 	if (!(await getApiSession(userId))) {
 		button.innerHTML = `<i class="fa-regular fa-lock me-2"></i><span>Verify to Pin</span>`;
-		button.title = "Verify your Kiln account to pin worlds.";
+		applyKilnDisclosureTitle(
+			button,
+			showDisclosures,
+			"Verify your Kiln account to pin worlds.",
+		);
 		return;
 	}
 
@@ -121,6 +131,7 @@ export async function favoritedPlaces(userId: number) {
 export async function approxPlaceRevenue(
 	includeIRLRevenue: boolean,
 	irlCurrency: CurrencyCode,
+	showDisclosures: boolean,
 ) {
 	const isOwnedByGuild = !document.querySelector(
 		'.place-hero-content a:has([class^="userlink-"])',
@@ -136,7 +147,7 @@ export async function approxPlaceRevenue(
 	const key = document.createElement("li");
 	const value = document.createElement("li");
 
-	key.innerHTML = "Revenue:";
+	key.innerHTML = `Revenue:${kilnDisclosureBadgeHtml(showDisclosures)}`;
 	value.innerHTML = "...";
 	value.classList.add(
 		config.apiAvailability.public ? "text-success" : "text-muted",
@@ -196,7 +207,7 @@ export async function approxPlaceRevenue(
 	value.innerHTML = `<i class="pi pi-brick me-2"></i> ~${revenue.toLocaleString()} ${includeIRLRevenue && revenue > 0 ? `<span class="text-muted">(${await bricksToCurrency(revenue, irlCurrency)})</span>` : ""}`;
 }
 
-export async function activeChallenges() {
+export async function activeChallenges(showDisclosures: boolean) {
 	const getRawTooltip = (el: Element | null) =>
 		el?.getAttribute("data-bs-original-title") ||
 		el?.getAttribute("data-bs-title") ||
@@ -432,7 +443,7 @@ export async function activeChallenges() {
 	card.innerHTML = `
 		<div class="card-header d-flex align-items-center">
 			<div class="flex-grow-1">
-				<i class="fas fa-tasks me-1"></i> Active Challenges (in this world)
+				<i class="fas fa-tasks me-1"></i> Active Challenges (in this world)${kilnDisclosureBadgeHtml(showDisclosures)}
 			</div>
 			<div class="d-flex align-items-center gap-1">
 				<span class="challenges-streak-container"></span>
@@ -506,7 +517,10 @@ export async function activeChallenges() {
 	sendMessage("registerBootstrapElements");
 }
 
-export async function playtimeTracking(userId: number) {
+export async function playtimeTracking(
+	userId: number,
+	showDisclosures: boolean,
+) {
 	const formatMinutes = (minutes: number) => {
 		if (minutes < 60) return `${minutes}mins`;
 		const h = Math.floor(minutes / 60);
@@ -574,7 +588,7 @@ export async function playtimeTracking(userId: number) {
 	card.innerHTML = `
 		<div class="card-header d-flex align-items-center">
 			<div class="flex-grow-1">
-				<i class="fas fa-clock me-1"></i> Your Playtime
+				<i class="fas fa-clock me-1"></i> Your Playtime${kilnDisclosureBadgeHtml(showDisclosures)}
 			</div>
 			<div class="d-flex align-items-center gap-1">
 				<span class="badge bg-primary playtime-total-badge"></span>
@@ -636,7 +650,7 @@ export async function playtimeTracking(userId: number) {
 	sendMessage("registerBootstrapElements");
 }
 
-export function achievementsProgressBar() {
+export function achievementsProgressBar(showDisclosures: boolean) {
 	const tabContents = document.getElementById("achievements-tabpane")!;
 
 	const achievements = tabContents.getElementsByClassName("card");
@@ -653,6 +667,11 @@ export function achievementsProgressBar() {
 	progressBar.ariaValueMin = "0";
 	progressBar.ariaValueMax = "100";
 	progressBar.innerHTML = `<div class="progress-bar progress-bar-striped ${percentage > 0 ? "text-bg-warning" : "text-bg-dark"}" style="width: ${percentage > 0 ? percentage : 100}%">${percentageDisplay}%</div>`;
+	applyKilnDisclosureTitle(
+		progressBar,
+		showDisclosures,
+		"Achievement progress",
+	);
 
 	tabContents.prepend(document.createElement("hr"));
 	tabContents.prepend(progressBar);
@@ -668,7 +687,7 @@ export function fadedUnearnedAchievements() {
 	}
 }
 
-export async function achievementEarnedPercentages() {
+export async function achievementEarnedPercentages(showDisclosures: boolean) {
 	const place = await sendMessage("getPlace", placeID);
 	if (!place.ok) return;
 
@@ -695,17 +714,30 @@ export async function achievementEarnedPercentages() {
 		const owners = parseInt(ownerText.innerText.replace(/[^0-9]/g, ""), 10);
 		const percentage = ((owners * 100) / data.uniqueVisits).toFixed(2);
 
-		ownerText.innerHTML += ` (${percentage}%, ${getDifficultyLabel(+percentage)}) <i class="fa-solid fa-circle-info" data-bs-toggle="tooltip" data-bs-title="Freebie: 90-100%<br />Cake Walk: 80-89.9%<br />Easy: 50-79.9%<br />Moderate: 30-49.9%<br />Challenging: 20-29.9%<br />Hard: 10-19.9%<br />Extreme: 5-9.9%<br />Insane: 1-4.9%<br />Impossible: 0-0.9%" data-bs-html="true"></i>`;
+		ownerText.innerHTML += ` (${percentage}%, ${getDifficultyLabel(+percentage)}) <i class="fa-solid fa-circle-info kiln-difficulty-info" data-bs-toggle="tooltip" data-bs-title="Freebie: 90-100%<br />Cake Walk: 80-89.9%<br />Easy: 50-79.9%<br />Moderate: 30-49.9%<br />Challenging: 20-29.9%<br />Hard: 10-19.9%<br />Extreme: 5-9.9%<br />Insane: 1-4.9%<br />Impossible: 0-0.9%" data-bs-html="true"></i>`;
+
+		const infoIcon = ownerText.querySelector<HTMLElement>(
+			".kiln-difficulty-info",
+		);
+		if (infoIcon) applyKilnDisclosureTitle(infoIcon, showDisclosures);
 	}
 
 	sendMessage("registerBootstrapElements");
 }
 
-export function attachServerShareButtons(tab: Element) {
+export function attachServerShareButtons(
+	tab: Element,
+	showDisclosures: boolean,
+) {
 	for (const server of tab.getElementsByClassName("card")) {
 		const shareBtn = document.createElement("button");
 		shareBtn.innerText = "Share Link";
 		shareBtn.classList.add("btn", "btn-primary", "btn-sm", "mt-2");
+		applyKilnDisclosureTitle(
+			shareBtn,
+			showDisclosures,
+			"Copy a shareable link to this server",
+		);
 
 		const joinBtn = server.getElementsByClassName("btn-success")[0]!;
 		joinBtn.parentElement!.appendChild(shareBtn);
@@ -729,10 +761,10 @@ export function attachServerShareButtons(tab: Element) {
 	}
 }
 
-export function serverShareLinks() {
+export function serverShareLinks(showDisclosures: boolean) {
 	const tab = document.getElementById("servers-tabpane")!;
 
-	attachServerShareButtons(tab);
+	attachServerShareButtons(tab, showDisclosures);
 
 	const urlServerId = new URLSearchParams(window.location.search).get(
 		"serverId",
@@ -780,7 +812,7 @@ export function creatorCommentLabels(creatorId: string) {
 	}).observe(container, { attributes: false, childList: true, subtree: false });
 }
 
-export function legacyPlaceViewLayout(): void {
+export function legacyPlaceViewLayout(showDisclosures: boolean): void {
 	const container = document.querySelector<HTMLElement>(
 		'div[style*="min-height: 60vh"]',
 	);
@@ -791,6 +823,9 @@ export function legacyPlaceViewLayout(): void {
 
 	const hero = container.querySelector<HTMLElement>(".place-hero");
 	if (!hero) return;
+
+	const accessWarningHtml =
+		hero.querySelector<HTMLElement>(".text-warning")?.outerHTML ?? null;
 
 	const title =
 		hero.querySelector<HTMLElement>(".place-hero-title")?.textContent?.trim() ??
@@ -858,7 +893,7 @@ export function legacyPlaceViewLayout(): void {
           <div class="col px-2 mt-1">
             <div class="text-muted fw-bold">
               <i style="width:1.3em" class="text-center text-muted fas fa-planet-ringed me-1"></i>
-              Polytoria Place
+              Polytoria Place${kilnDisclosureBadgeHtml(showDisclosures)}
             </div>
             <div class="text-muted">
               By <a href="${creatorHref}">${creatorName}</a>
@@ -871,7 +906,13 @@ export function legacyPlaceViewLayout(): void {
 
 	const buttonContainer = document.createElement("div");
 	buttonContainer.className = "row px-3 px-lg-2";
-	buttonContainer.innerHTML = `
+	buttonContainer.innerHTML = accessWarningHtml
+		? `
+      <div class="col px-1">
+        <div class="text-center my-2">${accessWarningHtml}</div>
+      </div>
+    `
+		: `
       <div class="col px-1">
         <button class="btn btn-lg btn-game w-100 my-2" id="btn-play">
           <i class="fas fa-play"></i>
@@ -895,7 +936,7 @@ export function legacyPlaceViewLayout(): void {
     `;
 	rightCol.appendChild(buttonContainer);
 
-	if (isCreator) {
+	if (isCreator && !accessWarningHtml) {
 		const manageBtn = buttonContainer.querySelector<HTMLElement>("#manage-btn");
 		fetch(`/create/place/${placeID}`)
 			.then((res) => {
@@ -1053,7 +1094,10 @@ function waitForPlaceTabs(): Promise<{
 	});
 }
 
-export async function detailedPlaceReviews(userId: number) {
+export async function detailedPlaceReviews(
+	userId: number,
+	showDisclosures: boolean,
+) {
 	const elements = await waitForPlaceTabs();
 	if (!elements) return;
 	const { tabList, tabContent } = elements;
@@ -1205,7 +1249,7 @@ export async function detailedPlaceReviews(userId: number) {
 		<a class="nav-link text-light" href="#!" id="reviews-tab" data-bs-toggle="tab" role="tab"
 		   data-bs-target="#reviews-tabpane" aria-controls="reviews-tabpane" aria-selected="false" tabindex="-1">
 			<i class="fas fa-star me-1"></i>
-			Reviews
+			Reviews${kilnDisclosureBadgeHtml(showDisclosures)}
 			<span class="kiln-review-avg-badge"></span>
 		</a>
 	`;
@@ -1574,21 +1618,13 @@ export async function detailedPlaceReviews(userId: number) {
 	}
 }
 
-export async function autoRefreshData(interval: "30s" | "1m" | "5m") {
+export async function autoRefreshData(
+	interval: "30s" | "1m" | "5m",
+	showDisclosures: boolean,
+) {
 	const intervalMs = { "30s": 30_000, "1m": 60_000, "5m": 300_000 }[interval];
-	const relativeTime = (iso: string | null): string => {
-		if (!iso) return "Never";
-		const diffMs = Date.now() - new Date(iso).getTime();
-		const diffDays = Math.floor(diffMs / 86_400_000);
-		if (diffDays === 0) return "Today";
-		if (diffDays === 1) return "Yesterday";
-		if (diffDays < 30) return `${diffDays} days ago`;
-		const diffMonths = Math.floor(diffDays / 30);
-		if (diffMonths < 12)
-			return `${diffMonths} month${diffMonths > 1 ? "s" : ""} ago`;
-		const diffYears = Math.floor(diffMonths / 12);
-		return `${diffYears} year${diffYears > 1 ? "s" : ""} ago`;
-	};
+	const relativeTime = (iso: string | null): string =>
+		iso ? formatNotificationRelativeTime(new Date(iso)) : "Never";
 
 	const infoCard = document.querySelector(".card-body:has(.fa-calendar)");
 
@@ -1597,6 +1633,7 @@ export async function autoRefreshData(interval: "30s" | "1m" | "5m") {
 		if (!li) return;
 		const icon = li.querySelector("i")!;
 		li.innerHTML = icon.outerHTML + text;
+		applyKilnDisclosureTitle(li, showDisclosures, "Automatically refreshed");
 	};
 
 	const flashLi = (iconClass: string, direction: "up" | "down") => {
@@ -1630,7 +1667,10 @@ export async function autoRefreshData(interval: "30s" | "1m" | "5m") {
 	setInterval(refresh, intervalMs);
 }
 
-export async function placeConsumablesTab(creatorId: string) {
+export async function placeConsumablesTab(
+	creatorId: string,
+	showDisclosures: boolean,
+) {
 	const tabList = document.getElementById("place-tabs");
 	const tabContent = document.querySelector(".card-body.tab-content");
 	if (!tabList || !tabContent) return;
@@ -1642,7 +1682,7 @@ export async function placeConsumablesTab(creatorId: string) {
 		<a class="nav-link text-light" href="#!" id="consumables-tab" data-bs-toggle="tab" role="tab"
 		   data-bs-target="#consumables-tabpane" aria-controls="consumables-tabpane" aria-selected="false" tabindex="-1">
 			<i class="fad fa-flask me-1"></i>
-			Consumables
+			Consumables${kilnDisclosureBadgeHtml(showDisclosures)}
 		</a>
 	`;
 	tabList.appendChild(navItem);
@@ -1734,7 +1774,10 @@ export async function placeConsumablesTab(creatorId: string) {
 	});
 }
 
-export function serverRefreshing(onRefresh?: (serverList: Element) => void) {
+export function serverRefreshing(
+	onRefresh?: (serverList: Element) => void,
+	showDisclosures = false,
+) {
 	const tabPane = document.getElementById("servers-tabpane")!;
 
 	const serverList = document.createElement("div");
@@ -1752,7 +1795,7 @@ export function serverRefreshing(onRefresh?: (serverList: Element) => void) {
 		right: 0,
 	});
 	refreshBar.innerHTML = `
-		<button class="btn btn-sm btn-outline-secondary kiln-servers-refresh-btn" type="button" title="Refresh servers">
+		<button class="btn btn-sm btn-outline-secondary kiln-servers-refresh-btn" type="button">
 			<i class="fas fa-sync-alt me-1"></i>Refresh
 		</button>
 	`;
@@ -1761,6 +1804,7 @@ export function serverRefreshing(onRefresh?: (serverList: Element) => void) {
 	const refreshBtn = refreshBar.querySelector<HTMLButtonElement>(
 		".kiln-servers-refresh-btn",
 	)!;
+	applyKilnDisclosureTitle(refreshBtn, showDisclosures, "Refresh servers");
 
 	refreshBtn.addEventListener("click", async () => {
 		refreshBtn.disabled = true;

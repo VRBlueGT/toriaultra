@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-export async function v2WorldLabels() {
+export async function v2WorldLabels(showDisclosures: boolean) {
 	const worldIds: number[] = [];
 	const cards = document.querySelectorAll(".card.mcard");
 	cards.forEach((card) => {
@@ -55,6 +55,11 @@ export async function v2WorldLabels() {
 						badge.classList.add("bg-secondary");
 						badge.textContent = "Unknown Version";
 					}
+					applyKilnDisclosureTitle(
+						badge,
+						showDisclosures,
+						"World engine version",
+					);
 					titleElement.appendChild(badge);
 				}
 			}

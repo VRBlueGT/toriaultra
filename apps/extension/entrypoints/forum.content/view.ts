@@ -17,10 +17,14 @@
 import { sendMessage } from "@/utils/messaging";
 import config from "@/utils/static/fallbackConfig.json";
 import { _bookmarkedThreads, type BookmarkedThread } from "@/utils/storage";
-import { formatNotificationRelativeTime } from "@/utils/utilities";
+import {
+	applyKilnDisclosureTitle,
+	formatNotificationRelativeTime,
+	kilnDisclosureBadgeHtml,
+} from "@/utils/utilities";
 import { CATEGORIES, getOrCreateForumToolbar } from "./search";
 
-export function forumMentions() {
+export function forumMentions(showDisclosures: boolean) {
 	const textBlocks = document.querySelectorAll("p:not(.text-muted):not(.mb-0)");
 	const regex = /@([\w.]+)/g;
 
@@ -52,6 +56,7 @@ export function forumMentions() {
 				link.href = `/u/${username}`;
 				link.className = "kiln-extension-mention";
 				link.textContent = fullMatch;
+				applyKilnDisclosureTitle(link, showDisclosures);
 				fragment.appendChild(link);
 
 				lastIndex = match.index + fullMatch.length;
@@ -63,7 +68,7 @@ export function forumMentions() {
 	});
 }
 
-export function aiBotForumWarnings() {
+export function aiBotForumWarnings(showDisclosures: boolean) {
 	const aiUserSet = new Set(config.users.generativeAI.map(String));
 	const cards = document.querySelectorAll(".card");
 
@@ -81,8 +86,7 @@ export function aiBotForumWarnings() {
 
 			const tag = document.createElement("span");
 			tag.className = "badge bg-secondary d-block mt-2";
-			tag.textContent =
-				"This content may have been generated using AI. This information may not be factual.";
+			tag.innerHTML = `This content may have been generated using AI. This information may not be factual.${kilnDisclosureBadgeHtml(showDisclosures)}`;
 			textBlock.appendChild(tag);
 		}
 	});
@@ -191,7 +195,7 @@ function getForumBasePath(): string {
 	return path === "/forum" ? "/forum/" : path;
 }
 
-export async function bookmarkedThreads() {
+export async function bookmarkedThreads(showDisclosures: boolean) {
 	const [, , second, third] = window.location.pathname.split("/");
 
 	if (second === "post") {
@@ -206,6 +210,7 @@ export async function bookmarkedThreads() {
 		button.type = "button";
 		button.className = "btn btn-sm btn-outline-secondary ms-2";
 		button.setAttribute("aria-label", "Bookmark thread");
+		applyKilnDisclosureTitle(button, showDisclosures);
 
 		const render = (bookmarked: boolean) => {
 			button.classList.toggle("text-warning", bookmarked);
@@ -280,7 +285,7 @@ export async function bookmarkedThreads() {
 	const button = document.createElement("button");
 	button.type = "button";
 	button.className = "btn btn-outline-secondary flex-fill w-50";
-	button.textContent = "Bookmarks";
+	button.innerHTML = `Bookmarks${kilnDisclosureBadgeHtml(showDisclosures)}`;
 	toolbar.appendChild(button);
 
 	const renderBookmarkEntry = (

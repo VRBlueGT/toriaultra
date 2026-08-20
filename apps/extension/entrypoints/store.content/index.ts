@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import { preferences } from "@/utils/storage";
+import { _showKilnDisclosures, preferences } from "@/utils/storage";
 import { getUserDetails } from "@/utils/utilities";
 import * as discovery from "./discovery";
 import * as view from "./view";
@@ -22,7 +22,10 @@ import * as view from "./view";
 export default defineContentScript({
 	matches: ["https://polytoria.com/store/*"],
 	main() {
-		preferences.getPreferences().then((values) => {
+		Promise.all([
+			preferences.getPreferences(),
+			_showKilnDisclosures.getValue(),
+		]).then(([values, showDisclosures]) => {
 			getUserDetails().then(async (user) => {
 				if (!user) {
 					console.warn("[Kiln] Failure to get logged in user details.");
@@ -39,24 +42,27 @@ export default defineContentScript({
 						values.config.legacyItemViewLayout.discovery;
 
 					if (legacyDiscoveryLayout) {
-						discovery.legacyStoreLayout();
+						discovery.legacyStoreLayout(showDisclosures);
 					}
 
 					if (values.enabled.includes("irlBrickPrice")) {
-						discovery.irlBrickPrice(values.config.irlBrickPrice.currency);
+						discovery.irlBrickPrice(
+							values.config.irlBrickPrice.currency,
+							showDisclosures,
+						);
 					}
 					if (values.enabled.includes("storeOwnedTags")) {
-						discovery.ownedTags(user.userId);
+						discovery.ownedTags(user.userId, showDisclosures);
 					}
 					if (values.enabled.includes("eventItems")) {
-						discovery.eventItems();
+						discovery.eventItems(showDisclosures);
 					}
 					if (
 						!legacyDiscoveryLayout &&
 						values.enabled.includes("disableInfiniteScrolling") &&
 						values.config.disableInfiniteScrolling.store
 					) {
-						discovery.disableInfiniteScrolling();
+						discovery.disableInfiniteScrolling(showDisclosures);
 					}
 				} else {
 					if (import.meta.env.MODE == "development") {
@@ -70,26 +76,37 @@ export default defineContentScript({
 					if (!itemDetails.ok) return;
 
 					if (values.enabled.includes("irlBrickPrice")) {
-						view.irlBrickPrice(values.config.irlBrickPrice.currency);
+						view.irlBrickPrice(
+							values.config.irlBrickPrice.currency,
+							showDisclosures,
+						);
 					}
 					if (values.enabled.includes("accurateOwners")) {
-						view.accurateOwnerCount();
+						view.accurateOwnerCount(showDisclosures);
 					}
 					if (values.enabled.includes("hoardersList")) {
 						view.hoardersList(
 							values.config.hoardersList?.minCopies ?? 2,
 							values.config.hoardersList?.showAvatars ?? true,
+							showDisclosures,
 						);
 					}
 					if (values.enabled.includes("mySerial")) {
-						view.mySerial(user.userId);
+						view.mySerial(user.userId, showDisclosures);
 					}
 
 					if (
 						values.enabled.includes("nftItems") &&
 						itemDetails.data.isLimited
 					) {
-						view.nftItems(user.userId);
+						view.nftItems(user.userId, showDisclosures);
+					}
+
+					if (
+						values.enabled.includes("itemOwnerCheck") &&
+						itemDetails.data.isLimited
+					) {
+						view.ownerCheck(showDisclosures);
 					}
 
 					if (
@@ -97,7 +114,7 @@ export default defineContentScript({
 						values.config.loveIntegration.itemView &&
 						itemDetails.data.isLimited
 					) {
-						view.loveIntegration();
+						view.loveIntegration(showDisclosures);
 					}
 
 					if (
@@ -107,6 +124,7 @@ export default defineContentScript({
 						view.collectibleOwnerLabels(
 							values.config.collectibleOwnerLabels?.inactiveDays ?? 30,
 							values.config.collectibleOwnerLabels?.ogYear ?? 2023,
+							showDisclosures,
 						);
 					}
 
@@ -114,7 +132,7 @@ export default defineContentScript({
 						values.enabled.includes("backClothingView") &&
 						["shirt", "pants", "clothing"].includes(itemDetails.data.type)
 					) {
-						view.clothing3DPreview();
+						view.clothing3DPreview(showDisclosures);
 					}
 
 					if (
@@ -122,7 +140,10 @@ export default defineContentScript({
 						values.config.creatorCommentLabels.items &&
 						itemDetails.data.creator.type != "guild"
 					) {
-						view.creatorCommentLabels(itemDetails.data.creator.id);
+						view.creatorCommentLabels(
+							itemDetails.data.creator.id,
+							showDisclosures,
+						);
 					}
 
 					if (itemDetails.data.type === "achievement") {
@@ -133,11 +154,11 @@ export default defineContentScript({
 						values.enabled.includes("legacyItemViewLayout") &&
 						values.config.legacyItemViewLayout.itemView
 					) {
-						view.legacyStoreLayout();
+						view.legacyStoreLayout(showDisclosures);
 					}
 
 					if (values.enabled.includes("recentCollectibleTransactions")) {
-						view.recentTransactions();
+						view.recentTransactions(showDisclosures);
 					}
 				}
 			});

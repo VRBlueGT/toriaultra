@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import { preferences } from "@/utils/storage";
+import { _showKilnDisclosures, preferences } from "@/utils/storage";
 import * as create from "./create";
 import * as search from "./search";
 import * as view from "./view";
@@ -22,7 +22,10 @@ import * as view from "./view";
 export default defineContentScript({
 	matches: ["https://polytoria.com/forum", "https://polytoria.com/forum/*"],
 	main() {
-		preferences.getPreferences().then((values) => {
+		Promise.all([
+			preferences.getPreferences(),
+			_showKilnDisclosures.getValue(),
+		]).then(([values, showDisclosures]) => {
 			const [_, _first, second, third] = window.location.pathname.split("/");
 
 			if (second == "post") {
@@ -34,19 +37,21 @@ export default defineContentScript({
 					_viewedForumThreads.setValue([...threads, +third]);
 				});
 
-				if (values.enabled.includes("forumMentions")) view.forumMentions();
+				if (values.enabled.includes("forumMentions"))
+					view.forumMentions(showDisclosures);
 				if (values.enabled.includes("aiBotForumWarnings"))
-					view.aiBotForumWarnings();
+					view.aiBotForumWarnings(showDisclosures);
 				if (values.enabled.includes("copyPostContents"))
 					view.copyPostContents();
 				if (values.enabled.includes("bookmarkedThreads"))
-					view.bookmarkedThreads();
+					view.bookmarkedThreads(showDisclosures);
 				if (values.enabled.includes("improvedForumComposer"))
 					create.improvedForumComposer(
 						values.config.improvedForumComposer.showCharacterCount,
 						values.config.improvedForumComposer.showMarkdownBtns,
 						values.config.improvedForumComposer.autoShowPreview,
 						values.config.improvedForumComposer.highlightFilteredWords,
+						showDisclosures,
 					);
 			} else if (second == "new") {
 				if (import.meta.env.MODE == "development") {
@@ -59,16 +64,17 @@ export default defineContentScript({
 						values.config.improvedForumComposer.showMarkdownBtns,
 						values.config.improvedForumComposer.autoShowPreview,
 						values.config.improvedForumComposer.highlightFilteredWords,
+						showDisclosures,
 					);
 			} else if (!second || second == "category") {
 				if (values.enabled.includes("advancedForumSearch")) {
 					_viewedForumThreads.getValue().then((threads) => {
-						search.advancedForumSearch(threads);
+						search.advancedForumSearch(threads, showDisclosures);
 					});
 				}
-				if (values.enabled.includes("myPosts")) search.myPosts();
+				if (values.enabled.includes("myPosts")) search.myPosts(showDisclosures);
 				if (values.enabled.includes("bookmarkedThreads"))
-					view.bookmarkedThreads();
+					view.bookmarkedThreads(showDisclosures);
 			}
 		});
 	},

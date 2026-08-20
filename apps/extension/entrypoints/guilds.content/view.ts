@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-export function creatorCommentLabels() {
+export function creatorCommentLabels(showDisclosures: boolean) {
 	const creatorId = document
 		.querySelector(
 			'.col-12:has(#guild-btn, #guild-notifications-button) a[class^="userlink-"]',
@@ -46,6 +46,11 @@ export function creatorCommentLabels() {
 		badge.setAttribute("data-bs-title", "This user leads this guild.");
 
 		usernameElement.appendChild(badge);
+
+		if (showDisclosures) {
+			usernameElement.appendChild(createKilnDisclosureBadge());
+		}
+
 		sendMessage("registerBootstrapElements");
 	};
 

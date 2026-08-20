@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import { kilnDisclosureBadgeHtml } from "@/utils/utilities";
+
 const placeID = +window.location.pathname.split("/")[3];
 
 type TrendMetric =
@@ -33,12 +35,12 @@ type TrendRange = {
 	window: string;
 };
 
-export function placeFileExport() {
+export function placeFileExport(showDisclosures: boolean) {
 	const container = document.createElement("div");
 	container.classList.add("form-group", "mt-4");
 	container.innerHTML = `
   <label class="mb-2">
-    <h5 class="mb-0">Download <code style="color: orange;">.poly</code> File</h5>
+    <h5 class="mb-0">Download <code style="color: orange;">.poly</code> File${kilnDisclosureBadgeHtml(showDisclosures)}</h5>
     <small class="text-muted">Quickly download your place from the site!</small>
   </label>
   <br>
@@ -62,7 +64,7 @@ export function placeFileExport() {
 	});
 }
 
-export function bulkWhitelist() {
+export function bulkWhitelist(showDisclosures: boolean) {
 	const whitelistCard = document.querySelector(
 		".card:has(#whitelist-username)",
 	)!;
@@ -72,7 +74,7 @@ export function bulkWhitelist() {
 	bulkWhitelistCard.innerHTML = `
 	<div class="card-header">
 		<i class="fa-duotone fa-solid fa-vial-circle-check"></i>
-		Multi-Whitelist
+		Multi-Whitelist${kilnDisclosureBadgeHtml(showDisclosures)}
 	</div>
 	<div class="card-body">
 		<textarea class="form-control bg-dark mb-2" placeholder="Usernames (separated by lines).." style="min-height: 250px;"></textarea>

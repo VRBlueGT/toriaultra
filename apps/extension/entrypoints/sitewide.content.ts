@@ -25,16 +25,23 @@ const preferencesData = _preferencesJson.preferences;
 
 import type { FeatureId } from "@/utils/featureIds.generated";
 import { PATH_FEATURES } from "@/utils/featurePaths.generated";
-import { _savedThemes, preferences } from "@/utils/storage";
+import {
+	_savedThemes,
+	_showKilnDisclosures,
+	preferences,
+} from "@/utils/storage";
 import { applyKilnTheme, THEME_PRESETS } from "@/utils/theme";
 import type { CurrencyCode } from "@/utils/types";
 import {
+	applyKilnDisclosureTitle,
 	bricksToCurrency,
+	createKilnDisclosureBadge,
 	getApiSession,
 	getUserDetails,
 	injectNoticeBanners,
 	injectPostUpdateBanner,
 	injectUpdateBanner,
+	kilnDisclosureBadgeHtml,
 	renderKilnNotifications,
 } from "@/utils/utilities";
 
@@ -42,6 +49,8 @@ export default defineContentScript({
 	matches: ["https://polytoria.com/*"],
 	runAt: "document_start",
 	async main() {
+		registerErrorTracking();
+
 		const isProfilePage = /^\/(u\/[^/]+|users\/\d+)\/?$/.test(
 			location.pathname,
 		);
@@ -120,11 +129,14 @@ export default defineContentScript({
 					}
 				});
 
-				preferences.getPreferences().then(async (values) => {
+				Promise.all([
+					preferences.getPreferences(),
+					_showKilnDisclosures.getValue(),
+				]).then(async ([values, showDisclosures]) => {
 					footerInjectionInfo(values.enabled);
 
 					if (values.enabled.includes("localizedTimestamps")) {
-						localizedTimestamps();
+						localizedTimestamps(showDisclosures);
 					}
 
 					if (values.enabled.includes("stickyNavbar")) {
@@ -198,18 +210,26 @@ export default defineContentScript({
 								.querySelector('.navbar [data-bs-html="true"]')!
 								.getElementsByTagName("span")[0]!;
 
-							brickBalance.innerHTML += ` <span style="color: rgb(141 141 141);">(${currency})</span>`;
+							const currencySpan = document.createElement("span");
+							currencySpan.style.color = "rgb(141 141 141)";
+							currencySpan.textContent = `(${currency})`;
+							applyKilnDisclosureTitle(
+								currencySpan,
+								showDisclosures,
+								"IRL currency conversion",
+							);
+							brickBalance.append(" ", currencySpan);
 						}
 					}
 
 					if (values.enabled.includes("userAliases")) {
 						_userAliases.getValue().then((aliases) => {
-							userAliases(user.userId, aliases);
+							userAliases(user.userId, aliases, showDisclosures);
 						});
 					}
 
 					if (values.enabled.includes("friendReqNotifActions")) {
-						friendReqNotifActions();
+						friendReqNotifActions(showDisclosures);
 					}
 
 					if (values.enabled.includes("reenableSearch")) {
@@ -221,7 +241,7 @@ export default defineContentScript({
 					}
 
 					if (values.enabled.includes("streakFreezeDisplay")) {
-						streakFreezeDisplay();
+						streakFreezeDisplay(showDisclosures);
 					}
 				});
 			});
@@ -245,6 +265,39 @@ export default defineContentScript({
 		}
 	},
 });
+
+function registerErrorTracking(): void {
+	const extensionPrefix = (browser.runtime.getURL as (path: string) => string)(
+		"",
+	);
+
+	const isOwnError = (...haystack: Array<string | undefined>) =>
+		haystack.some((s) => s?.includes(extensionPrefix));
+
+	window.addEventListener("error", (e) => {
+		if (!isOwnError(e.filename, e.error?.stack)) return;
+		sendMessage("reportError", {
+			type: "content",
+			message: e.message,
+			source: e.filename,
+			stack: e.error?.stack,
+			url: location.href,
+		});
+	});
+
+	window.addEventListener("unhandledrejection", (e) => {
+		const reason = e.reason;
+		const message = reason instanceof Error ? reason.message : String(reason);
+		const stack = reason instanceof Error ? reason.stack : undefined;
+		if (!isOwnError(stack)) return;
+		sendMessage("reportError", {
+			type: "content",
+			message,
+			stack,
+			url: location.href,
+		});
+	});
+}
 
 const THEME_BLOCKING_ITEM_IDS = new Set([
 	151140, 43548, 35699, 34715, 34698, 34419, 34418, 34416, 34392, 34391, 34390,
@@ -535,7 +588,11 @@ function footerInjectionInfo(enabledIds: FeatureId[]) {
 	footerInfoContainer.appendChild(injectionInfo);
 }
 
-function userAliases(userId: number, aliases: Record<number, string>) {
+function userAliases(
+	userId: number,
+	aliases: Record<number, string>,
+	showDisclosures: boolean,
+) {
 	const getUserId = (link: HTMLElement): number | null => {
 		const ownHref = link.getAttribute("href");
 		if (ownHref) {
@@ -562,6 +619,7 @@ function userAliases(userId: number, aliases: Record<number, string>) {
 		if (!link.matches('a[href^="/users/"]')) {
 			if (!link.textContent?.trim()) return;
 			link.innerText = alias;
+			applyKilnDisclosureTitle(link, showDisclosures, "Kiln alias");
 			return;
 		}
 
@@ -572,6 +630,7 @@ function userAliases(userId: number, aliases: Record<number, string>) {
 
 		textNodes[0].textContent = alias;
 		for (const node of textNodes.slice(1)) node.remove();
+		applyKilnDisclosureTitle(link, showDisclosures, "Kiln alias");
 	};
 
 	const processHomeTitle = () => {
@@ -581,7 +640,10 @@ function userAliases(userId: number, aliases: Record<number, string>) {
 		const span = document.querySelector<HTMLElement>(
 			"h3.home-title2 span.text-truncate",
 		);
-		if (span?.textContent?.trim()) span.innerText = alias;
+		if (span?.textContent?.trim()) {
+			span.innerText = alias;
+			applyKilnDisclosureTitle(span, showDisclosures, "Kiln alias");
+		}
 	};
 
 	for (const link of document.querySelectorAll<HTMLElement>(
@@ -632,7 +694,7 @@ function userAliases(userId: number, aliases: Record<number, string>) {
 	observer.observe(document.body, { childList: true, subtree: true });
 }
 
-function friendReqNotifActions() {
+function friendReqNotifActions(showDisclosures: boolean) {
 	const popup = document.querySelector<HTMLElement>(".notifications-popup");
 	if (!popup) {
 		console.warn("[Kiln] .notifications-popup not found");
@@ -657,6 +719,16 @@ function friendReqNotifActions() {
 			pointerEvents: "all",
 			boxSizing: "border-box",
 		});
+
+		if (showDisclosures) {
+			const badge = createKilnDisclosureBadge();
+			Object.assign(badge.style, {
+				display: "block",
+				width: "fit-content",
+				margin: "0 auto 6px auto",
+			});
+			popout.appendChild(badge);
+		}
 
 		const viewProfileBtn = document.createElement("button");
 		viewProfileBtn.className = "btn btn-primary btn-sm w-100 mb-1";
@@ -816,7 +888,7 @@ function friendReqNotifActions() {
 	});
 }
 
-function localizedTimestamps(): void {
+function localizedTimestamps(showDisclosures: boolean): void {
 	const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 	const MONTHS_FULL = [
@@ -973,10 +1045,13 @@ function localizedTimestamps(): void {
 			const localized = localizeRaw(raw);
 			if (!localized) return;
 
-			el.setAttribute("data-bs-original-title", localized);
-			el.setAttribute("title", localized);
+			applyKilnDisclosureTitle(el, showDisclosures, localized);
+			const finalTitle = el.title;
+
+			el.setAttribute("data-bs-original-title", finalTitle);
+			el.setAttribute("title", finalTitle);
 			if (el.hasAttribute("data-bs-title")) {
-				el.setAttribute("data-bs-title", localized);
+				el.setAttribute("data-bs-title", finalTitle);
 			}
 
 			updatedAny = true;
@@ -1175,7 +1250,7 @@ function linkForumSearchToAdvanced(): void {
 	forumSearchItem.dataset.searchurl = "/forum/?kiln-adv-search&q=%v";
 }
 
-function streakFreezeDisplay(): void {
+function streakFreezeDisplay(showDisclosures: boolean): void {
 	const streakSpan = document.querySelector<HTMLElement>(
 		".nav-link .text-streak",
 	);
@@ -1195,14 +1270,23 @@ function streakFreezeDisplay(): void {
 
 		const freezeCount = result.data;
 
-		streakSpan.insertAdjacentHTML(
-			"afterend",
-			`<small class="text-primary" style="margin-left: 10px; white-space: nowrap;"><i class="fas fa-snowflake me-1"></i>${freezeCount}</small>`,
+		const freezeSmall = document.createElement("small");
+		freezeSmall.className = "text-primary";
+		Object.assign(freezeSmall.style, {
+			marginLeft: "10px",
+			whiteSpace: "nowrap",
+		});
+		freezeSmall.innerHTML = `<i class="fas fa-snowflake me-1"></i>${freezeCount}`;
+		applyKilnDisclosureTitle(
+			freezeSmall,
+			showDisclosures,
+			"Streak freezes remaining",
 		);
+		streakSpan.insertAdjacentElement("afterend", freezeSmall);
 
 		if (!raw) return;
 
-		const freezeText = `<p class="mb-0 mt-1"><i class="fas fa-snowflake me-1"></i>${freezeCount} streak freeze${freezeCount === 1 ? "" : "s"} left</p>`;
+		const freezeText = `<p class="mb-0 mt-1"><i class="fas fa-snowflake me-1"></i>${freezeCount} streak freeze${freezeCount === 1 ? "" : "s"} left${kilnDisclosureBadgeHtml(showDisclosures)}</p>`;
 		const updated = raw.replace(/<\/div>\s*$/, `${freezeText}</div>`);
 		if (updated === raw) return;
 

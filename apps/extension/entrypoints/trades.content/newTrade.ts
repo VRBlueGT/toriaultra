@@ -14,9 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import { kilnDisclosureBadgeHtml } from "@/utils/utilities";
+
 const userId = +window.location.pathname.split("/")[3];
 
-export async function nftItems() {
+export async function nftItems(showDisclosures: boolean) {
 	const nfts = await sendMessage("getNFTItems", userId);
 	if (!nfts.ok) return;
 
@@ -108,7 +110,7 @@ export async function nftItems() {
 			if (!card.querySelector(".nft-overlay")) {
 				const overlay = document.createElement("div");
 				overlay.className = "nft-overlay";
-				overlay.textContent = "Not for Trade";
+				overlay.innerHTML = `Not for Trade${kilnDisclosureBadgeHtml(showDisclosures)}`;
 				card.appendChild(overlay);
 			}
 		} else {

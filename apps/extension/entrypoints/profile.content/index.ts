@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import { preferences } from "@/utils/storage";
+import { _showKilnDisclosures, preferences } from "@/utils/storage";
+import { kilnDisclosureBadgeHtml } from "@/utils/utilities";
 import * as discovery from "./discovery";
 import * as inventory from "./inventory";
 import * as view from "./view";
@@ -26,7 +27,10 @@ export default defineContentScript({
 		"https://polytoria.com/users/*",
 	],
 	main() {
-		preferences.getPreferences().then(async (values) => {
+		Promise.all([
+			preferences.getPreferences(),
+			_showKilnDisclosures.getValue(),
+		]).then(async ([values, showDisclosures]) => {
 			const segment = window.location.pathname.split("/")[2];
 			const isLegacyUrl = window.location.pathname.split("/")[1] === "users";
 
@@ -35,6 +39,7 @@ export default defineContentScript({
 					discovery.userLabels(
 						values.config.userLabels?.inactiveDays ?? 30,
 						values.config.userLabels?.ogYear ?? 2023,
+						showDisclosures,
 					);
 				}
 				return;
@@ -65,7 +70,7 @@ export default defineContentScript({
 				collectibleNav.innerHTML = `
 				<a href="${profileBase}/inventory/collectibles/" class="nav-link">
 					<i class="fa-regular fa-sparkles me-1"></i>
-					<span class="pilltitle">Collectibles</span>
+					<span class="pilltitle">Collectibles</span>${kilnDisclosureBadgeHtml(showDisclosures)}
 				</a>
 				`;
 				nav.appendChild(collectibleNav);
@@ -85,7 +90,7 @@ export default defineContentScript({
 					hoardedItemsCard.classList.add("nav-item", "text-center");
 					hoardedItemsCard.innerHTML = `
 					<h6 class="section-title mt-3 px-2">
-						Hoarded Items
+						Hoarded Items${kilnDisclosureBadgeHtml(showDisclosures)}
 					</h6>
 					<div class="card bg-dark mt-2">
 						<div class="card-body" id="p+hoarded_card"></div>
@@ -99,35 +104,38 @@ export default defineContentScript({
 				const blocked = document.querySelector(".card-body:has(.fa-ban)");
 
 				if (!blocked) {
-					if (values.enabled.includes("userIdDisplay")) view.displayId(userId);
+					if (values.enabled.includes("userIdDisplay"))
+						view.displayId(userId, false, showDisclosures);
 					if (values.enabled.includes("collectibleOwnerLabels"))
 						view.userLabels(
 							userId,
 							values.config.userLabels?.inactiveDays ?? 30,
 							values.config.userLabels?.ogYear ?? 2023,
+							showDisclosures,
 						);
 					if (values.enabled.includes("outfitCost"))
 						view.outfitCost(
 							userId,
 							values.enabled.includes("irlBrickPrice"),
 							values.config.irlBrickPrice.currency,
+							showDisclosures,
 						);
 					if (values.enabled.includes("rankingPositions"))
-						view.rankingPositions(userId);
+						view.rankingPositions(userId, showDisclosures);
 					if (values.enabled.includes("tgdStats"))
-						view.greatDivideStats(userId);
+						view.greatDivideStats(userId, showDisclosures);
 					if (values.enabled.includes("classicAvatarPerspective")) {
 						document.getElementById("avatarToggleBtn")!.click();
 					}
 					if (values.enabled.includes("avatarVersions")) {
-						view.avatarVersions(userId);
+						view.avatarVersions(userId, showDisclosures);
 					}
 					if (values.enabled.includes("pinnedAchievements")) {
-						view.pinnedAchievements(userId);
+						view.pinnedAchievements(userId, showDisclosures);
 					}
 					if (values.enabled.includes("userAliases")) {
 						_userAliases.getValue().then((aliases) => {
-							view.userAliases(userId, aliases);
+							view.userAliases(userId, aliases, showDisclosures);
 						});
 					}
 					if (values.enabled.includes("userCreationsTab")) {
@@ -151,7 +159,7 @@ export default defineContentScript({
 						*/
 					}
 					if (values.enabled.includes("userNotes")) {
-						view.userNotes(userId);
+						view.userNotes(userId, showDisclosures);
 					}
 					if (values.enabled.includes("avatarMeshDownloader")) {
 						view.avatarMeshDownloader(userId);
@@ -159,8 +167,8 @@ export default defineContentScript({
 				} else if (values.enabled.includes("basicBlockedInfo")) {
 					blocked.appendChild(document.createElement("hr"));
 
-					view.displayId(userId, true);
-					view.basicBlockedInfo(userId);
+					view.displayId(userId, true, showDisclosures);
+					view.basicBlockedInfo(userId, showDisclosures);
 				}
 			}
 		});

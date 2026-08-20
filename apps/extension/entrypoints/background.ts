@@ -15,6 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import { Polytoria } from "@kiln/schemas";
+import type { Menus } from "webextension-polyfill";
 import { onMessage } from "@/utils/messaging";
 import { cache, migrateThemesToLocal } from "@/utils/storage";
 import {
@@ -40,42 +41,12 @@ import "./background/feed";
 import "./background/storeListing";
 import "./background/placesListing";
 import "./background/forumSearch";
+import "./background/feedSearch";
+import { purgeOldErrors } from "./background/errors";
 
 export { ApiDisabledError, ApiHttpError, NoSessionError };
 
 const MAX_CACHE_BYTES = 4 * 1024 * 1024; // 4 MB
-
-const LINK_MENUS: { title: string; id: string; targetUrlPatterns: string[] }[] =
-	[
-		{
-			title: "Copy Place ID",
-			id: "Kiln-CopyPlaceID",
-			targetUrlPatterns: ["https://polytoria.com/places/*"],
-		},
-		{
-			title: "Copy User ID",
-			id: "Kiln-CopyUserID",
-			targetUrlPatterns: [
-				"https://polytoria.com/users/*",
-				"https://polytoria.com/u/*",
-			],
-		},
-		{
-			title: "Copy Item ID",
-			id: "Kiln-CopyItemID",
-			targetUrlPatterns: ["https://polytoria.com/store/*"],
-		},
-		{
-			title: "Copy Guild ID",
-			id: "Kiln-CopyGuildID",
-			targetUrlPatterns: ["https://polytoria.com/guilds/*"],
-		},
-		{
-			title: "Copy Thread ID",
-			id: "Kiln-CopyThreadID",
-			targetUrlPatterns: ["https://polytoria.com/forum/post/*"],
-		},
-	];
 
 async function resolveIdFromUrl(linkUrl: string): Promise<string> {
 	const parts = new URL(linkUrl).pathname.split("/");
@@ -88,13 +59,56 @@ async function resolveIdFromUrl(linkUrl: string): Promise<string> {
 		if ("id" in res) return String(res.id);
 		throw new Error("Failed to resolve user");
 	}
-	return parts[2];
+	return parts[parts.length - 1];
 }
 
-function extractAvatarHash(srcUrl: string): string {
-	const pathname = new URL(srcUrl).pathname;
-	return pathname.split("/")[3].replace("-icon", "").replace(".png", "");
-}
+type ContextMenuDef = {
+	title: string;
+	id: string;
+	contexts: Menus.ContextType[];
+	targetUrlPatterns: string[];
+	extract: (info: Menus.OnClickData) => string | Promise<string>;
+};
+
+const CONTEXT_MENUS: ContextMenuDef[] = [
+	{
+		title: "Copy ID",
+		id: "Kiln-CopyID",
+		contexts: ["link"],
+		targetUrlPatterns: [
+			"https://polytoria.com/places/*",
+			"https://polytoria.com/users/*",
+			"https://polytoria.com/store/*",
+			"https://polytoria.com/guilds/*",
+			"https://polytoria.com/u/*",
+			"https://polytoria.com/inbox/messages/*",
+			"https://polytoria.com/models/*",
+			"https://polytoria.com/create/ad/*",
+			"https://polytoria.com/addons/*",
+		],
+		extract: (info) => resolveIdFromUrl(info.linkUrl!),
+	},
+	{
+		title: "Copy Thread ID",
+		id: "Kiln-CopyThreadID",
+		contexts: ["link"],
+		targetUrlPatterns: ["https://polytoria.com/forum/post/*"],
+		extract: (info) => new URL(info.linkUrl!).pathname.split("/")[3],
+	},
+	{
+		title: "Copy Avatar Hash",
+		id: "Kiln-CopyAvatarHash",
+		contexts: ["image"],
+		targetUrlPatterns: [
+			"https://c0.ptacdn.com/thumbnails/avatars/*",
+			"https://cdn.polytoria.com/thumbnails/avatars/*",
+		],
+		extract: (info) => {
+			const pathname = new URL(info.srcUrl!).pathname;
+			return pathname.split("/")[3].replace("-icon", "").replace(".png", "");
+		},
+	},
+];
 
 async function copyToTab(tabId: number, value: string) {
 	await browser.scripting.executeScript({
@@ -108,47 +122,25 @@ function setupContextMenus() {
 	const docPatterns = ["https://polytoria.com/*"];
 
 	browser.contextMenus.removeAll().then(() => {
-		for (const menu of LINK_MENUS) {
+		for (const menu of CONTEXT_MENUS) {
 			browser.contextMenus.create({
 				title: menu.title,
 				id: menu.id,
-				contexts: ["link"],
+				contexts: menu.contexts,
 				documentUrlPatterns: docPatterns,
 				targetUrlPatterns: menu.targetUrlPatterns,
 			});
 		}
-
-		browser.contextMenus.create({
-			title: "Copy Avatar Hash",
-			id: "Kiln-CopyAvatarHash",
-			contexts: ["image"],
-			documentUrlPatterns: docPatterns,
-			targetUrlPatterns: [
-				"https://c0.ptacdn.com/thumbnails/avatars/*",
-				"https://cdn.polytoria.com/thumbnails/avatars/*",
-			],
-		});
 	});
 
 	browser.contextMenus.onClicked.addListener(async (info, tab) => {
 		if (!tab?.id) return;
 
-		const menuId = info.menuItemId as string;
-		const tabId = tab.id;
+		const menu = CONTEXT_MENUS.find((m) => m.id === info.menuItemId);
+		if (!menu) return;
 
-		if (menuId === "Kiln-CopyThreadID") {
-			const parts = new URL(info.linkUrl!).pathname.split("/");
-			await copyToTab(tabId, parts[3]);
-			return;
-		}
-
-		if (menuId === "Kiln-CopyAvatarHash") {
-			await copyToTab(tabId, extractAvatarHash(info.srcUrl!));
-			return;
-		}
-
-		const id = await resolveIdFromUrl(info.linkUrl!);
-		await copyToTab(tabId, id);
+		const value = await menu.extract(info);
+		await copyToTab(tab.id, value);
 	});
 }
 
@@ -169,6 +161,8 @@ export default defineBackground(() => {
 	});
 
 	trimCacheIfNeeded();
+
+	purgeOldErrors();
 
 	migrateThemesToLocal();
 

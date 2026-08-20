@@ -31,6 +31,41 @@ import type {
 	UserDetails,
 } from "./types";
 
+const KILN_DISCLOSURE_TITLE =
+	"This is a Kiln extension feature, not part of Polytoria.";
+
+export function kilnDisclosureBadgeHtml(show: boolean): string {
+	if (!show) return "";
+	return `<span class="badge bg-warning text-dark ms-1" style="font-size:0.6rem;font-weight:600;vertical-align:middle;" title="${KILN_DISCLOSURE_TITLE}">Kiln</span>`;
+}
+
+export function createKilnDisclosureBadge(): HTMLSpanElement {
+	const badge = document.createElement("span");
+	badge.className = "badge bg-warning text-dark ms-1";
+	Object.assign(badge.style, {
+		fontSize: "0.6rem",
+		fontWeight: "600",
+		verticalAlign: "middle",
+	});
+	badge.title = KILN_DISCLOSURE_TITLE;
+	badge.textContent = "Kiln";
+	return badge;
+}
+
+export function applyKilnDisclosureTitle(
+	el: HTMLElement,
+	show: boolean,
+	baseTitle?: string,
+): void {
+	if (!show) {
+		if (baseTitle) el.title = baseTitle;
+		return;
+	}
+	el.title = baseTitle
+		? `${baseTitle} (${KILN_DISCLOSURE_TITLE})`
+		: KILN_DISCLOSURE_TITLE;
+}
+
 export async function getConfig(): Promise<Extension.ExtensionConfig> {
 	const result = await sendMessage("getConfig").catch(() => null);
 	if (result?.ok) return result.data;
@@ -78,6 +113,10 @@ export async function updateApiSession(
 	return session;
 }
 
+export function withJitter(ms: number, ratio = 0.1): number {
+	return ms + (Math.random() * 2 - 1) * ms * ratio;
+}
+
 let _currencyRatesPromise: Promise<Extension.CurrencyExchangeRate> | null =
 	null;
 let _currencyRatesExpiry = 0;
@@ -87,7 +126,8 @@ export function getCurrencyRates(): Promise<Extension.CurrencyExchangeRate> {
 	if (_currencyRatesPromise && now < _currencyRatesExpiry) {
 		return _currencyRatesPromise;
 	}
-	_currencyRatesExpiry = now + 24 * 60 * 60 * 1000;
+	const expiry = withJitter(24 * 60 * 60 * 1000);
+	_currencyRatesExpiry = now + expiry;
 	_currencyRatesPromise = (async () => {
 		try {
 			const result = (await pullCache(
@@ -97,7 +137,7 @@ export function getCurrencyRates(): Promise<Extension.CurrencyExchangeRate> {
 					if (!r.ok) return "unavailable";
 					return r.data;
 				},
-				24 * 60 * 60 * 1000,
+				expiry,
 				false,
 			)) as Extension.CurrencyExchangeRate | "unavailable";
 

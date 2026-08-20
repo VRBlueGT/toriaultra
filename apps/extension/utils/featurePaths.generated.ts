@@ -26,7 +26,9 @@ export const PATH_FEATURES = {
 		"favoritedPlaces",
 		"homeFriendJoins",
 		"irlBrickPrice",
-		"quickCreatorLaunchBtns"
+		"myFeedPosts",
+		"quickCreatorLaunchBtns",
+		"searchFeedPosts"
 	],
 	"https://polytoria.com/create": [
 		"audioToolboxPreviews",
@@ -87,7 +89,9 @@ export const PATH_FEATURES = {
 		"favoritedPlaces",
 		"homeFriendJoins",
 		"irlBrickPrice",
-		"quickCreatorLaunchBtns"
+		"myFeedPosts",
+		"quickCreatorLaunchBtns",
+		"searchFeedPosts"
 	],
 	"https://polytoria.com/inbox": [
 		"messagePreviewExpand"
@@ -159,6 +163,7 @@ export const PATH_FEATURES = {
 		"eventItems",
 		"hoardersList",
 		"irlBrickPrice",
+		"itemOwnerCheck",
 		"legacyItemViewLayout",
 		"loveIntegration",
 		"mySerial",

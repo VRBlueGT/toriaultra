@@ -15,8 +15,9 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import { sendMessage } from "@/utils/messaging";
+import { kilnDisclosureBadgeHtml } from "@/utils/utilities";
 
-export function actions() {
+export function actions(showDisclosures: boolean) {
 	const container = document.getElementById("friends-container")!;
 
 	const actionBtns = document.createElement("div");
@@ -45,6 +46,13 @@ export function actions() {
 	};
 
 	setDisabled(true);
+
+	if (showDisclosures) {
+		const label = document.createElement("div");
+		label.className = "small text-muted mb-1";
+		label.innerHTML = `Friend Request Actions${kilnDisclosureBadgeHtml(true)}`;
+		container.parentElement!.insertBefore(label, container);
+	}
 	container.parentElement!.insertBefore(actionBtns, container);
 
 	const setup = () => {

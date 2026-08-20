@@ -88,7 +88,9 @@ export const ALL_FEATURE_IDS = [
 	"v2WorldLabels",
 	"securityKeyRenaming",
 	"outfitManagement",
-	"streakFreezeDisplay"
+	"streakFreezeDisplay",
+	"myFeedPosts",
+	"searchFeedPosts"
 ] as const;
 
 export type FeatureId = (typeof ALL_FEATURE_IDS)[number];

@@ -16,8 +16,12 @@
 
 import { sendMessage } from "@/utils/messaging";
 import type { PlaceListing } from "@/utils/types";
+import {
+	applyKilnDisclosureTitle,
+	kilnDisclosureBadgeHtml,
+} from "@/utils/utilities";
 
-export async function randomPlace() {
+export async function randomPlace(showDisclosures: boolean) {
 	const searchRow = document.querySelector(
 		"#games-carousel + .card .row",
 	)! as HTMLElement;
@@ -25,7 +29,7 @@ export async function randomPlace() {
 	const row = document.createElement("div");
 	row.classList.add("col-12", "col-lg-auto");
 	row.innerHTML = `
-    <button class="btn btn-secondary" type="button">Random Place</button>
+    <button class="btn btn-secondary" type="button">Random Place${kilnDisclosureBadgeHtml(showDisclosures)}</button>
     `;
 
 	const button = row.getElementsByTagName("button")[0]!;
@@ -42,7 +46,10 @@ export async function randomPlace() {
 	});
 }
 
-export function subtleV2Labels(mode: "minimal" | "legacy") {
+export function subtleV2Labels(
+	mode: "minimal" | "legacy",
+	showDisclosures: boolean,
+) {
 	const apply = (card: Element) => {
 		const isV2 = card.classList.contains("twopointo-demo-place");
 		card.classList.remove("twopointo-demo-place");
@@ -70,6 +77,7 @@ export function subtleV2Labels(mode: "minimal" | "legacy") {
 				width: "50%",
 				boxShadow: "0 0 3px #00000087",
 			});
+			applyKilnDisclosureTitle(badge, showDisclosures, "2.0 world indicator");
 			card.querySelector(".card-body")?.appendChild(badge);
 		} else {
 			card.querySelector<HTMLElement>(".twopointo-title")?.remove();
@@ -92,6 +100,11 @@ export function subtleV2Labels(mode: "minimal" | "legacy") {
 				width: "50%",
 				boxShadow: "0 0 3px #00000087",
 			});
+			applyKilnDisclosureTitle(
+				badge,
+				showDisclosures,
+				"Legacy world indicator",
+			);
 			card.querySelector(".card-body")?.appendChild(badge);
 		}
 	};
@@ -197,7 +210,7 @@ function readPlacesFilters(page: number) {
 	};
 }
 
-export function disableInfiniteScrolling() {
+export function disableInfiniteScrolling(showDisclosures: boolean) {
 	sendMessage("disablePlacesAutoScroll");
 
 	const container = document.getElementById("places-container");
@@ -210,7 +223,7 @@ export function disableInfiniteScrolling() {
 	const button = document.createElement("button");
 	button.type = "button";
 	button.className = "btn btn-outline-secondary w-100 mb-3";
-	button.textContent = "Load More";
+	button.innerHTML = `Load More${kilnDisclosureBadgeHtml(showDisclosures)}`;
 	container.insertAdjacentElement("afterend", button);
 
 	const setButtonState = (state: "idle" | "loading" | "error" | "done") => {
@@ -222,7 +235,7 @@ export function disableInfiniteScrolling() {
 					? "Failed to load more, click to retry"
 					: state === "done"
 						? "No more places"
-						: "Load More";
+						: `Load More${kilnDisclosureBadgeHtml(showDisclosures)}`;
 	};
 
 	new MutationObserver((records) => {

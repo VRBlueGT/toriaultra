@@ -14,32 +14,32 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import z from "zod";
 import { onMessage } from "@/utils/messaging";
 import { _errorLog } from "@/utils/storage";
-import { checkRateLimit, handle, KILN_API_BASE, safeFetch } from "./shared";
+import type { KilnErrorLogEntry } from "@/utils/types";
 
-const MAX_ERRORS_SENT = 15;
+const MAX_ENTRIES = 40;
+const MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
 
-onMessage("submitFeedback", ({ data }) =>
-	handle(async () => {
-		checkRateLimit("feedback", 5);
+export async function logError(
+	entry: Omit<KilnErrorLogEntry, "timestamp">,
+): Promise<void> {
+	const now = Date.now();
+	const log = await _errorLog.getValue();
+	const trimmed = log
+		.filter((e) => now - e.timestamp < MAX_AGE_MS)
+		.slice(-(MAX_ENTRIES - 1));
+	trimmed.push({ ...entry, timestamp: now });
+	await _errorLog.setValue(trimmed);
+}
 
-		const diagnostics =
-			data.type === "bug"
-				? {
-						userAgent: navigator.userAgent,
-						errors: (await _errorLog.getValue()).slice(-MAX_ERRORS_SENT),
-					}
-				: undefined;
+export async function purgeOldErrors(): Promise<void> {
+	const now = Date.now();
+	const log = await _errorLog.getValue();
+	const trimmed = log.filter((e) => now - e.timestamp < MAX_AGE_MS);
+	if (trimmed.length !== log.length) await _errorLog.setValue(trimmed);
+}
 
-		return safeFetch(
-			`${KILN_API_BASE}feedback`,
-			z.object({ ok: z.boolean() }),
-			{
-				method: "POST",
-				body: JSON.stringify({ ...data, diagnostics }),
-			},
-		);
-	}),
-);
+onMessage("reportError", ({ data }) => {
+	logError(data);
+});

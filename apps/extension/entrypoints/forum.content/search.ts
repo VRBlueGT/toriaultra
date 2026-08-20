@@ -20,6 +20,7 @@ import type { ForumSearchFilters } from "@/utils/types";
 import {
 	formatNotificationRelativeTime,
 	getUserDetails,
+	kilnDisclosureBadgeHtml,
 } from "@/utils/utilities";
 
 export const CATEGORIES = [
@@ -252,7 +253,10 @@ function setLoadMoreState(
 					: "Load More";
 }
 
-export async function advancedForumSearch(seenThreads: number[]) {
+export async function advancedForumSearch(
+	seenThreads: number[],
+	showDisclosures: boolean,
+) {
 	if (!new URLSearchParams(window.location.search).has("kiln-adv-search")) {
 		const searchForm = document.querySelector<HTMLFormElement>(
 			'form[action="/forum/search"]',
@@ -274,7 +278,7 @@ export async function advancedForumSearch(seenThreads: number[]) {
 			if (parsed.type) params.set("type", parsed.type);
 			const url = `${basePath}?${params.toString()}`;
 			window.history.pushState(null, "", url);
-			advancedForumSearch(seenThreads);
+			advancedForumSearch(seenThreads, showDisclosures);
 		});
 		return;
 	}
@@ -298,7 +302,7 @@ export async function advancedForumSearch(seenThreads: number[]) {
 	searchBox.className = "forum-category-container mb-3 border-secondary";
 	searchBox.innerHTML = `
 		<div class="d-flex align-items-center justify-content-between mb-2">
-			<h2 class="text-shadow mb-0">Advanced Search</h2>
+			<h2 class="text-shadow mb-0">Advanced Search${kilnDisclosureBadgeHtml(showDisclosures)}</h2>
 			<button type="button" class="btn btn-sm btn-outline-secondary" data-kiln="adv-search-back">
 				<i class="fas fa-arrow-left me-1"></i>Back to Forum
 			</button>
@@ -737,7 +741,15 @@ export async function advancedForumSearch(seenThreads: number[]) {
 
 	searchInput.addEventListener("input", () => {
 		const parsed = parseSearchOperators(searchInput.value);
-		if (!parsed.fromUser && !parsed.inCategory && !parsed.after && !parsed.before && !parsed.sort && !parsed.type) return;
+		if (
+			!parsed.fromUser &&
+			!parsed.inCategory &&
+			!parsed.after &&
+			!parsed.before &&
+			!parsed.sort &&
+			!parsed.type
+		)
+			return;
 
 		searchInput.value = parsed.cleanQuery;
 
@@ -809,7 +821,7 @@ export function getOrCreateForumToolbar(
 	return toolbar;
 }
 
-export async function myPosts() {
+export async function myPosts(showDisclosures: boolean) {
 	const searchForm = document.querySelector<HTMLFormElement>(
 		'form[action="/forum/search"]',
 	);
@@ -820,7 +832,7 @@ export async function myPosts() {
 	const button = document.createElement("button");
 	button.type = "button";
 	button.className = "btn btn-outline-secondary flex-fill w-50";
-	button.textContent = "My Posts";
+	button.innerHTML = `My Posts${kilnDisclosureBadgeHtml(showDisclosures)}`;
 	toolbar.appendChild(button);
 
 	const showMyPosts = async () => {

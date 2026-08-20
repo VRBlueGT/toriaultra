@@ -16,7 +16,7 @@
 
 import { Extension } from "@kiln/schemas";
 import { onMessage } from "@/utils/messaging";
-import { pullCache } from "@/utils/utilities";
+import { pullCache, withJitter } from "@/utils/utilities";
 import {
 	ApiDisabledError,
 	checkRateLimit,
@@ -63,7 +63,7 @@ onMessage("getCurrencyRates", () =>
 						Extension.CurrencyExchangeRate,
 						{ method: "GET" },
 					),
-				24 * 60 * 60 * 1000,
+				withJitter(24 * 60 * 60 * 1000),
 				false,
 			);
 		});

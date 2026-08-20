@@ -513,13 +513,13 @@
 			"hide": true
 		},
 		{
-			"name": "Timed-Item Owner Check",
-			"desc": "Click the shopping bags icon in the bottom left-hand corner of the timed item's item thumbnail to toggle an input and a button. Then just enter someone's username and it'll tell you whether they own it or not and if so what serial!",
+			"name": "Owner Check",
+			"desc": "Adds an \"Owner Check\" button next to the \"Not for Trade\" button on collectible item pages. Enter someone's username and it'll tell you whether they own it or not and if so what serial!",
 			"id": "itemOwnerCheck",
 			"tags": [
-				"economy"
-			],
-			"hide": true
+				"economy",
+				"new"
+			]
 		},
 		{
 			"name": "Hide User Ads",
@@ -1520,8 +1520,7 @@
 			"id": "copyPostContents",
 			"defaultEnabled": true,
 			"tags": [
-				"utility",
-				"new"
+				"utility"
 			]
 		},
 		{
@@ -1536,8 +1535,7 @@
 				}
 			],
 			"tags": [
-				"utility",
-				"new"
+				"utility"
 			]
 		},
 		{
@@ -1545,8 +1543,7 @@
 			"desc": "Condenses the long list of joined guilds on the left side of the guilds page into a simple-to-understand grid.",
 			"id": "condensedJoinedGuildsList",
 			"tags": [
-				"utility",
-				"new"
+				"utility"
 			]
 		},
 		{
@@ -1556,8 +1553,7 @@
 			"defaultEnabled": true,
 			"tags": [
 				"utility",
-				"development",
-				"new"
+				"development"
 			]
 		},
 		{
@@ -1566,8 +1562,7 @@
 			"id": "securityKeyRenaming",
 			"defaultEnabled": true,
 			"tags": [
-				"utility",
-				"new"
+				"utility"
 			]
 		},
 		{
@@ -1577,8 +1572,7 @@
 			"defaultEnabled": true,
 			"tags": [
 				"utility",
-				"expression",
-				"new"
+				"expression"
 			],
 			"hide": true
 		},
@@ -1587,6 +1581,37 @@
 			"desc": "Quickly see how many streak freezes you have next to the streak counter in the navbar.",
 			"id": "streakFreezeDisplay",
 			"defaultEnabled": false,
+			"tags": [
+				"utility"
+			]
+		},
+		{
+			"name": "\"My Feed Posts\"",
+			"desc": "Adds a \"My Feed Posts\" button next to the \"Feed\" heading on the homepage that displays all of the feed posts and replies you've made.",
+			"id": "myFeedPosts",
+			"defaultEnabled": true,
+			"notes": [
+				{
+					"type": "info",
+					"text": "Results are provided by PolyTrack. Thank you to them for allowing Kiln to pull from their data <3"
+				}
+			],
+			"tags": [
+				"social",
+				"new"
+			]
+		},
+		{
+			"name": "Search Feed Posts",
+			"desc": "Adds a \"Search Feed Posts\" button next to the \"Feed\" heading on the homepage, letting you search the sitewide feed by text, author, post type, and date.",
+			"id": "searchFeedPosts",
+			"defaultEnabled": true,
+			"notes": [
+				{
+					"type": "info",
+					"text": "Results are provided by PolyTrack. Thank you to them for allowing Kiln to pull from their data <3"
+				}
+			],
 			"tags": [
 				"utility",
 				"new"

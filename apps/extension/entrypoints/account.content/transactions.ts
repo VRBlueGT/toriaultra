@@ -19,7 +19,10 @@ import _preferencesJson from "../../public/preferences.json";
 const preferences = _preferencesJson.preferences;
 
 import type { CurrencyCode } from "../../utils/types";
-import { bricksToCurrency } from "../../utils/utilities";
+import {
+	bricksToCurrency,
+	kilnDisclosureBadgeHtml,
+} from "../../utils/utilities";
 
 const irlBrickPriceFeature = preferences.find((p) => p.id === "irlBrickPrice");
 const currencyOptions =
@@ -33,10 +36,14 @@ const datalistOptions = currencyOptions
 	.map((opt) => `<option value="${opt.label}">`)
 	.join("");
 
-export async function irlBrickPrice(savedCurrency: CurrencyCode) {
+export async function irlBrickPrice(
+	savedCurrency: CurrencyCode,
+	showDisclosures: boolean,
+) {
 	const tabsSidebar = document.getElementsByClassName("nav-pills")[0];
 	const section = document.createElement("div");
 	section.innerHTML = `
+    ${showDisclosures ? `<div class="small text-muted mb-1">Bricks Converter${kilnDisclosureBadgeHtml(true)}</div>` : ""}
     <input id="kiln-brickconverter-input" type="number" class="form-control bg-dark mb-2" placeholder="How many Bricks?">
     <input id="kiln-brickconverter-output" type="text" class="form-control bg-dark mb-2" placeholder="Result" disabled>
     <input id="kiln-brickconverter-type" type="text" class="form-control bg-dark mb-2" list="kiln-brickconverter-currencies" placeholder="Currency (e.g. USD)" value="${currencyOptions.find((o) => o.value === savedCurrency)?.label ?? savedCurrency}">

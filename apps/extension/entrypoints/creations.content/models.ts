@@ -16,7 +16,7 @@
 
 const modelId = +window.location.pathname.split("/")[2];
 
-export function modelTreeInspector() {
+export function modelTreeInspector(showDisclosures: boolean) {
 	interface Vector3 {
 		X: string;
 		Y: string;
@@ -345,7 +345,7 @@ export function modelTreeInspector() {
 
 		modal.innerHTML = `
 			<div class="d-flex justify-content-between align-items-center mb-2">
-				<h5 class="mb-0" style="color:#fff;">Model Tree Viewer</h5>
+				<h5 class="mb-0" style="color:#fff;">Model Tree Viewer${kilnDisclosureBadgeHtml(showDisclosures)}</h5>
 				<button class="btn btn-sm btn-secondary" id="kiln-model-tree-close">✕</button>
 			</div>
 			<div id="kiln-model-tree-status" class="text-muted mb-2" style="font-size:0.8rem;">Fetching...</div>

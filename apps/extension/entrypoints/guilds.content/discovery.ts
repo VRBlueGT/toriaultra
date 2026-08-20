@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-export function condensedJoinedGuildsList() {
+export function condensedJoinedGuildsList(showDisclosures: boolean) {
 	const container = document.getElementById("guild-categories");
 	if (!container) return;
 
@@ -63,6 +63,21 @@ export function condensedJoinedGuildsList() {
 		iconImg.alt = guildName;
 
 		link.appendChild(iconImg);
+
+		if (showDisclosures) {
+			link.style.position = "relative";
+			const badge = createKilnDisclosureBadge();
+			Object.assign(badge.style, {
+				position: "absolute",
+				top: "0",
+				right: "0",
+				fontSize: "0.45rem",
+				padding: "1px 3px",
+				zIndex: "10",
+			});
+			link.appendChild(badge);
+		}
+
 		condensedRow.appendChild(link);
 	}
 

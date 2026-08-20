@@ -363,8 +363,9 @@ const AvatarState = z.object({
 });
 
 const AvatarOutfit = z.object({
+	id: z.string(),
 	name: z.string(),
-	createdAt: z.number(),
+	createdAt: z.string(),
 	data: AvatarState,
 });
 
@@ -372,6 +373,11 @@ export const AvatarOutfitsApi = z.object({
 	data: z.array(AvatarOutfit),
 });
 export type AvatarOutfitsApi = z.infer<typeof AvatarOutfitsApi>;
+
+export const AvatarOutfitApi = z.object({
+	data: AvatarOutfit,
+});
+export type AvatarOutfitApi = z.infer<typeof AvatarOutfitApi>;
 
 const PlaceReviewReply = z.object({
 	id: z.string(),
