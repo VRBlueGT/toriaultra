@@ -19,6 +19,7 @@ import errorIcon from "@/assets/error.svg";
 import sadFace from "@/assets/sad-face.webp";
 import {
 	_bestFriends,
+	_homepageSectionOrder,
 	_lastViewedPlaces,
 	_showKilnDisclosures,
 	isChrome,
@@ -71,6 +72,9 @@ export default defineContentScript({
 
 			if (values.enabled.includes("myFeedPosts")) myFeedPosts();
 			if (values.enabled.includes("searchFeedPosts")) searchFeedPosts();
+
+			if (values.enabled.includes("reorderableHomepage"))
+				reorderableHomepage(showDisclosures);
 		});
 	},
 });
@@ -80,6 +84,7 @@ async function favoritedPlaces(
 	showDisclosures: boolean,
 ) {
 	const container = document.createElement("div");
+	container.id = "home-pinnedWorlds";
 	container.innerHTML = `
       <div class="row reqFadeAnim px-2 px-lg-0">
         <div class="col">
@@ -1463,4 +1468,132 @@ async function searchFeedPosts() {
 	if (new URLSearchParams(window.location.search).has("kiln-feed-search")) {
 		await showSearchFeedPosts();
 	}
+}
+
+const REORDERABLE_SECTION_LABELS: Record<string, string> = {
+	"home-pinnedWorlds": "Pinned Worlds",
+	"home-friendsOnline": "Friends",
+	"home-news": "News",
+	"home-liveNow": "Live Now",
+	"home-recommendedPlaces": "Recommended Worlds",
+	"home-newAndRising": "New & Rising",
+	"home-recentlyPlayed": "Continue Playing",
+	"home-feed": "Feed",
+};
+
+function wrapFeedSection(column: HTMLElement) {
+	if (document.getElementById("home-feed")) return;
+
+	const headingRow = Array.from(
+		column.querySelectorAll<HTMLElement>("h5.dash-ctitle"),
+	)
+		.find((h) => h.textContent?.trim() === "Feed")
+		?.closest<HTMLElement>(".row");
+	if (!headingRow || headingRow.parentElement !== column) return;
+
+	const nodesToWrap: Element[] = [];
+	let node: Element | null = headingRow;
+	while (node) {
+		nodesToWrap.push(node);
+		node = node.nextElementSibling;
+	}
+
+	const wrapper = document.createElement("div");
+	wrapper.id = "home-feed";
+	column.insertBefore(wrapper, headingRow);
+	for (const n of nodesToWrap) wrapper.appendChild(n);
+}
+
+async function reorderableHomepage(showDisclosures: boolean) {
+	const column = document.querySelector<HTMLElement>(".col-lg-8");
+	if (!column) return;
+
+	wrapFeedSection(column);
+
+	const getSections = (): HTMLElement[] =>
+		Array.from(column.children).filter(
+			(el): el is HTMLElement =>
+				el instanceof HTMLElement &&
+				REORDERABLE_SECTION_LABELS[el.id] !== undefined,
+		);
+
+	let observer: MutationObserver | null = null;
+
+	const applyOrder = async () => {
+		const order = await _homepageSectionOrder.getValue();
+		if (order.length === 0) return;
+
+		const sections = getSections();
+		const byId = new Map(sections.map((s) => [s.id, s]));
+		const ordered = order
+			.map((id) => byId.get(id))
+			.filter((s): s is HTMLElement => s !== undefined);
+		const rest = sections.filter((s) => !order.includes(s.id));
+
+		const desired = [...ordered, ...rest];
+
+		const feedIndex = desired.findIndex((s) => s.id === "home-feed");
+		if (feedIndex !== -1 && feedIndex !== desired.length - 1) {
+			const [feed] = desired.splice(feedIndex, 1);
+			desired.push(feed);
+		}
+
+		if (desired.every((s, i) => sections[i] === s)) return;
+
+		observer?.disconnect();
+		for (const section of desired) column.appendChild(section);
+		observer?.observe(column, { childList: true });
+	};
+
+	await applyOrder();
+
+	observer = new MutationObserver(() => applyOrder());
+	observer.observe(column, { childList: true });
+
+	const stickySection = document.querySelector<HTMLElement>(
+		".dashboardAvatarShadow + *",
+	);
+	if (!stickySection) return;
+
+	const reorderBtn = document.createElement("button");
+	reorderBtn.type = "button";
+	reorderBtn.className =
+		"btn btn-secondary mb-3 rounded-pill d-none d-md-block";
+	reorderBtn.innerHTML = `<i class="fas fa-arrows-up-down me-1"></i>Reorder Homepage${kilnDisclosureBadgeHtml(showDisclosures)}`;
+
+	const placeReorderBtn = (): boolean => {
+		if (reorderBtn.isConnected) return true;
+
+		const customizeBtn = stickySection.querySelector<HTMLElement>(
+			".customizeHomepageBtn",
+		);
+		if (!customizeBtn) return false;
+
+		customizeBtn.insertAdjacentElement("afterend", reorderBtn);
+		return true;
+	};
+
+	if (!placeReorderBtn()) {
+		const btnObserver = new MutationObserver(() => {
+			if (placeReorderBtn()) btnObserver.disconnect();
+		});
+		btnObserver.observe(stickySection, { childList: true, subtree: true });
+	}
+
+	reorderBtn.addEventListener("click", async () => {
+		const sections = getSections().map((section) => ({
+			id: section.id,
+			label: REORDERABLE_SECTION_LABELS[section.id],
+			locked: section.id === "home-feed",
+		}));
+		if (sections.length < 2) return;
+
+		const result = await sendMessage("showHomepageReorderModal", {
+			sections,
+		});
+		if (!result.ok || !result.data) return;
+
+		await _homepageSectionOrder.setValue(result.data);
+		await applyOrder();
+	});
 }

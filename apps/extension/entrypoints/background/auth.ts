@@ -333,3 +333,83 @@ onMessage("adminDeleteTheme", ({ data }) =>
 		),
 	),
 );
+
+onMessage("adminGetFeedback", ({ data }) =>
+	handle(() =>
+		withAuthSession(data.userId, (token, config) => {
+			const params = new URLSearchParams();
+			if (data.type) params.set("type", data.type);
+			if (data.status) params.set("status", data.status);
+			if (data.unanswered) params.set("unanswered", "true");
+			if (data.search) params.set("search", data.search);
+			if (data.page) params.set("page", String(data.page));
+
+			return safeFetch(
+				`${config.resolvedUrls.extension}admin/feedback?${params.toString()}`,
+				Extension.AdminFeedbackListApi,
+				{ headers: { Authorization: `Bearer ${token}` } },
+			);
+		}),
+	),
+);
+
+onMessage("adminRespondFeedback", ({ data }) =>
+	handle(() =>
+		withAuthSession(data.userId, (token, config) =>
+			safeFetch(
+				`${config.resolvedUrls.extension}admin/feedback/${encodeURIComponent(data.id)}/respond`,
+				Extension.AdminFeedbackApi,
+				{
+					method: "POST",
+					headers: { Authorization: `Bearer ${token}` },
+					body: JSON.stringify({ response: data.response }),
+				},
+			),
+		),
+	),
+);
+
+onMessage("adminResolveFeedback", ({ data }) =>
+	handle(() =>
+		withAuthSession(data.userId, (token, config) =>
+			safeFetch(
+				`${config.resolvedUrls.extension}admin/feedback/${encodeURIComponent(data.id)}/resolve`,
+				Extension.AdminFeedbackApi,
+				{
+					method: "POST",
+					headers: { Authorization: `Bearer ${token}` },
+				},
+			),
+		),
+	),
+);
+
+onMessage("adminReopenFeedback", ({ data }) =>
+	handle(() =>
+		withAuthSession(data.userId, (token, config) =>
+			safeFetch(
+				`${config.resolvedUrls.extension}admin/feedback/${encodeURIComponent(data.id)}/reopen`,
+				Extension.AdminFeedbackApi,
+				{
+					method: "POST",
+					headers: { Authorization: `Bearer ${token}` },
+				},
+			),
+		),
+	),
+);
+
+onMessage("adminDeleteFeedback", ({ data }) =>
+	handle(() =>
+		withAuthSession(data.userId, (token, config) =>
+			safeFetch(
+				`${config.resolvedUrls.extension}admin/feedback/${encodeURIComponent(data.id)}`,
+				Extension.AdminDeleteFeedbackApi,
+				{
+					method: "DELETE",
+					headers: { Authorization: `Bearer ${token}` },
+				},
+			),
+		),
+	),
+);

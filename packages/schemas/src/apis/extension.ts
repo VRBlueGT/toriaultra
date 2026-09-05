@@ -24,6 +24,7 @@ export const ExtensionConfigSchema = z.object({
 		maxBlockedTraders: z.number().positive().default(200),
 		maxPublishedThemes: z.number().positive().default(15),
 		maxPinnedAchievements: z.number().positive().default(5),
+		minReviewPlaytimeMinutes: z.number().nonnegative().default(5),
 	}),
 	users: z.object({
 		generativeAI: z.array(z.number()),
@@ -254,6 +255,32 @@ export const UnpublishThemeApi = z.object({
 });
 export type UnpublishThemeApi = z.infer<typeof UnpublishThemeApi>;
 
+const PublishedThemeEffect = z.object({
+	id: z.string(),
+	slot: z.enum([
+		"global",
+		"cards",
+		"buttons",
+		"inputs",
+		"navbar",
+		"modals",
+		"avatars",
+	]),
+	type: z.enum([
+		"border-radius",
+		"box-shadow",
+		"border-width",
+		"border-color",
+		"border-style",
+		"background-color",
+		"letter-spacing",
+		"text-transform",
+		"frame-image",
+		"frame-shape",
+	]),
+	value: z.union([z.string(), z.number()]),
+});
+
 export const GetPublishedThemeApi = z.object({
 	data: z.object({
 		id: z.string(),
@@ -265,6 +292,9 @@ export const GetPublishedThemeApi = z.object({
 		customCss: z.string().nullable().optional(),
 		backgroundImage: z.string().nullable().optional(),
 		navbarIconColor: z.string().nullable().optional(),
+		cursorUrl: z.string().nullable().optional(),
+		effects: z.array(PublishedThemeEffect).nullable().optional(),
+		colorTokens: z.record(z.string(), z.string()).nullable().optional(),
 	}),
 });
 export type GetPublishedThemeApi = z.infer<typeof GetPublishedThemeApi>;
@@ -423,6 +453,31 @@ export const PlaceReviewReplyApi = z.object({
 });
 export type PlaceReviewReplyApi = z.infer<typeof PlaceReviewReplyApi>;
 
+export const TopReviewersApi = z.object({
+	data: z.array(
+		z.object({
+			userId: z.number(),
+			username: z.string(),
+			thumbnail: z.string().nullable(),
+			reviewCount: z.number(),
+		}),
+	),
+});
+export type TopReviewersApi = z.infer<typeof TopReviewersApi>;
+
+export const RatedWorldsLeaderboardApi = z.object({
+	data: z.array(
+		z.object({
+			placeId: z.number(),
+			averageRating: z.number(),
+			reviewCount: z.number(),
+		}),
+	),
+});
+export type RatedWorldsLeaderboardApi = z.infer<
+	typeof RatedWorldsLeaderboardApi
+>;
+
 const KilnNotification = z.object({
 	id: z.number(),
 	userId: z.number(),
@@ -470,3 +525,46 @@ export const ActivitySearchApi = z.object({
 	data: z.array(ActivitySearchResult),
 });
 export type ActivitySearchApi = z.infer<typeof ActivitySearchApi>;
+
+const FeedbackEntry = z.object({
+	id: z.string(),
+	type: z.enum(["feature", "general", "bug"]),
+	message: z.string(),
+	version: z.string().nullable(),
+	status: z.enum(["open", "resolved"]),
+	response: z.string().nullable(),
+	respondedAt: z.string().nullable(),
+	createdAt: z.string(),
+	updatedAt: z.string(),
+});
+
+export const SubmitFeedbackApi = z.object({ data: FeedbackEntry });
+export type SubmitFeedbackApi = z.infer<typeof SubmitFeedbackApi>;
+
+export const MyFeedbackApi = z.object({ data: z.array(FeedbackEntry) });
+export type MyFeedbackApi = z.infer<typeof MyFeedbackApi>;
+
+const AdminFeedbackEntry = FeedbackEntry.extend({
+	clientId: z.string(),
+	userId: z.number().nullable(),
+	username: z.string().nullable(),
+});
+
+export const AdminFeedbackListApi = z.object({
+	data: z.array(AdminFeedbackEntry),
+	meta: z.object({
+		currentPage: z.number(),
+		perPage: z.number(),
+		totalPages: z.number(),
+		totalCount: z.number(),
+	}),
+});
+export type AdminFeedbackListApi = z.infer<typeof AdminFeedbackListApi>;
+
+export const AdminFeedbackApi = z.object({ data: AdminFeedbackEntry });
+export type AdminFeedbackApi = z.infer<typeof AdminFeedbackApi>;
+
+export const AdminDeleteFeedbackApi = z.object({
+	data: z.object({ ok: z.boolean() }),
+});
+export type AdminDeleteFeedbackApi = z.infer<typeof AdminDeleteFeedbackApi>;

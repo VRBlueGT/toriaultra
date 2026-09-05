@@ -405,6 +405,10 @@ export async function openThemeEditorSidebar(): Promise<void> {
 		</div>
 
 		<span id="kiln-te-published-badge" class="badge mb-2 w-100" style="display:none;"></span>
+		<div id="kiln-te-autoupdate-row" class="form-check mb-2" style="display:none;">
+			<input type="checkbox" id="kiln-te-autoupdate" class="form-check-input" />
+			<label for="kiln-te-autoupdate" class="form-check-label small text-muted">Auto-update from source</label>
+		</div>
 		<hr class="mt-1 mb-2" style="border-color:rgba(128,128,128,0.18);">
 
 		<div class="card mb-2">
@@ -584,9 +588,17 @@ export async function openThemeEditorSidebar(): Promise<void> {
 				</label>
 			</div>
 			<div class="d-flex gap-1 mb-1" id="kiln-te-left-actions"></div>
-			<button class="btn btn-primary btn-sm w-100" id="kiln-te-save">
-				<i class="fas fa-check me-1"></i>Save & Apply
-			</button>
+			<div class="d-flex gap-1">
+				<button class="btn btn-primary btn-sm flex-fill" id="kiln-te-save">
+					<i class="fas fa-check me-1"></i>Save & Apply
+				</button>
+				<div class="dropup" id="kiln-te-more-wrap" style="display:none;">
+					<button type="button" class="btn btn-outline-secondary btn-sm dropdown-toggle" id="kiln-te-more-btn" data-bs-toggle="dropdown" aria-expanded="false">
+						...
+					</button>
+					<ul class="dropdown-menu dropdown-menu-end" id="kiln-te-more-menu"></ul>
+				</div>
+			</div>
 		</div>
 
 		<div id="kiln-te-rename-overlay" style="display:none;position:absolute;inset:0;z-index:10;background:rgba(0,0,0,0.55);align-items:center;justify-content:center;padding:24px;">
@@ -792,6 +804,12 @@ export async function openThemeEditorSidebar(): Promise<void> {
 	const namePencil = sidebar.querySelector<HTMLButtonElement>(
 		"#kiln-te-name-pencil",
 	)!;
+	const autoUpdateRow = sidebar.querySelector<HTMLElement>(
+		"#kiln-te-autoupdate-row",
+	)!;
+	const autoUpdateCheck = sidebar.querySelector<HTMLInputElement>(
+		"#kiln-te-autoupdate",
+	)!;
 	const accentPicker = sidebar.querySelector<HTMLInputElement>(
 		"#kiln-te-accent-picker",
 	)!;
@@ -871,6 +889,8 @@ export async function openThemeEditorSidebar(): Promise<void> {
 	const leftActions = sidebar.querySelector<HTMLElement>(
 		"#kiln-te-left-actions",
 	)!;
+	const moreWrap = sidebar.querySelector<HTMLElement>("#kiln-te-more-wrap")!;
+	const moreMenu = sidebar.querySelector<HTMLElement>("#kiln-te-more-menu")!;
 	const saveBtn = sidebar.querySelector<HTMLButtonElement>("#kiln-te-save")!;
 	const exportJsonBtn = sidebar.querySelector<HTMLButtonElement>(
 		"#kiln-te-export-json",
@@ -1056,11 +1076,14 @@ export async function openThemeEditorSidebar(): Promise<void> {
 	function updateNameUI() {
 		const canRename = isCustomTheme() || isNew();
 		const savedTheme = getCurrentSavedTheme();
+		autoUpdateRow.style.display = "none";
 		if (savedTheme) {
 			publishedBadge.style.display = "";
 			if (savedTheme.importedSlug) {
 				publishedBadge.textContent = "Imported";
 				publishedBadge.className = "badge mb-2 w-100 bg-info text-dark";
+				autoUpdateRow.style.display = "";
+				autoUpdateCheck.checked = !!savedTheme.autoUpdate;
 			} else {
 				publishedBadge.textContent = savedTheme.publishedSlug
 					? "Published"
@@ -1081,34 +1104,177 @@ export async function openThemeEditorSidebar(): Promise<void> {
 		namePencil.style.display = canRename ? "" : "none";
 	}
 
+	let pendingConflictRetry: (() => void) | null = null;
+
+	function classifyPublishError(message: string): {
+		text: string;
+		offerRename: boolean;
+	} {
+		if (message.includes("A theme with that name already exists"))
+			return {
+				text: "A theme with that name already exists.",
+				offerRename: true,
+			};
+		if (message.includes("identical theme has already been published"))
+			return {
+				text: "An identical theme has already been published.",
+				offerRename: false,
+			};
+		if (message.includes("publish at most"))
+			return {
+				text: "You've reached your publish limit.",
+				offerRename: false,
+			};
+		return {
+			text: friendlyApiError(message, "Failed to publish. Please try again."),
+			offerRename: false,
+		};
+	}
+
+	function renderPublishError(message: string, retry: () => void) {
+		const { text, offerRename } = classifyPublishError(message);
+		if (!offerRename) {
+			publishStatus.textContent = text;
+			return;
+		}
+		publishStatus.innerHTML = `<span class="text-danger">${text}</span> <button class="btn btn-sm btn-outline-secondary py-0 ms-1" id="kiln-te-conflict-rename">Rename &amp; Retry</button>`;
+		publishStatus
+			.querySelector<HTMLButtonElement>("#kiln-te-conflict-rename")!
+			.addEventListener("click", () => {
+				pendingConflictRetry = retry;
+				openRenameOverlay();
+			});
+	}
+
+	async function attemptPublish(
+		savedTheme: NonNullable<ReturnType<typeof getCurrentSavedTheme>>,
+		mode: "publish" | "update",
+		button: HTMLButtonElement,
+	) {
+		const sessions = await apiSessions.getValue();
+		const verified =
+			sessions.find((s) => s.state === "verified" && s.accessToken) ??
+			(await showVerificationModal());
+		if (!verified) return;
+
+		if (mode === "publish") {
+			const publishedCount = savedThemes.filter((t) => t.publishedSlug).length;
+			const cfg = await getConfig();
+			if (publishedCount >= cfg.limits.maxPublishedThemes) {
+				publishStatus.textContent = `You can only publish up to ${cfg.limits.maxPublishedThemes} theme${cfg.limits.maxPublishedThemes === 1 ? "" : "s"}.`;
+				return;
+			}
+		}
+
+		const existingId =
+			mode === "update"
+				? savedTheme.publishedSlug
+				: savedTheme.previousPublishedSlug;
+		const name = workingName || "My Theme";
+		button.disabled = true;
+		publishStatus.textContent =
+			mode === "update" ? "Syncing published version…" : "Publishing…";
+
+		const result = await sendMessage("publishTheme", {
+			userId: verified.userId,
+			name,
+			accentColor: workingAccent,
+			navbarColor: workingNavbar,
+			...(workingFont !== "default" ? { fontFamily: workingFont } : {}),
+			...(workingCss ? { customCss: workingCss } : {}),
+			...(workingBg ? { backgroundImage: workingBg } : {}),
+			...(workingEffects.length ? { effects: workingEffects } : {}),
+			...(workingIconColor ? { navbarIconColor: workingIconColor } : {}),
+			...(Object.keys(workingColorTokens).length
+				? { colorTokens: workingColorTokens }
+				: {}),
+			...(existingId ? { existingId } : {}),
+		});
+
+		if (result.ok) {
+			const publishedId = result.data.data.id;
+			const isPending = result.data.data.approvalStatus === "pending";
+
+			const current = await _savedThemes.getValue();
+			const idx = current.findIndex((t) => t.id === savedTheme.id);
+			if (idx >= 0) {
+				const { previousPublishedSlug: _drop, ...rest } = current[idx];
+				current[idx] = { ...rest, publishedSlug: publishedId };
+				await _savedThemes.setValue(current);
+				savedThemes = await _savedThemes.getValue();
+			}
+			buildSelect();
+			updateNameUI();
+			refreshLeftActions();
+
+			if (mode === "update") {
+				publishStatus.innerHTML = isPending
+					? `<span class="text-warning"><i class="fas fa-clock me-1"></i>Submitted for re-review</span><div class="text-muted small mt-1">Changes to CSS or background require approval before going live.</div>`
+					: `<span class="text-success"><i class="fas fa-check me-1"></i>Published version updated!</span>`;
+			} else {
+				publishStatus.innerHTML = isPending
+					? `<div><span class="text-warning"><i class="fas fa-clock me-1"></i>Submitted for review</span><code class="ms-2" style="font-size:0.8em;">${publishedId}</code><button class="btn btn-sm btn-outline-secondary py-0 ms-1" id="kiln-te-copy-id"><i class="fas fa-copy me-1"></i>Copy ID</button></div><div class="text-muted small mt-1">Your theme includes content that must be approved before others can import it.</div>`
+					: `<span class="text-success me-2"><i class="fas fa-check me-1"></i>Published!</span><code class="me-2" style="font-size:0.8em;">${publishedId}</code><button class="btn btn-sm btn-outline-secondary py-0" id="kiln-te-copy-id"><i class="fas fa-copy me-1"></i>Copy ID</button>`;
+				publishStatus
+					.querySelector("#kiln-te-copy-id")!
+					.addEventListener("click", () => {
+						navigator.clipboard.writeText(publishedId);
+						const btn =
+							publishStatus.querySelector<HTMLButtonElement>(
+								"#kiln-te-copy-id",
+							)!;
+						btn.innerHTML = '<i class="fas fa-check me-1"></i>Copied!';
+						setTimeout(() => {
+							btn.innerHTML = '<i class="fas fa-copy me-1"></i>Copy ID';
+						}, 2000);
+					});
+			}
+		} else {
+			renderPublishError(result.message, () =>
+				attemptPublish(savedTheme, mode, button),
+			);
+		}
+		button.disabled = false;
+	}
+
+	function addMenuItem(
+		label: string,
+		iconClass: string,
+		extraClass = "",
+	): HTMLButtonElement {
+		const li = document.createElement("li");
+		const btn = document.createElement("button");
+		btn.type = "button";
+		btn.className = `dropdown-item ${extraClass}`.trim();
+		btn.innerHTML = `<i class="${iconClass} me-1"></i>${label}`;
+		li.appendChild(btn);
+		moreMenu.appendChild(li);
+		return btn;
+	}
+
 	function refreshLeftActions() {
 		publishStatus.innerHTML = "";
 		leftActions.innerHTML = "";
+		moreMenu.innerHTML = "";
 		const savedTheme = getCurrentSavedTheme();
 
 		if (!isNew()) {
-			const newBtn = document.createElement("button");
-			newBtn.className = "btn btn-sm btn-outline-primary flex-fill";
-			newBtn.innerHTML = '<i class="fas fa-plus me-1"></i>New';
-			leftActions.appendChild(newBtn);
+			const newBtn = addMenuItem("New", "fas fa-plus", "text-primary");
 			newBtn.addEventListener("click", () => switchTheme("__new__"));
 		}
 
 		if (savedTheme) {
-			const deleteBtn = document.createElement("button");
-			deleteBtn.className = "btn btn-sm btn-outline-danger flex-fill";
-			deleteBtn.innerHTML = '<i class="fas fa-trash me-1"></i>Delete';
-			leftActions.appendChild(deleteBtn);
+			const deleteBtn = addMenuItem("Delete", "fas fa-trash", "text-danger");
 			deleteBtn.addEventListener("click", () => {
 				openDeleteOverlay(savedTheme);
 			});
 
 			if (!savedTheme.importedSlug && savedTheme.publishedSlug) {
-				const unpublishBtn = document.createElement("button");
-				unpublishBtn.className = "btn btn-sm btn-outline-warning flex-fill";
-				unpublishBtn.innerHTML =
-					'<i class="fas fa-cloud-arrow-down me-1"></i>Unpublish';
-				leftActions.appendChild(unpublishBtn);
+				const unpublishBtn = addMenuItem(
+					"Unpublish",
+					"fas fa-cloud-arrow-down",
+					"text-warning",
+				);
 				unpublishBtn.addEventListener("click", async () => {
 					const sessions = await apiSessions.getValue();
 					const verified =
@@ -1130,11 +1296,11 @@ export async function openThemeEditorSidebar(): Promise<void> {
 							await _savedThemes.setValue(current);
 						}
 						savedThemes = await _savedThemes.getValue();
-						publishStatus.innerHTML =
-							'<span class="text-success"><i class="fas fa-check me-1"></i>Unpublished.</span>';
 						buildSelect();
 						updateNameUI();
 						refreshLeftActions();
+						publishStatus.innerHTML =
+							'<span class="text-success"><i class="fas fa-check me-1"></i>Unpublished.</span>';
 					} else {
 						publishStatus.textContent = friendlyApiError(
 							result.message,
@@ -1143,87 +1309,23 @@ export async function openThemeEditorSidebar(): Promise<void> {
 						unpublishBtn.disabled = false;
 					}
 				});
+
+				const updateBtn = addMenuItem(
+					"Update Published",
+					"fas fa-arrows-rotate",
+					"text-primary",
+				);
+				updateBtn.addEventListener("click", () =>
+					attemptPublish(savedTheme, "update", updateBtn),
+				);
 			} else if (!savedTheme.importedSlug) {
 				const publishBtn = document.createElement("button");
 				publishBtn.className = "btn btn-sm btn-outline-secondary flex-fill";
 				publishBtn.innerHTML = '<i class="fas fa-upload me-1"></i>Publish';
 				leftActions.appendChild(publishBtn);
-				publishBtn.addEventListener("click", async () => {
-					const sessions = await apiSessions.getValue();
-					const verified =
-						sessions.find((s) => s.state === "verified" && s.accessToken) ??
-						(await showVerificationModal());
-					if (!verified) return;
-					const publishedCount = savedThemes.filter(
-						(t) => t.publishedSlug,
-					).length;
-					const cfg = await getConfig();
-					if (publishedCount >= cfg.limits.maxPublishedThemes) {
-						publishStatus.textContent = `You can only publish up to ${cfg.limits.maxPublishedThemes} theme${cfg.limits.maxPublishedThemes === 1 ? "" : "s"}.`;
-						return;
-					}
-					const name = workingName || "My Theme";
-					publishBtn.disabled = true;
-					publishStatus.textContent = "Publishing…";
-					const result = await sendMessage("publishTheme", {
-						userId: verified.userId,
-						name,
-						accentColor: workingAccent,
-						navbarColor: workingNavbar,
-						...(workingFont !== "default" ? { fontFamily: workingFont } : {}),
-						...(workingCss ? { customCss: workingCss } : {}),
-						...(workingBg ? { backgroundImage: workingBg } : {}),
-						...(workingEffects.length ? { effects: workingEffects } : {}),
-						...(workingIconColor ? { navbarIconColor: workingIconColor } : {}),
-						...(Object.keys(workingColorTokens).length
-							? { colorTokens: workingColorTokens }
-							: {}),
-						...(savedTheme.previousPublishedSlug
-							? { existingId: savedTheme.previousPublishedSlug }
-							: {}),
-					});
-					if (result.ok) {
-						const publishedId = result.data.data.id;
-						const isPending = result.data.data.approvalStatus === "pending";
-						publishStatus.innerHTML = isPending
-							? `<div><span class="text-warning"><i class="fas fa-clock me-1"></i>Submitted for review</span><code class="ms-2" style="font-size:0.8em;">${publishedId}</code><button class="btn btn-sm btn-outline-secondary py-0 ms-1" id="kiln-te-copy-id"><i class="fas fa-copy me-1"></i>Copy ID</button></div><div class="text-muted small mt-1">Your theme includes content that must be approved before others can import it.</div>`
-							: `<span class="text-success me-2"><i class="fas fa-check me-1"></i>Published!</span><code class="me-2" style="font-size:0.8em;">${publishedId}</code><button class="btn btn-sm btn-outline-secondary py-0" id="kiln-te-copy-id"><i class="fas fa-copy me-1"></i>Copy ID</button>`;
-						publishStatus
-							.querySelector("#kiln-te-copy-id")!
-							.addEventListener("click", () => {
-								navigator.clipboard.writeText(publishedId);
-								const btn =
-									publishStatus.querySelector<HTMLButtonElement>(
-										"#kiln-te-copy-id",
-									)!;
-								btn.innerHTML = '<i class="fas fa-check me-1"></i>Copied!';
-								setTimeout(() => {
-									btn.innerHTML = '<i class="fas fa-copy me-1"></i>Copy ID';
-								}, 2000);
-							});
-						const current = await _savedThemes.getValue();
-						const idx = current.findIndex((t) => t.id === savedTheme.id);
-						if (idx >= 0) {
-							const { previousPublishedSlug: _, ...rest } = current[idx];
-							current[idx] = { ...rest, publishedSlug: publishedId };
-							await _savedThemes.setValue(current);
-							savedThemes = await _savedThemes.getValue();
-						}
-						buildSelect();
-						updateNameUI();
-						refreshLeftActions();
-					} else {
-						publishStatus.textContent = result.message.includes("409")
-							? "A theme with that name already exists."
-							: result.message.includes("403")
-								? "You've reached your publish limit."
-								: friendlyApiError(
-										result.message,
-										"Failed to publish. Please try again.",
-									);
-					}
-					publishBtn.disabled = false;
-				});
+				publishBtn.addEventListener("click", () =>
+					attemptPublish(savedTheme, "publish", publishBtn),
+				);
 			}
 		} else {
 			const importBtn = document.createElement("button");
@@ -1238,6 +1340,8 @@ export async function openThemeEditorSidebar(): Promise<void> {
 			leftActions.appendChild(galleryBtn);
 			galleryBtn.addEventListener("click", () => showGalleryFlow());
 		}
+
+		moreWrap.style.display = moreMenu.children.length > 0 ? "" : "none";
 	}
 
 	function switchTheme(id: string) {
@@ -1334,21 +1438,41 @@ export async function openThemeEditorSidebar(): Promise<void> {
 			if (opt) opt.textContent = typed;
 		}
 		closeRenameOverlay();
+		if (pendingConflictRetry) {
+			const retry = pendingConflictRetry;
+			pendingConflictRetry = null;
+			retry();
+		}
 	}
 
 	namePencil.addEventListener("click", () => {
 		if (!isCustomTheme() && !isNew()) return;
 		openRenameOverlay();
 	});
+	autoUpdateCheck.addEventListener("change", async () => {
+		const savedTheme = getCurrentSavedTheme();
+		if (!savedTheme) return;
+		const current = await _savedThemes.getValue();
+		const idx = current.findIndex((t) => t.id === savedTheme.id);
+		if (idx >= 0) {
+			current[idx] = { ...current[idx], autoUpdate: autoUpdateCheck.checked };
+			await _savedThemes.setValue(current);
+			savedThemes = await _savedThemes.getValue();
+		}
+	});
+	function cancelRename() {
+		pendingConflictRetry = null;
+		closeRenameOverlay();
+	}
 	sidebar
 		.querySelector("#kiln-te-rename-cancel")!
-		.addEventListener("click", closeRenameOverlay);
+		.addEventListener("click", cancelRename);
 	sidebar
 		.querySelector("#kiln-te-rename-confirm")!
 		.addEventListener("click", confirmRename);
 	renameInput.addEventListener("keydown", (e) => {
 		if (e.key === "Enter") confirmRename();
-		if (e.key === "Escape") closeRenameOverlay();
+		if (e.key === "Escape") cancelRename();
 	});
 
 	const importOverlay = sidebar.querySelector<HTMLElement>(
@@ -1880,10 +2004,6 @@ export async function openThemeEditorSidebar(): Promise<void> {
 			});
 			appliedOnce = true;
 
-			const publishedSlug = isNew()
-				? null
-				: (current.find((t) => t.id === themeId)?.publishedSlug ?? null);
-
 			if (isNew()) {
 				savedThemes = await _savedThemes.getValue();
 				currentId = themeId;
@@ -1894,42 +2014,6 @@ export async function openThemeEditorSidebar(): Promise<void> {
 			} else {
 				savedThemes = await _savedThemes.getValue();
 				buildSelect();
-			}
-
-			if (publishedSlug) {
-				const sessions = await apiSessions.getValue();
-				const verified = sessions.find(
-					(s) => s.state === "verified" && s.accessToken,
-				);
-				if (verified) {
-					publishStatus.textContent = "Syncing published version…";
-					const result = await sendMessage("publishTheme", {
-						userId: verified.userId,
-						name,
-						accentColor: workingAccent,
-						navbarColor: workingNavbar,
-						...(workingFont !== "default" ? { fontFamily: workingFont } : {}),
-						...(workingCss ? { customCss: workingCss } : {}),
-						...(workingBg ? { backgroundImage: workingBg } : {}),
-						...(workingEffects.length ? { effects: workingEffects } : {}),
-						...(workingIconColor ? { navbarIconColor: workingIconColor } : {}),
-						...(Object.keys(workingColorTokens).length
-							? { colorTokens: workingColorTokens }
-							: {}),
-						existingId: publishedSlug,
-					});
-					if (result.ok) {
-						const isPending = result.data.data.approvalStatus === "pending";
-						publishStatus.innerHTML = isPending
-							? `<span class="text-warning"><i class="fas fa-clock me-1"></i>Submitted for re-review</span><div class="text-muted small mt-1">Changes to CSS or background require approval before going live.</div>`
-							: `<span class="text-success"><i class="fas fa-check me-1"></i>Published version updated!</span>`;
-					} else {
-						publishStatus.textContent = friendlyApiError(
-							result.message,
-							"Failed to sync published version. Please try again.",
-						);
-					}
-				}
 			}
 		}
 
@@ -1959,25 +2043,27 @@ export async function openThemeEditorSidebar(): Promise<void> {
 			effects?: ThemeEffect[] | null;
 			navbarIconColor?: string | null;
 			cursorUrl?: string | null;
-			cursorScale?: number | null;
+			colorTokens?: Record<string, string> | null;
 		},
 		creatorName: string,
+		thumbnailUrl?: string | null,
 	) {
 		const confirmModal = createModal();
+		const thumbnailHtml = thumbnailUrl
+			? `<img src="${thumbnailUrl}" style="width:100%;height:100%;object-fit:cover;" />`
+			: `<div style="width:100%;height:50%;background:${fetched.navbarColor};"></div>
+				<div style="width:100%;height:50%;background:${fetched.accentColor};"></div>`;
 		confirmModal.innerHTML = `
 			<div class="d-flex justify-content-between align-items-center mb-3">
 				<h5 class="mb-0 fw-bold">Import Theme</h5>
 				<button class="btn-close btn-close-white" id="kiln-confirm-close" aria-label="Close"></button>
 			</div>
-			<div class="mb-3 d-flex align-items-center gap-3">
-				<div style="width:56px;height:56px;border-radius:8px;flex-shrink:0;overflow:hidden;">
-					<div style="width:100%;height:50%;background:${fetched.navbarColor};"></div>
-					<div style="width:100%;height:50%;background:${fetched.accentColor};"></div>
-				</div>
-				<div>
-					<div class="fw-semibold">${fetched.name}</div>
-					<div class="text-muted small">by ${creatorName}</div>
-				</div>
+			<div style="width:100%;height:180px;border-radius:8px;overflow:hidden;display:flex;flex-direction:column;">
+				${thumbnailHtml}
+			</div>
+			<div class="mt-2 mb-3">
+				<div class="fw-semibold">${fetched.name}</div>
+				<div class="text-muted small">by ${creatorName}</div>
 			</div>
 			<div class="d-flex gap-2 justify-content-end">
 				<button class="btn btn-sm btn-secondary" id="kiln-confirm-cancel">Cancel</button>
@@ -2015,7 +2101,7 @@ export async function openThemeEditorSidebar(): Promise<void> {
 						effects: fetched.effects?.length ? fetched.effects : undefined,
 						navbarIconColor: fetched.navbarIconColor ?? undefined,
 						cursorUrl: fetched.cursorUrl ?? undefined,
-						cursorScale: fetched.cursorScale ?? undefined,
+						colorTokens: fetched.colorTokens ?? undefined,
 						importedSlug: fetched.id,
 					});
 					await _savedThemes.setValue(current);
@@ -2032,6 +2118,7 @@ export async function openThemeEditorSidebar(): Promise<void> {
 					effects: fetched.effects ?? undefined,
 					navbarIconColor: fetched.navbarIconColor ?? undefined,
 					cursorUrl: fetched.cursorUrl ?? undefined,
+					colorTokens: fetched.colorTokens ?? undefined,
 				});
 				appliedOnce = true;
 
@@ -2274,7 +2361,7 @@ export async function openThemeEditorSidebar(): Promise<void> {
 					if (!fetchResult.ok) return;
 					const fetched = fetchResult.data.data;
 					galleryModal.close();
-					await showConfirmImport(fetched, creatorName);
+					await showConfirmImport(fetched, creatorName, theme.thumbnailUrl);
 				});
 				col
 					.querySelector(".kiln-gallery-report")!
@@ -2581,11 +2668,47 @@ export async function openThemeEditorSidebar(): Promise<void> {
 		});
 	}
 
+	async function syncImportedThemes() {
+		const targets = savedThemes.filter((t) => t.importedSlug && t.autoUpdate);
+		if (targets.length === 0) return;
+		const current = await _savedThemes.getValue();
+		let changed = false;
+		for (const t of targets) {
+			const result = await sendMessage("getPublishedTheme", t.importedSlug!);
+			if (!result.ok) continue;
+			const fetched = result.data.data;
+			const idx = current.findIndex((x) => x.id === t.id);
+			if (idx < 0) continue;
+			const updatedEntry = {
+				...current[idx],
+				name: fetched.name,
+				accentColor: fetched.accentColor,
+				navbarColor: fetched.navbarColor,
+				fontFamily: fetched.fontFamily ?? undefined,
+				customCss: fetched.customCss ?? undefined,
+				backgroundImage: fetched.backgroundImage ?? undefined,
+				effects: fetched.effects?.length ? fetched.effects : undefined,
+				navbarIconColor: fetched.navbarIconColor ?? undefined,
+				cursorUrl: fetched.cursorUrl ?? undefined,
+				colorTokens: fetched.colorTokens ?? undefined,
+			};
+			if (JSON.stringify(updatedEntry) !== JSON.stringify(current[idx])) {
+				current[idx] = updatedEntry;
+				changed = true;
+			}
+		}
+		if (!changed) return;
+		await _savedThemes.setValue(current);
+		savedThemes = current;
+		buildSelect();
+	}
+
 	buildSelect();
 	syncInputsToState();
 	updateNameUI();
 	refreshLeftActions();
 	void applyScaledCursor();
+	void syncImportedThemes();
 
 	const savedState = loadTeState();
 	if (savedState.isFloating) {

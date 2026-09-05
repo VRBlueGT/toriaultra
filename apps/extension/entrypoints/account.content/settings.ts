@@ -231,9 +231,33 @@ export async function kilnSettings() {
 					</div>
 				</div>
 			</div>
+			<div class="card mb-2">
+				<div class="card-header">
+					<h5 class="mb-0">The Future of Kiln</h5>
+				</div>
+				<div class="card-body">
+					<p class="mb-3">The next update of Kiln, v2.13.0, will be the last feature-packed update. Future updates, if they happen at all, will be mostly bug fixes.</p>
+
+					<p class="mb-3">As some may already know, Polytoria is in the process of remaking the website from scratch, which will make most of Kiln redundant (if they chose to copy its features). That and it'd require significant refactoring to work with the new page layouts.</p>
+
+					<p class="mb-3">This also partly has to do with how I don't like how Polytoria is being managed moderation-wise. I'm not here to rehash old things, and despite *cough* what some people might think, I'm not going to list my grievances just for the sake of drama.</p>
+
+					<p class="mb-3">I'll still be around in the community, and I do have a somewhat experimental project in the works. Most people won't be interested in it, so not sure if it'll ever come out.</p>
+
+					<p class="mb-3">Speak now for the features you want (and they MIGHT be added to the next update whenever that may be down the road), or forever hold your peace 👀</p>
+
+					<p class="mb-3">Features that depend on my API will still work for the foreseeable future.</p>
+
+					<p class="mb-3">Making Kiln has been so much fun, and it was awesome to see so many people install it &lt;3</p>
+
+					<hr class="my-3">
+
+					<p class="mb-0 text-muted">Index</p>
+				</div>
+			</div>
 			<div class="card mb-2 d-none">
 				<div class="card-header small fw-semibold d-flex justify-content-between align-items-center">
-					Support the Extension
+					<h5 class="mb-0">Support the Extension</h5>
 				</div>
 				<div class="card-body text-center">
 					<p class="text-muted mb-3">Support the extension's development with bricks! Donations don't grant you any special perks. The extension will always remain free for everyone <3</p>
@@ -279,7 +303,7 @@ export async function kilnSettings() {
 			</div>
 			<div class="card mb-2">
 				<div class="card-header small fw-semibold d-flex justify-content-between align-items-center">
-					System Status
+					<h5 class="mb-0">System Status</h5>
 					<button id="kiln-status-refresh" class="btn btn-sm btn-outline-secondary py-0 px-2" title="Refresh">
 						<i class="fas fa-sync-alt" style="font-size:0.75rem;"></i>
 					</button>
@@ -287,7 +311,7 @@ export async function kilnSettings() {
 				<div class="card-body p-0" id="kiln-status-list"></div>
 			</div>
 			<div class="card">
-				<div class="card-header small fw-semibold">Send Feedback</div>
+				<div class="card-header small fw-semibold"><h5 class="mb-0">Send Feedback</h5></div>
 				<div class="card-body">
 					<p class="text-muted small mb-2">Have a suggestion, ran into a bug, or just want to say something? Send it directly to me! :D</p>
 					<div class="alert border-secondary small py-2 mb-2">
@@ -307,13 +331,22 @@ export async function kilnSettings() {
 						<button id="kiln-feedback-submit" class="btn btn-primary btn-sm">Submit</button>
 						<span id="kiln-feedback-status" class="small"></span>
 						<div id="kiln-feedback-bug-notice" class="alert border-danger small py-1 px-2 mb-0 d-none">
-							<i class="fas fa-info-circle me-1"></i>Includes diagnostic info (browser, recent errors) to track down the issue.
+							<i class="fas fa-info-circle me-1"></i>Includes minimal, non-invasive diagnostic info (whether you're on Firefox & recent errors by the extension) to track down the issue.
 						</div>
 					</div>
+					<hr class="my-3">
+					<div class="d-flex justify-content-between align-items-center" id="kiln-my-feedback-header" style="cursor:pointer;">
+						<span class="small fw-semibold">
+							My Feedback
+							<span class="badge bg-secondary ms-1 d-none" id="kiln-my-feedback-count"></span>
+						</span>
+						<i class="fas fa-chevron-down text-muted" id="kiln-my-feedback-chevron" style="font-size:0.75rem;transition:transform 200ms;"></i>
+					</div>
+					<div id="kiln-my-feedback-body" class="mt-2" style="display:none;"></div>
 				</div>
 			</div>
 			<div class="card mt-2">
-				<div class="card-header small fw-semibold">Misc. Preferences</div>
+				<div class="card-header small fw-semibold"><h5 class="mb-0">Misc. Preferences</h5></div>
 				<div class="card-body py-2">
 					<div class="form-check form-switch mb-0">
 						<input class="form-check-input" type="checkbox" id="kiln-update-notices-toggle">
@@ -1198,12 +1231,40 @@ function initAdminTab(userId: number) {
 
 	inner.innerHTML = `
 		<div class="d-flex gap-2 mb-3">
-			<button class="btn btn-secondary flex-grow-1" id="kadmin-tab-themes">Themes</button>
+			<button class="btn btn-primary flex-grow-1" id="kadmin-tab-themes">Themes</button>
+			<button class="btn btn-secondary flex-grow-1" id="kadmin-tab-feedback">Feedback</button>
 		</div>
 		<div id="kadmin-themes"></div>
+		<div id="kadmin-feedback" style="display:none;"></div>
 	`;
 
 	const themesPanel = document.getElementById("kadmin-themes")!;
+	const feedbackPanel = document.getElementById("kadmin-feedback")!;
+
+	const adminPanels: Record<string, HTMLElement> = {
+		themes: themesPanel,
+		feedback: feedbackPanel,
+	};
+	const adminTabBtns: Record<string, HTMLElement> = {
+		themes: document.getElementById("kadmin-tab-themes")!,
+		feedback: document.getElementById("kadmin-tab-feedback")!,
+	};
+
+	let feedbackLoaded = false;
+	for (const [name, btn] of Object.entries(adminTabBtns)) {
+		btn.addEventListener("click", () => {
+			for (const [key, panel] of Object.entries(adminPanels)) {
+				panel.style.display = key === name ? "" : "none";
+			}
+			for (const [key, b] of Object.entries(adminTabBtns)) {
+				b.className = `btn flex-grow-1 ${key === name ? "btn-primary" : "btn-secondary"}`;
+			}
+			if (name === "feedback" && !feedbackLoaded) {
+				feedbackLoaded = true;
+				initAdminFeedbackTab(userId, feedbackPanel);
+			}
+		});
+	}
 
 	renderPendingThemes();
 
@@ -1347,6 +1408,219 @@ function initAdminTab(userId: number) {
 			}
 		});
 	}
+}
+
+const FEEDBACK_TYPE_LABELS = {
+	general: "General",
+	feature: "Suggestion",
+	bug: "Bug Report",
+} as const;
+
+function initAdminFeedbackTab(userId: number, panel: HTMLElement) {
+	panel.innerHTML = `
+		<div class="d-flex gap-2 mb-2 flex-wrap">
+			<input id="kadmin-fb-search" type="text" class="form-control form-control-sm" style="max-width:220px;" placeholder="Search message or username…" />
+			<select id="kadmin-fb-type" class="form-select form-select-sm" style="max-width:150px;">
+				<option value="">All types</option>
+				<option value="general">General</option>
+				<option value="feature">Suggestion</option>
+				<option value="bug">Bug Report</option>
+			</select>
+			<select id="kadmin-fb-status" class="form-select form-select-sm" style="max-width:150px;">
+				<option value="">All statuses</option>
+				<option value="open">Open</option>
+				<option value="resolved">Resolved</option>
+			</select>
+			<div class="form-check align-self-center">
+				<input class="form-check-input" type="checkbox" id="kadmin-fb-unanswered">
+				<label class="form-check-label small" for="kadmin-fb-unanswered">No response yet</label>
+			</div>
+		</div>
+		<div id="kadmin-fb-list"></div>
+		<div id="kadmin-fb-pagination" class="d-flex justify-content-between align-items-center mt-2"></div>
+	`;
+
+	const searchInput = document.getElementById(
+		"kadmin-fb-search",
+	) as HTMLInputElement;
+	const typeSelect = document.getElementById(
+		"kadmin-fb-type",
+	) as HTMLSelectElement;
+	const statusSelect = document.getElementById(
+		"kadmin-fb-status",
+	) as HTMLSelectElement;
+	const unansweredCheck = document.getElementById(
+		"kadmin-fb-unanswered",
+	) as HTMLInputElement;
+	const list = document.getElementById("kadmin-fb-list")!;
+	const pagination = document.getElementById("kadmin-fb-pagination")!;
+
+	let page = 1;
+
+	async function load() {
+		list.innerHTML = `<p class="text-muted small">Loading…</p>`;
+		pagination.innerHTML = "";
+
+		const result = await sendMessage("adminGetFeedback", {
+			userId,
+			type: (typeSelect.value || undefined) as
+				| "feature"
+				| "general"
+				| "bug"
+				| undefined,
+			status: (statusSelect.value || undefined) as
+				| "open"
+				| "resolved"
+				| undefined,
+			unanswered: unansweredCheck.checked,
+			search: searchInput.value.trim() || undefined,
+			page,
+		});
+
+		if (!result.ok) {
+			list.innerHTML = `<p class="text-danger small">Failed to load: ${result.message}</p>`;
+			return;
+		}
+
+		const { data: items, meta } = result.data;
+		if (items.length === 0) {
+			list.innerHTML = `<p class="text-muted small">No feedback matches these filters.</p>`;
+			return;
+		}
+
+		list.innerHTML = items
+			.map((item) => {
+				const statusBadge =
+					item.status === "resolved"
+						? '<span class="badge bg-success">Resolved</span>'
+						: '<span class="badge bg-secondary">Open</span>';
+				const noResponseBadge = !item.response
+					? '<span class="badge bg-warning text-dark">No response</span>'
+					: "";
+				const metaLine = [
+					item.username && `From ${item.username}`,
+					item.version && `Kiln v${item.version}`,
+					new Date(item.createdAt).toLocaleString(),
+				]
+					.filter(Boolean)
+					.join(" · ");
+
+				return `
+					<div class="card mb-2${!item.response ? " border-warning" : ""}" data-feedback-id="${item.id}">
+						<div class="card-body">
+							<div class="d-flex justify-content-between align-items-start gap-2 mb-1">
+								<div class="d-flex gap-1 flex-wrap">
+									<span class="badge bg-primary">${FEEDBACK_TYPE_LABELS[item.type as keyof typeof FEEDBACK_TYPE_LABELS]}</span>
+									${statusBadge}
+									${noResponseBadge}
+								</div>
+								<div class="d-flex gap-2 flex-shrink-0">
+									<button class="btn btn-outline-secondary btn-sm" data-action="toggle-status" data-id="${item.id}">${item.status === "resolved" ? "Reopen" : "Resolve"}</button>
+									<button class="btn btn-outline-danger btn-sm" data-action="delete" data-id="${item.id}">Delete</button>
+								</div>
+							</div>
+							<div class="text-muted mb-2" style="font-size:0.72rem;">${metaLine}</div>
+							<div class="small mb-2">${item.message.replace(/</g, "&lt;")}</div>
+							${
+								item.response
+									? `<div class="alert border-secondary small py-2 px-2 mb-2"><strong>Your response:</strong> ${item.response.replace(/</g, "&lt;")}</div>`
+									: ""
+							}
+							<div class="d-flex gap-2">
+								<input type="text" class="form-control form-control-sm kadmin-fb-response-input" data-id="${item.id}" placeholder="${item.response ? "Revise response…" : "Write a response…"}" value="${item.response ? item.response.replace(/"/g, "&quot;") : ""}" />
+								<button class="btn btn-primary btn-sm flex-shrink-0" data-action="respond" data-id="${item.id}">Send</button>
+							</div>
+						</div>
+					</div>
+				`;
+			})
+			.join("");
+
+		pagination.innerHTML = `
+			<button class="btn btn-outline-secondary btn-sm" id="kadmin-fb-prev" ${meta.currentPage <= 1 ? "disabled" : ""}>← Prev</button>
+			<span class="text-muted small">Page ${meta.currentPage} of ${meta.totalPages} (${meta.totalCount} total)</span>
+			<button class="btn btn-outline-secondary btn-sm" id="kadmin-fb-next" ${meta.currentPage >= meta.totalPages ? "disabled" : ""}>Next →</button>
+		`;
+		document.getElementById("kadmin-fb-prev")?.addEventListener("click", () => {
+			page = Math.max(1, page - 1);
+			load();
+		});
+		document.getElementById("kadmin-fb-next")?.addEventListener("click", () => {
+			page += 1;
+			load();
+		});
+
+		for (const btn of list.querySelectorAll<HTMLButtonElement>(
+			"[data-action]",
+		)) {
+			btn.addEventListener("click", async () => {
+				const id = btn.dataset.id!;
+				const action = btn.dataset.action as
+					| "toggle-status"
+					| "delete"
+					| "respond";
+				btn.disabled = true;
+
+				if (action === "delete") {
+					const result = await sendMessage("adminDeleteFeedback", {
+						userId,
+						id,
+					});
+					if (result.ok) await load();
+					else btn.disabled = false;
+					return;
+				}
+
+				if (action === "toggle-status") {
+					const item = items.find((i) => i.id === id)!;
+					const result = await sendMessage(
+						item.status === "resolved"
+							? "adminReopenFeedback"
+							: "adminResolveFeedback",
+						{ userId, id },
+					);
+					if (result.ok) await load();
+					else btn.disabled = false;
+					return;
+				}
+
+				if (action === "respond") {
+					const input = list.querySelector<HTMLInputElement>(
+						`.kadmin-fb-response-input[data-id="${id}"]`,
+					)!;
+					const response = input.value.trim();
+					if (!response) {
+						btn.disabled = false;
+						return;
+					}
+					const result = await sendMessage("adminRespondFeedback", {
+						userId,
+						id,
+						response,
+					});
+					if (result.ok) await load();
+					else btn.disabled = false;
+				}
+			});
+		}
+	}
+
+	let searchDebounce: ReturnType<typeof setTimeout> | null = null;
+	searchInput.addEventListener("input", () => {
+		if (searchDebounce) clearTimeout(searchDebounce);
+		searchDebounce = setTimeout(() => {
+			page = 1;
+			load();
+		}, 250);
+	});
+	for (const el of [typeSelect, statusSelect, unansweredCheck]) {
+		el.addEventListener("change", () => {
+			page = 1;
+			load();
+		});
+	}
+
+	load();
 }
 
 function renderInline(text: string): string {
@@ -1706,6 +1980,7 @@ async function initFeedbackTab() {
 			message,
 			version,
 			username: user?.username ?? "",
+			userId: user?.userId,
 		});
 
 		if (result.ok) {
@@ -1716,6 +1991,7 @@ async function initFeedbackTab() {
 			setTimeout(() => {
 				status.textContent = "";
 			}, 4000);
+			if (myFeedbackLoaded) renderMyFeedback();
 		} else {
 			status.textContent =
 				result.code === "RATE_LIMITED"
@@ -1725,6 +2001,72 @@ async function initFeedbackTab() {
 		}
 
 		submitBtn.disabled = false;
+	});
+
+	let myFeedbackLoaded = false;
+
+	async function renderMyFeedback() {
+		const body = document.getElementById("kiln-my-feedback-body")!;
+		const countBadge = document.getElementById("kiln-my-feedback-count")!;
+		body.innerHTML = `<p class="text-muted small mb-0">Loading…</p>`;
+
+		const result = await sendMessage("getMyFeedback", user?.userId);
+		if (!result.ok) {
+			body.innerHTML = `<p class="text-danger small mb-0">Failed to load your feedback.</p>`;
+			return;
+		}
+
+		const items = result.data.data;
+		countBadge.classList.toggle("d-none", items.length === 0);
+		countBadge.textContent = String(items.length);
+
+		if (items.length === 0) {
+			body.innerHTML = `<p class="text-muted small mb-0">You haven't submitted any feedback yet.</p>`;
+			return;
+		}
+
+		body.innerHTML = items
+			.map((item, i) => {
+				const statusBadge =
+					item.status === "resolved"
+						? '<span class="badge bg-success">Resolved</span>'
+						: '<span class="badge bg-secondary">Open</span>';
+				return `
+					<div class="card${i < items.length - 1 ? " mb-2" : ""}">
+						<div class="card-body p-2">
+							<div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+								<div class="d-flex gap-1 flex-wrap">
+									<span class="badge bg-primary">${FEEDBACK_TYPE_LABELS[item.type as keyof typeof FEEDBACK_TYPE_LABELS]}</span>
+									${statusBadge}
+								</div>
+								<span class="text-muted flex-shrink-0" style="font-size:0.72rem;">${new Date(item.createdAt).toLocaleString()}</span>
+							</div>
+							<div class="small mb-0" style="white-space:pre-wrap;">${item.message.replace(/</g, "&lt;")}</div>
+							${
+								item.response
+									? `<div class="alert border-secondary small py-2 px-2 mt-2 mb-0" style="white-space:pre-wrap;"><strong>Response:</strong> ${item.response.replace(/</g, "&lt;")}</div>`
+									: '<div class="text-muted small mt-2"><i class="fas fa-clock me-1"></i>Awaiting a response</div>'
+							}
+						</div>
+					</div>
+				`;
+			})
+			.join("");
+	}
+
+	const myFeedbackHeader = document.getElementById("kiln-my-feedback-header")!;
+	const myFeedbackChevron = document.getElementById(
+		"kiln-my-feedback-chevron",
+	)!;
+	myFeedbackHeader.addEventListener("click", () => {
+		const body = document.getElementById("kiln-my-feedback-body")!;
+		const collapsed = body.style.display === "none";
+		body.style.display = collapsed ? "" : "none";
+		myFeedbackChevron.style.transform = collapsed ? "rotate(180deg)" : "";
+		if (collapsed && !myFeedbackLoaded) {
+			myFeedbackLoaded = true;
+			renderMyFeedback();
+		}
 	});
 }
 

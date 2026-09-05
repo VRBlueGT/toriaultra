@@ -37,8 +37,8 @@ export default defineContentScript({
 			if (isLegacyUrl && (!segment || Number.isNaN(Number(segment)))) {
 				if (values.enabled.includes("collectibleOwnerLabels")) {
 					discovery.userLabels(
-						values.config.userLabels?.inactiveDays ?? 30,
-						values.config.userLabels?.ogYear ?? 2023,
+						values.config.collectibleOwnerLabels?.inactiveDays ?? 30,
+						values.config.collectibleOwnerLabels?.ogYear ?? 2023,
 						showDisclosures,
 					);
 				}
@@ -109,8 +109,8 @@ export default defineContentScript({
 					if (values.enabled.includes("collectibleOwnerLabels"))
 						view.userLabels(
 							userId,
-							values.config.userLabels?.inactiveDays ?? 30,
-							values.config.userLabels?.ogYear ?? 2023,
+							values.config.collectibleOwnerLabels?.inactiveDays ?? 30,
+							values.config.collectibleOwnerLabels?.ogYear ?? 2023,
 							showDisclosures,
 						);
 					if (values.enabled.includes("outfitCost"))

@@ -43,6 +43,7 @@ import "./background/placesListing";
 import "./background/forumSearch";
 import "./background/feedSearch";
 import { purgeOldErrors } from "./background/errors";
+import { scheduleThemeAutoUpdateCheck } from "./background/themeAutoUpdate";
 
 export { ApiDisabledError, ApiHttpError, NoSessionError };
 
@@ -165,6 +166,8 @@ export default defineBackground(() => {
 	purgeOldErrors();
 
 	migrateThemesToLocal();
+
+	scheduleThemeAutoUpdateCheck();
 
 	migrateLegacySettings().then((migration) => {
 		if (migration) {

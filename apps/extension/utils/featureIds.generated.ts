@@ -90,7 +90,8 @@ export const ALL_FEATURE_IDS = [
 	"outfitManagement",
 	"streakFreezeDisplay",
 	"myFeedPosts",
-	"searchFeedPosts"
+	"searchFeedPosts",
+	"reorderableHomepage"
 ] as const;
 
 export type FeatureId = (typeof ALL_FEATURE_IDS)[number];

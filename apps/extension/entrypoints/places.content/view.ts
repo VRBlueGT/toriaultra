@@ -29,8 +29,6 @@ import {
 
 const placeID = +window.location.pathname.split("/")[2];
 
-const MIN_REVIEW_PLAYTIME_MS = 5 * 60 * 1000;
-
 export async function recordPlaceView() {
 	const placeResult = await sendMessage("getPlace", placeID);
 	if (!placeResult.ok) return;
@@ -1102,6 +1100,9 @@ export async function detailedPlaceReviews(
 	if (!elements) return;
 	const { tabList, tabContent } = elements;
 
+	const config = await getConfig();
+	const minReviewPlaytimeMs = config.limits.minReviewPlaytimeMinutes * 60_000;
+
 	const isVerified = !!(await getApiSession(userId));
 
 	const renderStars = (rating: number, interactive = false) => {
@@ -1315,7 +1316,7 @@ export async function detailedPlaceReviews(
 			? activityResult.data.totalPlaytime
 			: null;
 		const hasEnoughPlaytime =
-			totalPlaytimeMs === null || totalPlaytimeMs >= MIN_REVIEW_PLAYTIME_MS;
+			totalPlaytimeMs === null || totalPlaytimeMs >= minReviewPlaytimeMs;
 		const creatorId = placeResult.ok ? placeResult.data.creator.id : null;
 		const isCreator = creatorId !== null && creatorId === userId;
 
@@ -1358,9 +1359,9 @@ export async function detailedPlaceReviews(
 					? `
 			<div class="kiln-review-form border-bottom border-secondary pb-3 mb-3">
 				<p class="text-muted mb-0">
-					<i class="fa-regular fa-clock me-1"></i> You need at least 5 minutes of playtime in this world to leave a review${
+					<i class="fa-regular fa-clock me-1"></i> You need at least ${formatMinutes(config.limits.minReviewPlaytimeMinutes)} of playtime in this world to leave a review${
 						totalPlaytimeMs !== null
-							? ` (you've played ${formatMinutes(Math.round(totalPlaytimeMs / 60_000))} so far)`
+							? ` (you've played ${formatMinutes(Math.floor(totalPlaytimeMs / 60_000))} so far)`
 							: ""
 					}.
 				</p>

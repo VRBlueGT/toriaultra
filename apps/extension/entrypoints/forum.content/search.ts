@@ -58,6 +58,7 @@ const TYPE_OPTIONS = [
 
 const DEFAULT_SORT = "newest";
 const DEFAULT_TYPE = "thread";
+const DEFAULT_MY_POSTS_SORT = "newest";
 
 function getForumBasePath(): string {
 	const path = window.location.pathname;
@@ -137,7 +138,11 @@ function renderEntry(
 	entry: PolyTrack.ForumEntry,
 	seen: boolean = false,
 ): HTMLElement {
-	const resolveReplyLink = async (replyId: number, card: HTMLAnchorElement) => {
+	const resolveReplyLink = async (
+		replyId: number,
+		card: HTMLAnchorElement,
+		openInNewTab: boolean,
+	) => {
 		if (card.dataset.kilnResolving === "1") return;
 		card.dataset.kilnResolving = "1";
 		card.style.opacity = "0.6";
@@ -148,7 +153,9 @@ function renderEntry(
 				console.error("[Kiln] Failed to resolve reply link:", result.message);
 				return;
 			}
-			window.location.href = new URL(result.data, "https://polytrack.top").href;
+			const url = new URL(result.data, "https://polytrack.top").href;
+			if (openInNewTab) window.open(url, "_blank", "noopener,noreferrer");
+			else window.location.href = url;
 		} finally {
 			delete card.dataset.kilnResolving;
 			card.style.opacity = "";
@@ -227,7 +234,13 @@ function renderEntry(
 		threadLink.href = "#";
 		card.addEventListener("click", (event) => {
 			event.preventDefault();
-			resolveReplyLink(entry.id, threadLink);
+			const openInNewTab = event.metaKey || event.ctrlKey || event.shiftKey;
+			resolveReplyLink(entry.id, threadLink, openInNewTab);
+		});
+		card.addEventListener("auxclick", (event) => {
+			if (event.button !== 1) return;
+			event.preventDefault();
+			resolveReplyLink(entry.id, threadLink, true);
 		});
 	} else {
 		threadLink.href = `/forum/post/${entry.id}`;
@@ -632,6 +645,11 @@ export async function advancedForumSearch(
 	const syncFiltersToUrl = (filters: ForumSearchFilters) => {
 		const params = new URLSearchParams(window.location.search);
 
+		params.delete("from");
+		params.delete("in");
+		params.delete("after");
+		params.delete("before");
+
 		if (filters.search) params.set("q", filters.search);
 		else params.delete("q");
 
@@ -774,18 +792,33 @@ export async function advancedForumSearch(
 		const params = new URLSearchParams(window.location.search);
 		const fromParam = params.get("from");
 		const inParam = params.get("in");
-		const afterParam = params.get("after");
-		const beforeParam = params.get("before");
+		const afterParam = params.get("after") ?? params.get("postedAfter");
+		const beforeParam = params.get("before") ?? params.get("postedBefore");
 		const sortParam = params.get("sort");
 		const typeParam = params.get("type");
+		const authorIdsParam = params.get("authorIds");
+		const categoryIdsParam = params.get("categoryIds");
 
 		if (fromParam) {
 			const resolved = await resolveAuthor(fromParam);
 			if (resolved) authors.add(resolved);
 		}
+		if (authorIdsParam) {
+			for (const idText of authorIdsParam.split(",")) {
+				const id = Number(idText);
+				if (Number.isFinite(id)) authors.add({ id, label: `#${id}` });
+			}
+		}
 		if (inParam) {
 			const resolved = resolveCategory(inParam);
 			if (resolved) categories.add(resolved);
+		}
+		if (categoryIdsParam) {
+			for (const idText of categoryIdsParam.split(",")) {
+				const id = Number(idText);
+				const match = CATEGORIES.find((category) => category.id === id);
+				if (match) categories.add({ id: match.id, label: match.name });
+			}
 		}
 		if (afterParam) postedAfterInput.value = afterParam;
 		if (beforeParam) postedBeforeInput.value = beforeParam;
@@ -907,6 +940,30 @@ export async function myPosts(showDisclosures: boolean) {
 			'[data-kiln="my-posts-sort"]',
 		)!;
 
+		const syncMyPostsUrl = () => {
+			const params = new URLSearchParams(window.location.search);
+			params.set("my-posts", "");
+
+			if (sortSelect.value !== DEFAULT_MY_POSTS_SORT)
+				params.set("sort", sortSelect.value);
+			else params.delete("sort");
+
+			if (repliesCheckbox.checked) params.set("replies", "1");
+			else params.delete("replies");
+
+			const url = `${window.location.pathname}?${params.toString()}`;
+			window.history.replaceState(null, "", url);
+		};
+
+		const initialParams = new URLSearchParams(window.location.search);
+		const initialSort = initialParams.get("sort");
+		if (
+			initialSort &&
+			[...sortSelect.options].some((option) => option.value === initialSort)
+		)
+			sortSelect.value = initialSort;
+		repliesCheckbox.checked = initialParams.get("replies") === "1";
+
 		let nextPage: number | null = null;
 
 		const loadPage = async (page: number) => {
@@ -946,6 +1003,7 @@ export async function myPosts(showDisclosures: boolean) {
 		};
 
 		const runSearch = async () => {
+			syncMyPostsUrl();
 			resultsContainer.innerHTML = `<div class="text-center text-muted p-4"><span class="spinner-border spinner-border-sm"></span> Loading your posts...</div>`;
 			setLoadMoreState(loadMoreButton, "hidden");
 			await loadPage(1);

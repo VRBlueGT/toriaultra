@@ -217,7 +217,10 @@ body:has(.kiln-extension-modal[open]) {
 */
 
 .kiln-filtered-word {
+	padding: 0;
 	background-color: rgba(220, 53, 69, 0.45);
 	color: transparent !important;
+	font: inherit;
+	line-height: inherit;
 	border-radius: 2px;
 }

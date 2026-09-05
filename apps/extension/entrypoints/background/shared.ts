@@ -247,26 +247,34 @@ export async function withAuthSession<T>(
 			throw err;
 		if (!session.refreshToken) throw new NoSessionError();
 
-		const refreshed = await safeFetch(
-			`${config.resolvedUrls.extension}auth/refresh`,
-			Extension.RefreshTokenApi,
-			{
-				method: "POST",
-				headers: { "x-kiln-refresh-token": session.refreshToken },
-			},
-		);
+		const refreshed = await dedupe(`refreshSession:${userId}`, async () => {
+			const latestStore = await apiSessions.getValue();
+			const latestSession = latestStore.find((s) => s.userId == userId);
+			if (!latestSession?.refreshToken) throw new NoSessionError();
 
-		const updatedStore = sessionStore.map((s) =>
-			s.userId == userId
-				? {
-						...s,
-						accessToken: refreshed.data.accessToken,
-						refreshToken: refreshed.data.refreshToken,
-					}
-				: s,
-		);
-		await apiSessions.setValue(updatedStore);
+			const result = await safeFetch(
+				`${config.resolvedUrls.extension}auth/refresh`,
+				Extension.RefreshTokenApi,
+				{
+					method: "POST",
+					headers: { "x-kiln-refresh-token": latestSession.refreshToken },
+				},
+			);
 
-		return fn(refreshed.data.accessToken, config);
+			const updatedStore = latestStore.map((s) =>
+				s.userId == userId
+					? {
+							...s,
+							accessToken: result.data.accessToken,
+							refreshToken: result.data.refreshToken,
+						}
+					: s,
+			);
+			await apiSessions.setValue(updatedStore);
+
+			return result.data;
+		});
+
+		return fn(refreshed.accessToken, config);
 	}
 }

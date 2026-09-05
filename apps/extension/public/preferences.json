@@ -852,7 +852,7 @@
 		},
 		{
 			"name": "User Labels",
-			"desc": "Shows \"Inactive\" and \"OG\" badges next to the names of users across the site. Applies to the list of owners on collectible item pages, the users page, and profiles (in the \"Info\" card section).",
+			"desc": "Shows \"Inactive\" and \"OG\" badges next to the names of users across the site. Applies to the list of owners on collectible item pages, the users page, profiles (in the \"Info\" card section), and forum posts/replies.",
 			"id": "collectibleOwnerLabels",
 			"defaultEnabled": true,
 			"config": [
@@ -1018,12 +1018,6 @@
 			"name": "Theme Creator",
 			"desc": "Unleash your creativity and customize the Polytoria website to your liking!",
 			"id": "themeCreator",
-			"notes": [
-				{
-					"type": "warning",
-					"text": "This feature is *very* experimental, you may run into issues. For any theme rendering related issues, please submit them to this form -> "
-				}
-			],
 			"tags": [
 				"expression"
 			]
@@ -1061,7 +1055,8 @@
 				}
 			],
 			"tags": [
-				"utility"
+				"utility",
+				"deprecated"
 			]
 		},
 		{
@@ -1358,9 +1353,8 @@
 				{
 					"type": "check",
 					"subsetting": "highlightFilteredWords",
-					"label": "Highlight Words Blocked by the Forum Filter",
-					"default": true,
-					"hide": true
+					"label": "Highlight Words Blocked by the Site Filter",
+					"default": true
 				}
 			],
 			"tags": [
@@ -1614,6 +1608,16 @@
 			],
 			"tags": [
 				"utility",
+				"new"
+			]
+		},
+		{
+			"name": "Reorder-able Homepage",
+			"desc": "Reorder your homepage the way you want it!",
+			"id": "reorderableHomepage",
+			"tags": [
+				"utility",
+				"expression",
 				"new"
 			]
 		}

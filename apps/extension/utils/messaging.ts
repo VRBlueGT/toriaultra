@@ -32,6 +32,7 @@ import type {
 
 export interface ProtocolMap {
 	openPreferences(): void;
+	themeAutoUpdated(): void;
 	downloadPlaceFile(id: number): void;
 	getModelFile(id: number): string;
 	joinPlace(data: { placeId: number; serverId?: number; version: 1 | 2 }): void;
@@ -278,7 +279,34 @@ export interface ProtocolMap {
 		message: string;
 		version: string;
 		username: string;
-	}): Promise<Result<{ ok: boolean }>>;
+		userId?: number;
+	}): Promise<Result<Extension.SubmitFeedbackApi>>;
+	getMyFeedback(userId?: number): Promise<Result<Extension.MyFeedbackApi>>;
+	adminGetFeedback(data: {
+		userId: number;
+		type?: "feature" | "general" | "bug";
+		status?: "open" | "resolved";
+		unanswered?: boolean;
+		search?: string;
+		page?: number;
+	}): Promise<Result<Extension.AdminFeedbackListApi>>;
+	adminRespondFeedback(data: {
+		userId: number;
+		id: string;
+		response: string;
+	}): Promise<Result<Extension.AdminFeedbackApi>>;
+	adminResolveFeedback(data: {
+		userId: number;
+		id: string;
+	}): Promise<Result<Extension.AdminFeedbackApi>>;
+	adminReopenFeedback(data: {
+		userId: number;
+		id: string;
+	}): Promise<Result<Extension.AdminFeedbackApi>>;
+	adminDeleteFeedback(data: {
+		userId: number;
+		id: string;
+	}): Promise<Result<Extension.AdminDeleteFeedbackApi>>;
 	reportError(entry: Omit<KilnErrorLogEntry, "timestamp">): void;
 
 	getAvatarOutfits(userId: number): Promise<Result<Extension.AvatarOutfitsApi>>;
@@ -321,6 +349,11 @@ export interface ProtocolMap {
 		userId: number;
 		replyId: string;
 	}): Promise<Result<null>>;
+	getTopReviewers(): Promise<Result<Extension.TopReviewersApi>>;
+	getRatedWorldsLeaderboard(
+		order: "highest" | "lowest",
+	): Promise<Result<Extension.RatedWorldsLeaderboardApi>>;
+	setNativeRankingsLoadingPaused(paused: boolean): void;
 
 	getKilnNotifications(
 		userId: number,
@@ -347,6 +380,9 @@ export interface ProtocolMap {
 	showSecurityKeyRenamePrompt(data: {
 		currentName: string;
 	}): Promise<Result<string | null>>;
+	showHomepageReorderModal(data: {
+		sections: Array<{ id: string; label: string; locked?: boolean }>;
+	}): Promise<Result<string[] | null>>;
 
 	updateOutfit(data: { id: number; name: string }): Promise<Result<unknown>>;
 }

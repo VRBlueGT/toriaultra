@@ -68,6 +68,60 @@ export function forumMentions(showDisclosures: boolean) {
 	});
 }
 
+export async function forumUserLabels(
+	inactiveDays: number,
+	ogYear: number,
+	showDisclosures: boolean,
+) {
+	const OG_CUTOFF = `${ogYear + 1}-01-01`;
+
+	const batch: { userId: number; nameLink: Element }[] = [];
+	document.querySelectorAll(".card").forEach((card) => {
+		const nameLink = card.querySelector(
+			".forum-user-container .text-truncate a.text-reset",
+		);
+		if (!nameLink) return;
+
+		const userId = parseInt(
+			nameLink.getAttribute("href")?.split("/").pop() ?? "",
+			10,
+		);
+		if (!userId || Number.isNaN(userId)) return;
+
+		batch.push({ userId, nameLink });
+	});
+
+	for (let i = 0; i < batch.length; i += 5) {
+		const chunk = batch.slice(i, i + 5);
+		const result = await sendMessage("checkUserActivity", {
+			userIds: chunk.map((c) => c.userId),
+			days: inactiveDays,
+		});
+		if (!result.ok) continue;
+
+		for (const { userId, nameLink } of chunk) {
+			const info = result.data[String(userId)];
+			if (!info) continue;
+
+			if (!info.active) {
+				nameLink.insertAdjacentHTML(
+					"afterend",
+					`<span class="badge bg-secondary ms-1" style="font-size:0.65rem;vertical-align:middle;" data-bs-toggle="tooltip" data-bs-title="Hasn't been seen online in the last ${inactiveDays} days">Inactive</span>${kilnDisclosureBadgeHtml(showDisclosures)}`,
+				);
+			}
+
+			if (info.registeredAt && info.registeredAt.slice(0, 10) < OG_CUTOFF) {
+				nameLink.insertAdjacentHTML(
+					"afterend",
+					`<span class="badge bg-warning text-dark ms-1" style="font-size:0.65rem;vertical-align:middle;" data-bs-toggle="tooltip" data-bs-title="Joined during ${ogYear} or earlier">OG</span>${kilnDisclosureBadgeHtml(showDisclosures)}`,
+				);
+			}
+		}
+
+		sendMessage("registerBootstrapElements");
+	}
+}
+
 export function aiBotForumWarnings(showDisclosures: boolean) {
 	const aiUserSet = new Set(config.users.generativeAI.map(String));
 	const cards = document.querySelectorAll(".card");

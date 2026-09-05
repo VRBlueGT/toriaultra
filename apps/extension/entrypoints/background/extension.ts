@@ -178,6 +178,227 @@ onMessage("showSecurityKeyRenamePrompt", ({ data: { currentName } }) =>
 	}),
 );
 
+onMessage("showHomepageReorderModal", ({ data: { sections } }) =>
+	handle(async () => {
+		const tabs = await browser.tabs.query({
+			active: true,
+			currentWindow: true,
+		});
+		if (!tabs[0]?.id) return null;
+
+		const results = await browser.scripting.executeScript({
+			target: { tabId: tabs[0].id },
+			world: "MAIN",
+			args: [sections],
+			func: async (
+				sections: Array<{ id: string; label: string; locked?: boolean }>,
+			) => {
+				// @ts-expect-error
+				const Swal = window.Swal;
+
+				const { value } = await Swal.fire({
+					title: "Reorder Homepage",
+					html: '<div id="kiln-reorder-list" style="text-align: left;"></div>',
+					showCancelButton: true,
+					confirmButtonText: "Save",
+					cancelButtonText: "Cancel",
+					width: 500,
+					didOpen: () => {
+						const list = document.getElementById(
+							"kiln-reorder-list",
+						) as HTMLElement;
+
+						// Animates `el` from `firstRect` to its current (post-mutation)
+						// position using a FLIP transform, instead of the browser's
+						// native (and visually janky) HTML5 drag-and-drop.
+						const flip = (el: HTMLElement, firstRect: DOMRect) => {
+							const lastRect = el.getBoundingClientRect();
+							const dy = firstRect.top - lastRect.top;
+							if (!dy) return;
+
+							el.style.transition = "none";
+							el.style.transform = `translateY(${dy}px)`;
+							el.getBoundingClientRect();
+							requestAnimationFrame(() => {
+								el.style.transition = "transform 150ms ease";
+								el.style.transform = "";
+							});
+						};
+
+						let dragEl: HTMLElement | null = null;
+						let placeholder: HTMLElement | null = null;
+						let grabOffsetX = 0;
+						let grabOffsetY = 0;
+
+						const onPointerMove = (e: PointerEvent) => {
+							if (!dragEl || !placeholder) return;
+							dragEl.style.left = `${e.clientX - grabOffsetX}px`;
+							dragEl.style.top = `${e.clientY - grabOffsetY}px`;
+
+							const dragRect = dragEl.getBoundingClientRect();
+							const dragMiddle = dragRect.top + dragRect.height / 2;
+							const siblings = Array.from(list.children) as HTMLElement[];
+							const placeholderIndex = siblings.indexOf(placeholder);
+
+							for (let i = 0; i < siblings.length; i++) {
+								const sib = siblings[i];
+								if (sib === placeholder || sib.dataset.locked === "true")
+									continue;
+
+								const rect = sib.getBoundingClientRect();
+								const middle = rect.top + rect.height / 2;
+
+								if (i < placeholderIndex && dragMiddle < middle) {
+									const first = sib.getBoundingClientRect();
+									list.insertBefore(placeholder, sib);
+									flip(sib, first);
+									break;
+								}
+								if (i > placeholderIndex && dragMiddle > middle) {
+									const first = sib.getBoundingClientRect();
+									list.insertBefore(placeholder, sib.nextElementSibling);
+									flip(sib, first);
+									break;
+								}
+							}
+						};
+
+						const onPointerUp = () => {
+							document.removeEventListener("pointermove", onPointerMove);
+							document.removeEventListener("pointerup", onPointerUp);
+							document.body.style.userSelect = "";
+							if (!dragEl || !placeholder) return;
+
+							const finalRect = placeholder.getBoundingClientRect();
+							const finishedDragEl = dragEl;
+							const finishedPlaceholder = placeholder;
+							dragEl = null;
+							placeholder = null;
+
+							finishedDragEl.style.transition =
+								"left 150ms ease, top 150ms ease, box-shadow 150ms ease";
+							finishedDragEl.style.left = `${finalRect.left}px`;
+							finishedDragEl.style.top = `${finalRect.top}px`;
+							finishedDragEl.style.boxShadow = "none";
+
+							const cleanup = () => {
+								list.insertBefore(finishedDragEl, finishedPlaceholder);
+								finishedPlaceholder.remove();
+								finishedDragEl.style.cssText = "";
+								finishedDragEl.classList.remove("kiln-reorder-dragging");
+							};
+							finishedDragEl.addEventListener("transitionend", cleanup, {
+								once: true,
+							});
+							setTimeout(cleanup, 200);
+						};
+
+						const startDrag = (e: PointerEvent, row: HTMLElement) => {
+							e.preventDefault();
+
+							const rect = row.getBoundingClientRect();
+							grabOffsetX = e.clientX - rect.left;
+							grabOffsetY = e.clientY - rect.top;
+
+							placeholder = document.createElement("div");
+							placeholder.style.height = `${rect.height}px`;
+							const cs = getComputedStyle(row);
+							placeholder.style.marginTop = cs.marginTop;
+							placeholder.style.marginBottom = cs.marginBottom;
+							placeholder.style.border = "2px dashed rgba(255, 255, 255, 0.25)";
+							placeholder.style.borderRadius = cs.borderRadius;
+							placeholder.style.boxSizing = "border-box";
+							list.insertBefore(placeholder, row);
+
+							document.body.appendChild(row);
+							Object.assign(row.style, {
+								position: "fixed",
+								zIndex: "100000",
+								width: `${rect.width}px`,
+								left: `${rect.left}px`,
+								top: `${rect.top}px`,
+								margin: "0",
+								pointerEvents: "none",
+								boxShadow: "0 10px 25px rgba(0, 0, 0, 0.4)",
+							});
+							row.classList.add("kiln-reorder-dragging");
+
+							dragEl = row;
+							document.body.style.userSelect = "none";
+							document.addEventListener("pointermove", onPointerMove);
+							document.addEventListener("pointerup", onPointerUp);
+						};
+
+						for (const section of sections) {
+							const row = document.createElement("div");
+							row.className =
+								"d-flex align-items-center gap-2 mb-2 p-2 rounded bg-dark border border-secondary";
+							if (section.locked) row.classList.add("opacity-50");
+							row.dataset.id = section.id;
+							if (section.locked) row.dataset.locked = "true";
+							row.innerHTML = section.locked
+								? `
+								<i class="fas fa-lock text-muted" style="width: 1em;"></i>
+								<span class="flex-grow-1">${section.label}</span>
+								<button type="button" class="btn btn-sm btn-outline-secondary" disabled><i class="fas fa-chevron-up"></i></button>
+								<button type="button" class="btn btn-sm btn-outline-secondary" disabled><i class="fas fa-chevron-down"></i></button>
+							`
+								: `
+								<i class="fas fa-grip-vertical text-muted kiln-reorder-handle" style="cursor: grab; touch-action: none;"></i>
+								<span class="flex-grow-1">${section.label}</span>
+								<button type="button" class="btn btn-sm btn-outline-secondary" data-dir="up"><i class="fas fa-chevron-up"></i></button>
+								<button type="button" class="btn btn-sm btn-outline-secondary" data-dir="down"><i class="fas fa-chevron-down"></i></button>
+							`;
+							list.appendChild(row);
+
+							if (section.locked) continue;
+
+							row
+								.querySelector('[data-dir="up"]')!
+								.addEventListener("click", () => {
+									const prev = row.previousElementSibling as HTMLElement | null;
+									if (!prev) return;
+									const firstRow = row.getBoundingClientRect();
+									const firstPrev = prev.getBoundingClientRect();
+									list.insertBefore(row, prev);
+									flip(row, firstRow);
+									flip(prev, firstPrev);
+								});
+							row
+								.querySelector('[data-dir="down"]')!
+								.addEventListener("click", () => {
+									const next = row.nextElementSibling as HTMLElement | null;
+									if (!next || next.dataset.locked === "true") return;
+									const firstRow = row.getBoundingClientRect();
+									const firstNext = next.getBoundingClientRect();
+									list.insertBefore(next, row);
+									flip(row, firstRow);
+									flip(next, firstNext);
+								});
+
+							row
+								.querySelector<HTMLElement>(".kiln-reorder-handle")!
+								.addEventListener("pointerdown", (e) => startDrag(e, row));
+						}
+					},
+					preConfirm: () => {
+						const list = document.getElementById(
+							"kiln-reorder-list",
+						) as HTMLElement;
+						return Array.from(list.children).map(
+							(el) => (el as HTMLElement).dataset.id as string,
+						);
+					},
+				});
+
+				return value ?? null;
+			},
+		});
+
+		return (results[0]?.result as string[] | null) ?? null;
+	}),
+);
+
 onMessage("searchUsersByActivity", ({ data: query }) =>
 	handle(async () => {
 		const config = await withApi("kiln_api", "extension");

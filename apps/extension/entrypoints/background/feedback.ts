@@ -14,16 +14,36 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import z from "zod";
+import { Extension } from "@kiln/schemas";
 import { onMessage } from "@/utils/messaging";
-import { _errorLog } from "@/utils/storage";
-import { checkRateLimit, handle, KILN_API_BASE, safeFetch } from "./shared";
+import { _errorLog, apiSessions, getFeedbackClientId } from "@/utils/storage";
+import { checkRateLimit, handle, safeFetch, withApi } from "./shared";
 
 const MAX_ERRORS_SENT = 15;
+const CLIENT_ID_HEADER = "x-kiln-feedback-id";
+
+async function getOptionalAuthHeader(
+	userId: number | undefined,
+): Promise<Record<string, string>> {
+	if (!userId) return {};
+	const sessions = await apiSessions.getValue();
+	const session = sessions.find(
+		(s) => s.userId === userId && s.state === "verified" && s.accessToken,
+	);
+	return session?.accessToken
+		? { Authorization: `Bearer ${session.accessToken}` }
+		: {};
+}
 
 onMessage("submitFeedback", ({ data }) =>
 	handle(async () => {
 		checkRateLimit("feedback", 5);
+
+		const [config, clientId, authHeader] = await Promise.all([
+			withApi("kiln_api", "extension"),
+			getFeedbackClientId(),
+			getOptionalAuthHeader(data.userId),
+		]);
 
 		const diagnostics =
 			data.type === "bug"
@@ -34,12 +54,29 @@ onMessage("submitFeedback", ({ data }) =>
 				: undefined;
 
 		return safeFetch(
-			`${KILN_API_BASE}feedback`,
-			z.object({ ok: z.boolean() }),
+			`${config.resolvedUrls.extension}feedback`,
+			Extension.SubmitFeedbackApi,
 			{
 				method: "POST",
+				headers: { [CLIENT_ID_HEADER]: clientId, ...authHeader },
 				body: JSON.stringify({ ...data, diagnostics }),
 			},
+		);
+	}),
+);
+
+onMessage("getMyFeedback", ({ data: userId }) =>
+	handle(async () => {
+		const [config, clientId, authHeader] = await Promise.all([
+			withApi("kiln_api", "extension"),
+			getFeedbackClientId(),
+			getOptionalAuthHeader(userId),
+		]);
+
+		return safeFetch(
+			`${config.resolvedUrls.extension}feedback/mine`,
+			Extension.MyFeedbackApi,
+			{ headers: { [CLIENT_ID_HEADER]: clientId, ...authHeader } },
 		);
 	}),
 );

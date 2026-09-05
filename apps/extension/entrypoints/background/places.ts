@@ -687,6 +687,97 @@ onMessage("deleteReviewReply", ({ data: { userId, replyId } }) =>
 	),
 );
 
+onMessage("getTopReviewers", () =>
+	handle(async () => {
+		const config = await withApi("kiln_api", "extension");
+		return pullKVCache(
+			"leaderboards",
+			"top-reviewers",
+			() =>
+				safeFetch(
+					`${config.resolvedUrls.extension}places/leaderboards/top-reviewers`,
+					Extension.TopReviewersApi,
+				),
+			5 * 60 * 1000,
+			false,
+		);
+	}),
+);
+
+onMessage("getRatedWorldsLeaderboard", ({ data: order }) =>
+	handle(async () => {
+		const config = await withApi("kiln_api", "extension");
+		return pullKVCache(
+			"leaderboards",
+			`rated-worlds-${order}`,
+			() =>
+				safeFetch(
+					`${config.resolvedUrls.extension}places/leaderboards/rated-worlds?order=${order}`,
+					Extension.RatedWorldsLeaderboardApi,
+				),
+			5 * 60 * 1000,
+			false,
+		);
+	}),
+);
+
+onMessage("setNativeRankingsLoadingPaused", async ({ data: paused }) => {
+	const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+	if (!tabs[0]?.id) return;
+
+	await browser.scripting.executeScript({
+		target: { tabId: tabs[0].id },
+		world: "MAIN",
+		args: [paused],
+		func: (paused: boolean) => {
+			const win = window as typeof window & {
+				__kilnRankingsPaused?: boolean;
+				__kilnRankingsPatched?: boolean;
+			};
+
+			if (!win.__kilnRankingsPatched) {
+				//@ts-expect-error axios is a global injected by the page
+				const pageAxios = window.axios;
+				if (pageAxios?.get) {
+					const originalGet = pageAxios.get.bind(pageAxios);
+					pageAxios.get = (url: string, config?: unknown) => {
+						if (
+							win.__kilnRankingsPaused &&
+							String(url).startsWith("/api/rankings")
+						) {
+							return Promise.resolve({
+								data: { data: [], meta: { nextPageURL: null } },
+							});
+						}
+						return originalGet(url, config);
+					};
+				}
+
+				const nav = document.getElementById("ranking-category");
+				nav?.addEventListener(
+					"click",
+					(e) => {
+						const target = (e.target as HTMLElement).closest?.(
+							"a[data-ranking-category]",
+						) as HTMLElement | null;
+						if (
+							target &&
+							!target.dataset.rankingCategory?.startsWith("kiln-")
+						) {
+							win.__kilnRankingsPaused = false;
+						}
+					},
+					true,
+				);
+
+				win.__kilnRankingsPatched = true;
+			}
+
+			win.__kilnRankingsPaused = paused;
+		},
+	});
+});
+
 onMessage("getWorldVersions", ({ data }) =>
 	handle(async () => {
 		const cacheKey = "data";

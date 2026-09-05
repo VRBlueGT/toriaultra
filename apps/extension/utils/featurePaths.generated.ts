@@ -28,6 +28,7 @@ export const PATH_FEATURES = {
 		"irlBrickPrice",
 		"myFeedPosts",
 		"quickCreatorLaunchBtns",
+		"reorderableHomepage",
 		"searchFeedPosts"
 	],
 	"https://polytoria.com/create": [
@@ -64,6 +65,7 @@ export const PATH_FEATURES = {
 		"advancedForumSearch",
 		"aiBotForumWarnings",
 		"bookmarkedThreads",
+		"collectibleOwnerLabels",
 		"copyPostContents",
 		"forumMentions",
 		"improvedForumComposer",
@@ -73,6 +75,7 @@ export const PATH_FEATURES = {
 		"advancedForumSearch",
 		"aiBotForumWarnings",
 		"bookmarkedThreads",
+		"collectibleOwnerLabels",
 		"copyPostContents",
 		"forumMentions",
 		"improvedForumComposer",
@@ -91,6 +94,7 @@ export const PATH_FEATURES = {
 		"irlBrickPrice",
 		"myFeedPosts",
 		"quickCreatorLaunchBtns",
+		"reorderableHomepage",
 		"searchFeedPosts"
 	],
 	"https://polytoria.com/inbox": [
@@ -153,6 +157,9 @@ export const PATH_FEATURES = {
 		"serverShareLinks",
 		"subtleV2Labels",
 		"worldTrends"
+	],
+	"https://polytoria.com/rankings*": [
+		"detailedPlaceReviews"
 	],
 	"https://polytoria.com/store/*": [
 		"accurateOwners",

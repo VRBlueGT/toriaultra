@@ -26,6 +26,7 @@ export default defineConfig({
 			"declarativeNetRequest",
 			"contextMenus",
 			"scripting",
+			"alarms",
 		],
 		host_permissions: [
 			"https://polytoria.com/*",

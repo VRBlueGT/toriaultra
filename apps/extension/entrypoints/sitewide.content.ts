@@ -45,6 +45,20 @@ import {
 	renderKilnNotifications,
 } from "@/utils/utilities";
 
+async function applyActiveKilnTheme(): Promise<void> {
+	const values = await preferences.getPreferences();
+	if (!values.enabled.includes("themeCreator")) return;
+	const activeId = values.config.themeCreator.activeThemeId || "default";
+	if (activeId === "default") return;
+	if (activeId in THEME_PRESETS) {
+		applyKilnTheme(THEME_PRESETS[activeId]);
+	} else {
+		const saved = await _savedThemes.getValue();
+		const theme = saved.find((t) => t.id === activeId);
+		applyKilnTheme(theme ?? null);
+	}
+}
+
 export default defineContentScript({
 	matches: ["https://polytoria.com/*"],
 	runAt: "document_start",
@@ -55,20 +69,10 @@ export default defineContentScript({
 			location.pathname,
 		);
 		if (!isProfilePage) {
-			const values = await preferences.getPreferences();
-			if (values.enabled.includes("themeCreator")) {
-				const activeId = values.config.themeCreator.activeThemeId || "default";
-				if (activeId !== "default") {
-					if (activeId in THEME_PRESETS) {
-						applyKilnTheme(THEME_PRESETS[activeId]);
-					} else {
-						const saved = await _savedThemes.getValue();
-						const theme = saved.find((t) => t.id === activeId);
-						applyKilnTheme(theme ?? null);
-					}
-				}
-			}
+			await applyActiveKilnTheme();
+			onMessage("themeAutoUpdated", () => applyActiveKilnTheme());
 
+			const values = await preferences.getPreferences();
 			if (values.enabled.includes("legacySidebar")) {
 				const style = document.createElement("style");
 				style.textContent =

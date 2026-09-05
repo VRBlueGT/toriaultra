@@ -63,7 +63,9 @@ const irlBrickPriceCurrencies = new Set(
 			id: string;
 			config?: Array<{ options?: Array<{ value: string }> }>;
 		}>
-	).find((p) => p.id === "irlBrickPrice")?.config?.[0]?.options?.map((o) => o.value),
+	)
+		.find((p) => p.id === "irlBrickPrice")
+		?.config?.[0]?.options?.map((o) => o.value),
 );
 
 export const defaultPreferences = {
@@ -202,6 +204,7 @@ export type SavedTheme = {
 	publishedSlug?: string;
 	previousPublishedSlug?: string;
 	importedSlug?: string;
+	autoUpdate?: boolean;
 	backgroundImage?: string;
 	backgroundOverlayColor?: string;
 	backgroundOverlayOpacity?: number;
@@ -265,6 +268,14 @@ export const _userNotes = storage.defineItem<Record<number, string>>(
 	"local:userNotes",
 	{
 		fallback: {},
+		version: 1,
+	},
+);
+
+export const _homepageSectionOrder = storage.defineItem<string[]>(
+	"local:homepageSectionOrder",
+	{
+		fallback: [],
 		version: 1,
 	},
 );
@@ -412,3 +423,20 @@ export const _errorLog = storage.defineItem<KilnErrorLogEntry[]>(
 		version: 1,
 	},
 );
+
+const _feedbackClientId = storage.defineItem<string | null>(
+	"local:feedbackClientId",
+	{
+		fallback: null,
+		version: 1,
+	},
+);
+
+export async function getFeedbackClientId(): Promise<string> {
+	const existing = await _feedbackClientId.getValue();
+	if (existing) return existing;
+
+	const id = crypto.randomUUID();
+	await _feedbackClientId.setValue(id);
+	return id;
+}

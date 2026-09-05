@@ -20,7 +20,6 @@ import {
 } from "@/utils/utilities";
 
 const DEFAULT_MAX_CHARS = 5000;
-const FILTER_HIGHLIGHTING_ENABLED = false;
 
 export function improvedForumComposer(
 	showCharacterCount: boolean,
@@ -138,8 +137,9 @@ export function improvedForumComposer(
 	wrapper.appendChild(textareaContainer);
 	wrapper.appendChild(preview);
 
-	if (FILTER_HIGHLIGHTING_ENABLED && highlightFilteredWords) {
+	if (highlightFilteredWords) {
 		initFilterHighlighting(textarea, textareaContainer);
+		initTitleFilterHighlighting(textarea);
 	}
 
 	const syncHeight = () => {
@@ -184,18 +184,33 @@ export function improvedForumComposer(
 	});
 }
 
-function initFilterHighlighting(
-	textarea: HTMLTextAreaElement,
-	container: HTMLElement,
-) {
+type FilterField = HTMLTextAreaElement | HTMLInputElement;
+
+function initTitleFilterHighlighting(textarea: HTMLTextAreaElement) {
+	const title = textarea
+		.closest("form")
+		?.querySelector<HTMLInputElement>('input[name="title"]');
+	const container = title?.parentElement;
+	if (!title || !container) return;
+
+	if (getComputedStyle(container).position === "static") {
+		container.style.position = "relative";
+	}
+
+	initFilterHighlighting(title, container);
+}
+
+function initFilterHighlighting(field: FilterField, container: HTMLElement) {
+	const isInput = field instanceof HTMLInputElement;
+
 	const backdrop = document.createElement("div");
 	backdrop.setAttribute("aria-hidden", "true");
 	backdrop.style.cssText = `
 		position: absolute;
-		inset: 0;
+		top: 0;
+		left: 0;
+		z-index: 1;
 		overflow: hidden;
-		white-space: pre-wrap;
-		overflow-wrap: break-word;
 		color: transparent;
 		pointer-events: none;
 	`;
@@ -216,24 +231,63 @@ function initFilterHighlighting(
 		"fontSize",
 		"fontWeight",
 		"fontStyle",
+		"fontVariant",
 		"letterSpacing",
+		"wordSpacing",
 		"lineHeight",
+		"textAlign",
+		"textIndent",
+		"textTransform",
+		"whiteSpace",
+		"overflowWrap",
+		"wordBreak",
+		"direction",
 	] as const;
 
-	const cs = getComputedStyle(textarea);
-	for (const prop of copiedProps) {
-		backdrop.style[prop] = cs[prop];
-	}
-	backdrop.style.borderColor = "transparent";
+	const syncGeometry = () => {
+		const cs = getComputedStyle(field);
+		for (const prop of copiedProps) {
+			backdrop.style[prop] = cs[prop];
+		}
+		backdrop.style.borderColor = "transparent";
+		if (isInput) backdrop.style.whiteSpace = "pre";
 
-	container.insertBefore(backdrop, textarea);
-	textarea.style.position = "relative";
-	textarea.style.backgroundColor = "transparent";
+		const borderX =
+			Number.parseFloat(cs.borderLeftWidth) +
+			Number.parseFloat(cs.borderRightWidth);
+		const borderY =
+			Number.parseFloat(cs.borderTopWidth) +
+			Number.parseFloat(cs.borderBottomWidth);
+
+		const scrollbarX = Math.max(
+			0,
+			field.offsetWidth - field.clientWidth - borderX,
+		);
+		const scrollbarY = Math.max(
+			0,
+			field.offsetHeight - field.clientHeight - borderY,
+		);
+
+		backdrop.style.paddingRight = `${Number.parseFloat(cs.paddingRight) + scrollbarX}px`;
+		backdrop.style.paddingBottom = `${Number.parseFloat(cs.paddingBottom) + scrollbarY}px`;
+		backdrop.style.top = `${field.offsetTop}px`;
+		backdrop.style.left = `${field.offsetLeft}px`;
+		backdrop.style.width = `${field.offsetWidth}px`;
+		backdrop.style.height = `${field.offsetHeight}px`;
+	};
+
+	container.insertBefore(backdrop, field);
+	syncGeometry();
 
 	let filters: RegExp[] = [];
 
+	const syncScroll = () => {
+		backdrop.scrollTop = field.scrollTop;
+		backdrop.scrollLeft = field.scrollLeft;
+	};
+
 	const render = () => {
-		const text = textarea.value;
+		const text = field.value;
 		if (filters.length === 0) {
 			backdrop.innerHTML = "";
 			return;
@@ -251,28 +305,27 @@ function initFilterHighlighting(
 		html += escapeHtml(text.slice(lastIndex));
 
 		backdrop.innerHTML = text.endsWith("\n") ? `${html} ` : html;
-		backdrop.scrollTop = textarea.scrollTop;
-		backdrop.scrollLeft = textarea.scrollLeft;
-
-		if (import.meta.env.MODE == "development") {
-			console.log(
-				`[Kiln] Filter highlighting: ${ranges.length} match(es) found`,
-				ranges.map(([start, end]) => JSON.stringify(text.slice(start, end))),
-			);
-		}
+		syncScroll();
 	};
 
-	textarea.addEventListener("input", render);
-	textarea.addEventListener("scroll", () => {
-		backdrop.scrollTop = textarea.scrollTop;
-		backdrop.scrollLeft = textarea.scrollLeft;
-	});
+	field.addEventListener("input", render);
+	for (const event of ["scroll", "keyup", "click", "select", "focus", "blur"]) {
+		field.addEventListener(event, () => {
+			syncScroll();
+			requestAnimationFrame(syncScroll);
+		});
+	}
+
+	new ResizeObserver(() => {
+		syncGeometry();
+		syncScroll();
+	}).observe(field);
 
 	getProfanityFilter().then((loadedFilters) => {
 		filters = loadedFilters;
 		if (import.meta.env.MODE == "development") {
 			console.log(
-				`[Kiln] Filter highlighting initialized with ${filters.length} pattern(s)`,
+				`[Kiln] Filter highlighting initialized on ${isInput ? "title" : "content"} with ${filters.length} pattern(s)`,
 			);
 		}
 		render();
@@ -298,12 +351,12 @@ function findFilteredRanges(
 		}
 	}
 
-	raw.sort((a, b) => a[0] - b[0]);
+	raw.sort((a, b) => a[0] - b[0] || b[1] - a[1]);
 
 	const merged: [number, number][] = [];
 	for (const range of raw) {
 		const last = merged[merged.length - 1];
-		if (last && range[0] <= last[1]) {
+		if (last && range[0] < last[1]) {
 			last[1] = Math.max(last[1], range[1]);
 		} else {
 			merged.push(range);

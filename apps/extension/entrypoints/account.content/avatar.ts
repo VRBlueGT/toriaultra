@@ -90,6 +90,55 @@ const DEFAULT_TRANSFORM: AccessoryTransform = {
 	scale: 1,
 };
 
+const BODY_COLOR_KEYS = [
+	"headColor",
+	"torsoColor",
+	"leftArmColor",
+	"rightArmColor",
+	"leftLegColor",
+	"rightLegColor",
+] as const;
+
+const HEX_COLOR = /^#?([0-9a-fA-F]{6})$/;
+const SHORTHAND_HEX_COLOR = /^#?([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F])$/;
+const RGB_COLOR = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/;
+
+function toHexColor(value: unknown): string | null {
+	if (typeof value !== "string") return null;
+	const color = value.trim();
+
+	const full = HEX_COLOR.exec(color);
+	if (full) return `#${full[1].toLowerCase()}`;
+
+	const shorthand = SHORTHAND_HEX_COLOR.exec(color);
+	if (shorthand) {
+		const [, r, g, b] = shorthand;
+		return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
+	}
+
+	const rgb = RGB_COLOR.exec(color);
+	if (rgb) {
+		return `#${rgb
+			.slice(1, 4)
+			.map((channel) =>
+				Math.min(255, Math.max(0, Math.round(parseFloat(channel))))
+					.toString(16)
+					.padStart(2, "0"),
+			)
+			.join("")}`;
+	}
+
+	return null;
+}
+
+function normalizeBodyColors(state: AvatarIFrameState): AvatarIFrameState {
+	const record = state as Record<string, unknown>;
+	for (const key of BODY_COLOR_KEYS) {
+		record[key] = toHexColor(record[key]) ?? DEFAULT_AVATAR[key];
+	}
+	return state;
+}
+
 export function customBodyColorHexCodes(showDisclosures: boolean) {
 	const bodyPartButtons = document.querySelectorAll<HTMLButtonElement>(
 		".avatarAction.bodypart",
@@ -211,7 +260,7 @@ export function avatarSandbox(
 				"https://cdn.polytoria.com/assets/T2iRSGfF-USjCej5fq_-P1HNrNX8Grx4.png",
 		},
 		34910: {
-			type: "clothes",
+			type: "clothing",
 			name: "Treehugging",
 			price: 0,
 			creator: { name: "Polytoria", id: 1 },
@@ -318,14 +367,14 @@ export function avatarSandbox(
 	]
 		.map(
 			(c) =>
-				`<div class="colorpicker-color" style="background-color: ${c}"></div>`,
+				`<div class="colorpicker-color" data-color="${c}" style="background-color: ${c}"></div>`,
 		)
 		.join("");
 	bodyColorsModal.innerHTML = `
 <div class="row text-muted mb-4" style="font-size: 0.8rem;">
 	<div class="col">
 		<h5 class="mb-0" style="color: #fff;">Modify Body Colors</h5>
-		Selected Body Part: <i id="p+selected_bodypart">none</i>
+		Selected Body Part: <i id="p+selected_bodypart" class="kiln-bodycolor-target">none</i>
 	</div>
 	<div class="col-md-3">
 		<button type="button" class="btn btn-info w-100 mx-auto">X</button>
@@ -334,13 +383,49 @@ export function avatarSandbox(
 <div class="modal-body">
 	<div class="wrapper">${colorSwatches}</div>
 	<div class="input-group mt-2">
-		<input type="text" class="form-control bg-dark" placeholder="HEX Code..">
-		<button type="button" class="btn btn-primary">Set</button>
+		<input type="text" class="form-control bg-dark kiln-bodycolor-hex" placeholder="HEX Code.." maxlength="7" spellcheck="false" autocomplete="off">
+		<button type="button" class="btn btn-primary kiln-bodycolor-set">Set</button>
+		<div class="invalid-feedback">Enter a hex code like #ffb000.</div>
 	</div>
 </div>`;
 	bodyColorsModal
 		.querySelector<HTMLButtonElement>(".btn-info")!
 		.addEventListener("click", () => bodyColorsModal.close());
+
+	const bodyColorTargetLabel = bodyColorsModal.querySelector<HTMLElement>(
+		".kiln-bodycolor-target",
+	)!;
+	const bodyColorHexInput = bodyColorsModal.querySelector<HTMLInputElement>(
+		".kiln-bodycolor-hex",
+	)!;
+
+	function applyBodyColor(hex: string): void {
+		(avatar as Record<string, unknown>)[`${selectedBodyPart}Color`] = hex;
+		bodyColorsModal.close();
+		updateAvatar();
+	}
+
+	function submitBodyColorHex(): void {
+		const hex = toHexColor(bodyColorHexInput.value);
+		if (hex === null) {
+			bodyColorHexInput.classList.add("is-invalid");
+			return;
+		}
+		bodyColorHexInput.value = "";
+		applyBodyColor(hex);
+	}
+
+	bodyColorHexInput.addEventListener("input", () =>
+		bodyColorHexInput.classList.remove("is-invalid"),
+	);
+	bodyColorHexInput.addEventListener("keydown", (e) => {
+		if (e.key !== "Enter") return;
+		e.preventDefault();
+		submitBodyColorHex();
+	});
+	bodyColorsModal
+		.querySelector<HTMLButtonElement>(".kiln-bodycolor-set")!
+		.addEventListener("click", submitBodyColorHex);
 
 	const repositionModal = createModal();
 	const repositionSliderIds = [
@@ -592,6 +677,12 @@ export function avatarSandbox(
 	).forEach((part) => {
 		part.addEventListener("click", () => {
 			selectedBodyPart = part.id;
+			bodyColorTargetLabel.innerText = formatBodyPartName(selectedBodyPart);
+			bodyColorHexInput.classList.remove("is-invalid");
+			bodyColorHexInput.value =
+				toHexColor(
+					(avatar as Record<string, unknown>)[`${selectedBodyPart}Color`],
+				) ?? "";
 			bodyColorsModal.showModal();
 		});
 	});
@@ -602,10 +693,9 @@ export function avatarSandbox(
 		) as HTMLElement[]
 	).forEach((color) => {
 		color.addEventListener("click", () => {
-			(avatar as Record<string, unknown>)[`${selectedBodyPart}Color`] =
-				color.style.backgroundColor;
-			bodyColorsModal.close();
-			updateAvatar();
+			const hex = color.dataset.color;
+			if (hex === undefined) return;
+			applyBodyColor(hex);
 		});
 	});
 
@@ -694,7 +784,9 @@ export function avatarSandbox(
 	jsonUploadButton.addEventListener("change", () => {
 		const reader = new FileReader();
 		reader.addEventListener("loadend", () => {
-			avatar = JSON.parse(reader.result as string) as AvatarIFrameState;
+			avatar = normalizeBodyColors(
+				JSON.parse(reader.result as string) as AvatarIFrameState,
+			);
 			updateAvatar();
 			jsonUploadButton.value = "";
 		});
@@ -1178,7 +1270,7 @@ export function avatarSandbox(
 <div class="card mcard w-100">
   <div class="card-body text-center p-4">
     <img class="m-2" src="${sadFace}" width="75" height="75" style="filter: grayscale(1)">
-    <p class="text-muted mb-0"><a href="/account">Verify your Kiln account</a> to save and sync outfits across devices.</p>
+    <p class="text-muted mb-0"><a href="/my/settings/kiln?tab=sync">Verify your Kiln account</a> to save and sync outfits across devices.</p>
   </div>
 </div>`;
 				return;
@@ -1526,6 +1618,11 @@ export function avatarSandbox(
 				onConfirm();
 			}
 		});
+	}
+
+	function formatBodyPartName(part: string): string {
+		const spaced = part.replace(/([A-Z])/g, " $1");
+		return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 	}
 
 	function cleanAccessoryType(type: string): string {

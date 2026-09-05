@@ -45,6 +45,12 @@ export default defineContentScript({
 					view.copyPostContents();
 				if (values.enabled.includes("bookmarkedThreads"))
 					view.bookmarkedThreads(showDisclosures);
+				if (values.enabled.includes("collectibleOwnerLabels"))
+					view.forumUserLabels(
+						values.config.collectibleOwnerLabels?.inactiveDays ?? 30,
+						values.config.collectibleOwnerLabels?.ogYear ?? 2023,
+						showDisclosures,
+					);
 				if (values.enabled.includes("improvedForumComposer"))
 					create.improvedForumComposer(
 						values.config.improvedForumComposer.showCharacterCount,

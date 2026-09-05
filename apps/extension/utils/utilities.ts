@@ -154,24 +154,49 @@ export function getCurrencyRates(): Promise<Extension.CurrencyExchangeRate> {
 	return _currencyRatesPromise;
 }
 
-function normalizeFilterPattern(pattern: string): string {
-	let normalized = pattern;
-	if (normalized.startsWith("^")) normalized = normalized.slice(1);
-	if (normalized.endsWith("$") && !normalized.endsWith("\\$")) {
-		normalized = normalized.slice(0, -1);
+const MAX_WILDCARD_SPAN = 20;
+
+const REGEX_SYNTAX = /[\\[\](){}|^$+?]|\.[*+?{]/;
+const REGEX_LITERAL = /^\/(.*)\/([a-z]*)$/;
+
+function escapeLiteral(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function globToSource(glob: string): string {
+	const literals = glob.split("*").filter(Boolean);
+	if (literals.length === 0) return "";
+
+	return [
+		glob.startsWith("*") ? "" : "(?<!\\w)",
+		literals.map(escapeLiteral).join(`.{0,${MAX_WILDCARD_SPAN}}?`),
+		glob.endsWith("*") ? "" : "(?!\\w)",
+	].join("");
+}
+
+const edgeWildcard = (match: string) => (match.includes("+") ? "\\S+" : "\\S*");
+
+function regexToSource(source: string): string {
+	return source
+		.replace(/^(?:\.[*+]\??)+/, edgeWildcard)
+		.replace(/(?<!\\)(?:\.[*+]\??)+$/, edgeWildcard)
+		.replace(/(?<!\\)\.\*/g, `.{0,${MAX_WILDCARD_SPAN}}?`)
+		.replace(/(?<!\\)\.\+/g, `.{1,${MAX_WILDCARD_SPAN}}?`);
+}
+
+function compileFilterPattern(line: string): RegExp | null {
+	const literal = REGEX_LITERAL.exec(line);
+	const source =
+		literal || REGEX_SYNTAX.test(line)
+			? regexToSource(literal ? literal[1] : line)
+			: globToSource(line);
+	if (!source) return null;
+
+	try {
+		return new RegExp(source, `gi${(literal?.[2] ?? "").replace(/[gi]/g, "")}`);
+	} catch (_err) {
+		return null;
 	}
-	normalized = normalized
-		.replace(/^(?:\.[*+])+/, "")
-		.replace(/(?:\.[*+])+$/, "");
-
-	normalized = normalized.replace(/^\*+/, "");
-
-	const MAX_WILDCARD_SPAN = 20;
-	normalized = normalized
-		.replace(/\.\*/g, `.{0,${MAX_WILDCARD_SPAN}}`)
-		.replace(/\.\+/g, `.{1,${MAX_WILDCARD_SPAN}}`);
-
-	return normalized || pattern;
 }
 
 let _profanityFilterPromise: Promise<RegExp[]> | null = null;
@@ -202,11 +227,9 @@ export function getProfanityFilter(): Promise<RegExp[]> {
 				.map((line) => line.trim())
 				.filter(Boolean)
 				.reduce<RegExp[]>((acc, line) => {
-					try {
-						acc.push(new RegExp(normalizeFilterPattern(line), "gi"));
-					} catch (_err) {
-						invalidLines++;
-					}
+					const compiled = compileFilterPattern(line);
+					if (compiled) acc.push(compiled);
+					else invalidLines++;
 					return acc;
 				}, []);
 
@@ -226,6 +249,14 @@ export function getProfanityFilter(): Promise<RegExp[]> {
 			return [];
 		}
 	})();
+
+	_profanityFilterPromise.then((patterns) => {
+		if (patterns.length === 0) {
+			_profanityFilterPromise = null;
+			_profanityFilterExpiry = 0;
+		}
+	});
+
 	return _profanityFilterPromise;
 }
 

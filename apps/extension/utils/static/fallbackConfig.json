@@ -22,7 +22,8 @@
 		"maxNFTSerialsPerItem": 10,
 		"maxBlockedTraders": 200,
 		"maxPublishedThemes": 15,
-		"maxPinnedAchievements": 5
+		"maxPinnedAchievements": 5,
+		"minReviewPlaytimeMinutes": 5
 	},
 	"users": {
 		"generativeAI": [

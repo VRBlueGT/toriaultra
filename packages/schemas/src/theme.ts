@@ -799,6 +799,9 @@ export function buildThemeCSS(
 	const dropdownBg = lightenHex(navbarColor, 9);
 	const secondaryBg = lightenHex(navbarColor, 13);
 	const borderColor = lightenHex(navbarColor, 18);
+	const heroBgTop = darkenHex(navbarColor, 5);
+	const heroBgBottom = darkenHex(navbarColor, 11);
+	const [hvr, hvg, hvb] = hexToRgb(darkenHex(navbarColor, 16));
 	const [cr, cg, cb] = hexToRgb(cardBg);
 	const [sr, sg, sb] = hexToRgb(secondaryBg);
 	const [bcr, bcg, bcb] = hexToRgb(borderColor);
@@ -1059,6 +1062,33 @@ html .input-group.nav-search input#gsearch:focus {
   padding: 12px;
 }
 .store-filter-label { color: rgba(255, 255, 255, 0.7); }
+
+.item-hero {
+  background: linear-gradient(180deg, ${heroBgTop}, ${heroBgBottom}) !important;
+  border-bottom-color: ${borderColor} !important;
+}
+.item-hero::before {
+  content: "";
+  position: absolute;
+  inset: -15%;
+  z-index: 0;
+  background-image: var(--item-bg);
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  filter: blur(50px) saturate(1.3);
+  opacity: 0.22;
+  pointer-events: none;
+}
+.item-hero::after {
+  background: radial-gradient(
+    ellipse at center,
+    rgba(${ar}, ${ag}, ${ab}, 0.1) 0%,
+    transparent 42%,
+    rgba(${hvr}, ${hvg}, ${hvb}, 0.85) 100%
+  ) !important;
+}
+.item-hero > canvas { position: relative; z-index: 1; }
 
 .card-dash {
   background: linear-gradient(180deg, ${cardBg}, ${cardCap}) !important;
