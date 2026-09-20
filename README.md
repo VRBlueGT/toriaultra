@@ -1,11 +1,10 @@
 > [!CAUTION]
-> Kiln is in no way affiliated with the Polytoria team. For any bug reports, feature suggestions, or concerns, please submit them via the "Feedback" form in the extension preferences.
+> ToriaUltra is in no way affiliated with the Polytoria team. For any bug reports, feature suggestions, or concerns, please submit them via the "Feedback" form in the extension preferences.
 
-# Kiln
+# ToriaUltra
 
-Kiln, previously Poly+, is a quality-of-life browser extension for the Polytoria website.
+ToriaUltra is a quality-of-life browser extension for the Polytoria website.
 
-> "50+ features. Everything Polytoria should have built in."
 
 ![image](https://img.shields.io/badge/Google_chrome-4285F4?style=for-the-badge&logo=Google-chrome&logoColor=white)
 ![image](https://img.shields.io/badge/Microsoft_Edge-0078D7?style=for-the-badge&logo=Microsoft-edge&logoColor=white)
@@ -32,11 +31,10 @@ Kiln, previously Poly+, is a quality-of-life browser extension for the Polytoria
 
 - **Theme Creator** lets you unleash your creativity and customize the Polytoria website to your liking!
 
-A full list of features can be found on the website [here](https://kiln.indexx.dev).
 
 ## Supported Browsers
 
-Kiln is supported on Chromium-based browsers and Firefox!
+ToriaUltra is supported on Chromium-based browsers and Firefox!
 
 ### Examples of Browsers that are Chromium-based
 
@@ -46,14 +44,7 @@ Kiln is supported on Chromium-based browsers and Firefox!
 - Opera (& it's variations)
 - Brave
 - Helium
-etc..
+- Etc..
 
 # How to Download
-
-1. Go to the extensions (or add-ons) webstore for your respective browser:
-    - Chromium-based browsers: [Chrome Webstore](https://chromewebstore.google.com/detail/Kiln/feafepokhecfmimpepbpccmcnjbcbklg)
-    - Firefox: [Firefox Add-ons Store](https://addons.mozilla.org/en-US/firefox/addon/polytoriaplus/)
-
-2. Click on the Kiln icon in your browser's tooltip (if it's pinned, if not you may have to go to a sub-menu in your browser's toolbar and find the extension there) to go to the settings page, and customize your experience. Remember to click save at the bottom of the page when you are done!
-
-3. Go to Polytoria's website and enjoy the many features and QOL improvements that come with Kiln!
+ToriaUltra isn't out yet, however you can compile it for yourself. This is not recommended as right now because I have not finished stripping out PolyTrack and Kiln APIs.
