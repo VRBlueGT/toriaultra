@@ -14,7 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import { _showKilnDisclosures, preferences } from "@/utils/storage";
+import {
+	_condensedTabBars,
+	_showKilnDisclosures,
+	preferences,
+} from "@/utils/storage";
 import * as discovery from "./discovery";
 import * as manage from "./manage";
 import * as view from "./view";
@@ -29,7 +33,8 @@ export default defineContentScript({
 		Promise.all([
 			preferences.getPreferences(),
 			_showKilnDisclosures.getValue(),
-		]).then(async ([values, showDisclosures]) => {
+			_condensedTabBars.getValue(),
+		]).then(async ([values, showDisclosures, condensedTabBars]) => {
 			const user = await getUserDetails();
 			if (!user) {
 				console.warn("[Kiln] Failure to get logged in user details.");
@@ -50,10 +55,16 @@ export default defineContentScript({
 					creatorAnchor?.getAttribute("href")?.split("/")[2] ?? null;
 
 				if (values.enabled.includes("legacyWorldViewLayout")) {
-					view.legacyPlaceViewLayout(showDisclosures);
+					view.legacyPlaceViewLayout(
+						showDisclosures,
+						values.config.legacyWorldViewLayout.newerFeatures,
+					);
 				}
 				if (values.enabled.includes("favoritedPlaces")) {
 					view.favoritedPlaces(user.userId, showDisclosures);
+				}
+				if (values.enabled.includes("downloadableCopyableWorlds")) {
+					view.downloadableCopyableWorlds(showDisclosures);
 				}
 				if (values.enabled.includes("placeRevenue")) {
 					view.approxPlaceRevenue(
@@ -91,6 +102,9 @@ export default defineContentScript({
 						showDisclosures,
 					);
 				}
+				if (values.enabled.includes("serverUserSearch")) {
+					view.serverUserSearch(showDisclosures);
+				}
 
 				if (
 					values.enabled.includes("creatorCommentLabels") &&
@@ -107,13 +121,14 @@ export default defineContentScript({
 					);
 				}
 				if (values.enabled.includes("detailedPlaceReviews")) {
-					view.detailedPlaceReviews(user.userId, showDisclosures);
+					view.detailedPlaceReviews(
+						user.userId,
+						showDisclosures,
+						condensedTabBars,
+					);
 				}
 				if (values.enabled.includes("placeConsumablesTab") && creatorId) {
 					view.placeConsumablesTab(creatorId, showDisclosures);
-				}
-				if (values.enabled.includes("favoritedPlaces")) {
-					view.recordPlaceView();
 				}
 			} else if (first === "create") {
 				if (import.meta.env.MODE == "development") {
@@ -143,27 +158,30 @@ export default defineContentScript({
 						manage.worldTrends();
 					}
 				}
-			} else {
+			} else if (first === "places" && !second) {
 				if (import.meta.env.MODE == "development") {
 					console.log("[Kiln] Running discovery page functions: ", discovery);
 				}
 
-				if (values.enabled.includes("subtleV2Labels")) {
-					discovery.subtleV2Labels(
-						values.config.subtleV2Labels.mode,
+				if (values.enabled.includes("legacyWorldDiscoveryLayout")) {
+					discovery.legacyWorldDiscoveryLayout(
 						showDisclosures,
+						values.enabled.includes("disableInfiniteScrolling") &&
+							values.config.disableInfiniteScrolling.places,
 					);
-				}
 
-				if (values.enabled.includes("randomPlace")) {
+					if (values.enabled.includes("subtleV2Labels")) {
+						discovery.legacySubtleV2Labels(
+							values.config.subtleV2Labels.mode,
+							showDisclosures,
+						);
+					}
+
+					if (values.enabled.includes("randomPlace")) {
+						discovery.legacyRandomPlace(showDisclosures);
+					}
+				} else if (values.enabled.includes("randomPlace")) {
 					discovery.randomPlace(showDisclosures);
-				}
-
-				if (
-					values.enabled.includes("disableInfiniteScrolling") &&
-					values.config.disableInfiniteScrolling.places
-				) {
-					discovery.disableInfiniteScrolling(showDisclosures);
 				}
 			}
 		});

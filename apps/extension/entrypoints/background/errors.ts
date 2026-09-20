@@ -19,7 +19,7 @@ import { _errorLog } from "@/utils/storage";
 import type { KilnErrorLogEntry } from "@/utils/types";
 
 const MAX_ENTRIES = 40;
-const MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
+const MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 
 export async function logError(
 	entry: Omit<KilnErrorLogEntry, "timestamp">,

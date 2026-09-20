@@ -20,7 +20,6 @@ import sadFace from "@/assets/sad-face.webp";
 import {
 	_bestFriends,
 	_homepageSectionOrder,
-	_lastViewedPlaces,
 	_showKilnDisclosures,
 	isChrome,
 	preferences,
@@ -29,7 +28,6 @@ import type { CurrencyCode, FeedPost } from "@/utils/types";
 import {
 	applyKilnDisclosureTitle,
 	createKilnDisclosureBadge,
-	fireKilnNotification,
 	formatNotificationRelativeTime,
 	getUserDetails,
 	kilnDisclosureBadgeHtml,
@@ -45,10 +43,7 @@ export default defineContentScript({
 			_showKilnDisclosures.getValue(),
 		]).then(([values, showDisclosures]) => {
 			if (values.enabled.includes("favoritedPlaces"))
-				favoritedPlaces(
-					values.config.favoritedPlaces.notifyOnUpdate,
-					showDisclosures,
-				);
+				favoritedPlaces(showDisclosures);
 			if (values.enabled.includes("bestFriends")) bestFriends(showDisclosures);
 			if (values.enabled.includes("irlBrickPrice"))
 				irlBrickPrice(
@@ -79,10 +74,7 @@ export default defineContentScript({
 	},
 });
 
-async function favoritedPlaces(
-	notifyOnUpdate: boolean,
-	showDisclosures: boolean,
-) {
+async function favoritedPlaces(showDisclosures: boolean) {
 	const container = document.createElement("div");
 	container.id = "home-pinnedWorlds";
 	container.innerHTML = `
@@ -173,8 +165,6 @@ async function favoritedPlaces(
 		return;
 	}
 
-	const lastViewed = notifyOnUpdate ? await _lastViewedPlaces.getValue() : {};
-
 	const cardElements: Array<{
 		scrollCard: HTMLAnchorElement;
 		details: Polytoria.PlaceApi;
@@ -213,42 +203,6 @@ async function favoritedPlaces(
 			PlayerCountText.children[0].classList.value =
 				"text-warning fa-duotone fa-lock";
 			PlayerCountText.children[1].remove();
-		}
-
-		if (notifyOnUpdate) {
-			const knownUpdatedAt = lastViewed[details.id];
-			const currentUpdatedAt = details.updatedAt ?? details.createdAt;
-
-			if (knownUpdatedAt !== undefined && currentUpdatedAt !== knownUpdatedAt) {
-				const ratingsHeader = scrollCard.querySelector(".ratings-header")!;
-				const badge = document.createElement("span");
-				badge.className = "kiln-update-badge badge bg-info";
-				badge.textContent = "Updated";
-				badge.title = "This world has been updated since you last viewed it.";
-				Object.assign(badge.style, {
-					position: "absolute",
-					top: "0",
-					left: "50%",
-					translate: "-50%",
-					zIndex: "2000",
-					fontFamily: "'Varela Round'",
-					borderTopLeftRadius: "0px",
-					borderTopRightRadius: "0px",
-					marginTop: "-3px",
-					width: "50%",
-					boxShadow: "0 0 3px #00000087",
-				});
-				ratingsHeader.appendChild(badge);
-
-				await fireKilnNotification({
-					id: `place-update:${details.id}`,
-					message: `${details.name} has been updated!`,
-					date: new Date(currentUpdatedAt),
-					url: `/places/${details.id}`,
-					avatarUrl: details.thumbnail,
-					dedupeValue: currentUpdatedAt,
-				});
-			}
 		}
 
 		card.appendChild(scrollCard);
@@ -766,31 +720,34 @@ async function myFeedPosts() {
 									? `<p class="mb-1 text-muted small fst-italic"><i class="fas fa-triangle-exclamation me-1"></i>Original post unavailable</p>`
 									: ""
 						}
-						<p class="mb-1">
-							<a data-kiln="feed-link" class="text-reset">${escapeHtml(truncatedPreview)}</a>
-						</p>
 						${
-							entry.mediaUrl
-								? `<img src="${escapeHtml(entry.mediaUrl)}" class="img-fluid rounded-3 my-2" style="max-height:200px;">`
+							truncatedPreview
+								? `<p class="mb-1"><a data-kiln="feed-link" class="text-reset">${escapeHtml(truncatedPreview)}</a></p>`
 								: ""
 						}
-						<div class="text-muted small">
-							<i class="far fa-comment me-1"></i>${entry.replyCount ?? "-"}
+						${
+							entry.mediaUrl
+								? `<a data-kiln="feed-link" class="d-inline-block"><img src="${escapeHtml(entry.mediaUrl)}" class="img-fluid rounded-3 my-2" style="max-height:200px;"></a>`
+								: ""
+						}
+						<div class="small">
+							<a data-kiln="feed-link" class="text-muted text-decoration-none"><i class="far fa-comment me-1"></i>${entry.replyCount ?? "-"}</a>
 						</div>
 					</div>
 				</div>
 			</div>
 			`;
 
-		const link = card.querySelector<HTMLAnchorElement>(
+		for (const link of card.querySelectorAll<HTMLAnchorElement>(
 			'[data-kiln="feed-link"]',
-		)!;
-		if (entry.parentUnavailable) {
-			link.href = "#";
-			link.style.pointerEvents = "none";
-			link.style.opacity = "0.7";
-		} else {
-			link.href = `/feed/${isReply ? (entry.parentId ?? entry.id) : entry.id}`;
+		)) {
+			if (entry.parentUnavailable) {
+				link.href = "#";
+				link.style.pointerEvents = "none";
+				link.style.opacity = "0.7";
+			} else {
+				link.href = `/feed/${isReply ? (entry.parentId ?? entry.id) : entry.id}`;
+			}
 		}
 
 		return card;
@@ -1045,31 +1002,34 @@ async function searchFeedPosts() {
 									? `<p class="mb-1 text-muted small fst-italic"><i class="fas fa-triangle-exclamation me-1"></i>Original post unavailable</p>`
 									: ""
 						}
-						<p class="mb-1">
-							<a data-kiln="feed-link" class="text-reset">${escapeHtml(truncatedPreview)}</a>
-						</p>
 						${
-							entry.mediaUrl
-								? `<img src="${escapeHtml(entry.mediaUrl)}" class="img-fluid rounded-3 my-2" style="max-height:200px;">`
+							truncatedPreview
+								? `<p class="mb-1"><a data-kiln="feed-link" class="text-reset">${escapeHtml(truncatedPreview)}</a></p>`
 								: ""
 						}
-						<div class="text-muted small">
-							<i class="far fa-comment me-1"></i>${entry.replyCount ?? "-"}
+						${
+							entry.mediaUrl
+								? `<a data-kiln="feed-link" class="d-inline-block"><img src="${escapeHtml(entry.mediaUrl)}" class="img-fluid rounded-3 my-2" style="max-height:200px;"></a>`
+								: ""
+						}
+						<div class="small">
+							<a data-kiln="feed-link" class="text-muted text-decoration-none"><i class="far fa-comment me-1"></i>${entry.replyCount ?? "-"}</a>
 						</div>
 					</div>
 				</div>
 			</div>
 			`;
 
-		const link = card.querySelector<HTMLAnchorElement>(
+		for (const link of card.querySelectorAll<HTMLAnchorElement>(
 			'[data-kiln="feed-link"]',
-		)!;
-		if (entry.parentUnavailable) {
-			link.href = "#";
-			link.style.pointerEvents = "none";
-			link.style.opacity = "0.7";
-		} else {
-			link.href = `/feed/${isReply ? (entry.parentId ?? entry.id) : entry.id}`;
+		)) {
+			if (entry.parentUnavailable) {
+				link.href = "#";
+				link.style.pointerEvents = "none";
+				link.style.opacity = "0.7";
+			} else {
+				link.href = `/feed/${isReply ? (entry.parentId ?? entry.id) : entry.id}`;
+			}
 		}
 
 		return card;
@@ -1474,81 +1434,78 @@ const REORDERABLE_SECTION_LABELS: Record<string, string> = {
 	"home-pinnedWorlds": "Pinned Worlds",
 	"home-friendsOnline": "Friends",
 	"home-news": "News",
+	"home-following": "Following",
 	"home-liveNow": "Live Now",
 	"home-recommendedPlaces": "Recommended Worlds",
 	"home-newAndRising": "New & Rising",
 	"home-recentlyPlayed": "Continue Playing",
-	"home-feed": "Feed",
 };
-
-function wrapFeedSection(column: HTMLElement) {
-	if (document.getElementById("home-feed")) return;
-
-	const headingRow = Array.from(
-		column.querySelectorAll<HTMLElement>("h5.dash-ctitle"),
-	)
-		.find((h) => h.textContent?.trim() === "Feed")
-		?.closest<HTMLElement>(".row");
-	if (!headingRow || headingRow.parentElement !== column) return;
-
-	const nodesToWrap: Element[] = [];
-	let node: Element | null = headingRow;
-	while (node) {
-		nodesToWrap.push(node);
-		node = node.nextElementSibling;
-	}
-
-	const wrapper = document.createElement("div");
-	wrapper.id = "home-feed";
-	column.insertBefore(wrapper, headingRow);
-	for (const n of nodesToWrap) wrapper.appendChild(n);
-}
 
 async function reorderableHomepage(showDisclosures: boolean) {
 	const column = document.querySelector<HTMLElement>(".col-lg-8");
 	if (!column) return;
 
-	wrapFeedSection(column);
+	const playTab = document.getElementById("home-play");
 
-	const getSections = (): HTMLElement[] =>
-		Array.from(column.children).filter(
+	const following = playTab?.querySelector<HTMLElement>(
+		'section[aria-labelledby="home-following-title"]',
+	);
+	if (following && !following.id) following.id = "home-following";
+
+	const groups: Array<{ label: string; container: HTMLElement }> = [
+		{ label: "Homepage", container: column },
+	];
+	if (playTab) groups.push({ label: "Play Tab", container: playTab });
+
+	const getSections = (container: HTMLElement): HTMLElement[] =>
+		Array.from(container.children).filter(
 			(el): el is HTMLElement =>
 				el instanceof HTMLElement &&
 				REORDERABLE_SECTION_LABELS[el.id] !== undefined,
 		);
 
+	const defaultOrder = groups.flatMap((g) =>
+		getSections(g.container).map((s) => s.id),
+	);
+
 	let observer: MutationObserver | null = null;
+
+	const observeContainers = () => {
+		for (const { container } of groups)
+			observer?.observe(container, { childList: true });
+	};
+
+	const orderSections = (order: string[]) => {
+		const rank = (section: HTMLElement) => {
+			const index = order.indexOf(section.id);
+			return index === -1 ? order.length : index;
+		};
+
+		for (const { container } of groups) {
+			const sections = getSections(container);
+			if (sections.length === 0) continue;
+
+			const desired = [...sections].sort((a, b) => rank(a) - rank(b));
+			if (desired.every((s, i) => sections[i] === s)) continue;
+
+			const anchor = sections[sections.length - 1].nextSibling;
+
+			observer?.disconnect();
+			for (const section of desired) container.insertBefore(section, anchor);
+			observeContainers();
+		}
+	};
 
 	const applyOrder = async () => {
 		const order = await _homepageSectionOrder.getValue();
 		if (order.length === 0) return;
-
-		const sections = getSections();
-		const byId = new Map(sections.map((s) => [s.id, s]));
-		const ordered = order
-			.map((id) => byId.get(id))
-			.filter((s): s is HTMLElement => s !== undefined);
-		const rest = sections.filter((s) => !order.includes(s.id));
-
-		const desired = [...ordered, ...rest];
-
-		const feedIndex = desired.findIndex((s) => s.id === "home-feed");
-		if (feedIndex !== -1 && feedIndex !== desired.length - 1) {
-			const [feed] = desired.splice(feedIndex, 1);
-			desired.push(feed);
-		}
-
-		if (desired.every((s, i) => sections[i] === s)) return;
-
-		observer?.disconnect();
-		for (const section of desired) column.appendChild(section);
-		observer?.observe(column, { childList: true });
+		orderSections(order);
 	};
 
 	await applyOrder();
 
 	observer = new MutationObserver(() => applyOrder());
-	observer.observe(column, { childList: true });
+	observeContainers();
 
 	const stickySection = document.querySelector<HTMLElement>(
 		".dashboardAvatarShadow + *",
@@ -1581,17 +1538,25 @@ async function reorderableHomepage(showDisclosures: boolean) {
 	}
 
 	reorderBtn.addEventListener("click", async () => {
-		const sections = getSections().map((section) => ({
-			id: section.id,
-			label: REORDERABLE_SECTION_LABELS[section.id],
-			locked: section.id === "home-feed",
-		}));
+		const sections = groups.flatMap(({ label, container }) =>
+			getSections(container).map((section) => ({
+				id: section.id,
+				label: REORDERABLE_SECTION_LABELS[section.id],
+				group: label,
+			})),
+		);
 		if (sections.length < 2) return;
 
 		const result = await sendMessage("showHomepageReorderModal", {
 			sections,
 		});
 		if (!result.ok || !result.data) return;
+
+		if (result.data.length === 0) {
+			await _homepageSectionOrder.setValue([]);
+			orderSections(defaultOrder);
+			return;
+		}
 
 		await _homepageSectionOrder.setValue(result.data);
 		await applyOrder();

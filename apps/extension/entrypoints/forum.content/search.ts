@@ -19,6 +19,7 @@ import { sendMessage } from "@/utils/messaging";
 import type { ForumSearchFilters } from "@/utils/types";
 import {
 	formatNotificationRelativeTime,
+	getConfig,
 	getUserDetails,
 	kilnDisclosureBadgeHtml,
 } from "@/utils/utilities";
@@ -335,6 +336,10 @@ export async function advancedForumSearch(
 				<span class="input-group-text bg-dark"><i class="fas fa-search"></i></span>
 				<input type="search" class="form-control" data-kiln="search" placeholder="Search titles and post content">
 			</div>
+			<div class="form-check mt-1">
+				<input class="form-check-input" type="checkbox" id="kiln-literal-search" data-kiln="literal">
+				<label class="form-check-label small text-muted" for="kiln-literal-search">Literal match (exact phrase, no fuzzy matching)</label>
+			</div>
 		</div>
 		<div class="col-lg-4 col-12">
 			<label class="small text-muted mb-1 d-block">Sort</label>
@@ -364,11 +369,17 @@ export async function advancedForumSearch(
 				${TYPE_OPTIONS.map((o) => `<option value="${o.value}"${o.value === DEFAULT_TYPE ? " selected" : ""}>${o.label}</option>`).join("")}
 			</select>
 		</div>
-		<div class="col-12 d-flex flex-column flex-sm-row justify-content-sm-end gap-2">
-			<button type="button" class="btn btn-outline-secondary" data-kiln="clear">Clear</button>
-			<button type="submit" class="btn btn-primary" data-kiln="submit">
-				<i class="fas fa-search me-1"></i>Search
-			</button>
+		<div class="col-12 d-flex flex-column flex-sm-row justify-content-sm-between align-items-sm-center gap-2">
+			<div class="form-check mb-0">
+				<input class="form-check-input" type="checkbox" id="kiln-exclude-ai-bots" data-kiln="exclude-ai-bots">
+				<label class="form-check-label" for="kiln-exclude-ai-bots">Exclude AI bot posts</label>
+			</div>
+			<div class="d-flex flex-column flex-sm-row gap-2">
+				<button type="button" class="btn btn-outline-secondary" data-kiln="clear">Clear</button>
+				<button type="submit" class="btn btn-primary" data-kiln="submit">
+					<i class="fas fa-search me-1"></i>Search
+				</button>
+			</div>
 		</div>
 	`;
 
@@ -639,6 +650,30 @@ export async function advancedForumSearch(
 	const clearButton = panel.querySelector<HTMLButtonElement>(
 		'[data-kiln="clear"]',
 	)!;
+	const excludeAiBotsCheckbox = panel.querySelector<HTMLInputElement>(
+		'[data-kiln="exclude-ai-bots"]',
+	)!;
+	const literalCheckbox = panel.querySelector<HTMLInputElement>(
+		'[data-kiln="literal"]',
+	)!;
+
+	let aiUserIdsPromise: Promise<Set<number>> | null = null;
+	const getAiUserIds = (): Promise<Set<number>> => {
+		if (!aiUserIdsPromise) {
+			aiUserIdsPromise = getConfig().then(
+				(config) => new Set(config.users.generativeAI),
+			);
+		}
+		return aiUserIdsPromise;
+	};
+
+	const filterEntries = async (
+		entries: PolyTrack.ForumEntry[],
+	): Promise<PolyTrack.ForumEntry[]> => {
+		if (!excludeAiBotsCheckbox.checked) return entries;
+		const aiUserIds = await getAiUserIds();
+		return entries.filter((entry) => !aiUserIds.has(entry.author.polytoriaId));
+	};
 
 	let nextPage: number | null = null;
 
@@ -673,6 +708,12 @@ export async function advancedForumSearch(
 		if (filters.postedBefore) params.set("postedBefore", filters.postedBefore);
 		else params.delete("postedBefore");
 
+		if (excludeAiBotsCheckbox.checked) params.set("excludeAiBots", "1");
+		else params.delete("excludeAiBots");
+
+		if (literalCheckbox.checked) params.set("literal", "1");
+		else params.delete("literal");
+
 		const query = params.toString();
 		const url = `${window.location.pathname}${query ? `?${query}` : ""}`;
 		window.history.replaceState(null, "", url);
@@ -687,6 +728,7 @@ export async function advancedForumSearch(
 		categoryIds: categories.getIds(),
 		postedAfter: postedAfterInput.value,
 		postedBefore: postedBeforeInput.value,
+		literal: literalCheckbox.checked,
 	});
 
 	const runSearch = async () => {
@@ -703,15 +745,15 @@ export async function advancedForumSearch(
 		}
 
 		resultsContainer.innerHTML = "";
-		if (result.data.entries.length === 0) {
+		const entries = await filterEntries(result.data.entries);
+		if (entries.length === 0) {
 			resultsContainer.innerHTML = `<div class="text-center text-danger border border-danger rounded p-2">No forum entries matched your search.</div>`;
-			return;
-		}
-
-		for (const entry of result.data.entries) {
-			resultsContainer.appendChild(
-				renderEntry(entry, seenThreads.includes(entry.threadId)),
-			);
+		} else {
+			for (const entry of entries) {
+				resultsContainer.appendChild(
+					renderEntry(entry, seenThreads.includes(entry.threadId)),
+				);
+			}
 		}
 
 		nextPage = result.data.nextPage;
@@ -728,7 +770,7 @@ export async function advancedForumSearch(
 			return;
 		}
 
-		for (const entry of result.data.entries) {
+		for (const entry of await filterEntries(result.data.entries)) {
 			resultsContainer.appendChild(
 				renderEntry(entry, seenThreads.includes(entry.threadId)),
 			);
@@ -751,6 +793,8 @@ export async function advancedForumSearch(
 		postedBeforeInput.value = "";
 		authors.clear();
 		categories.clear();
+		excludeAiBotsCheckbox.checked = false;
+		literalCheckbox.checked = false;
 		runSearch();
 	});
 
@@ -826,6 +870,8 @@ export async function advancedForumSearch(
 			sortSelect.value = sortParam;
 		if (typeParam && TYPE_OPTIONS.some((o) => o.value === typeParam))
 			typeSelect.value = typeParam;
+		if (params.get("excludeAiBots") === "1") excludeAiBotsCheckbox.checked = true;
+		if (params.get("literal") === "1") literalCheckbox.checked = true;
 	};
 
 	await prefillOperators();

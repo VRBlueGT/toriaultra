@@ -21,10 +21,12 @@ export const ExtensionConfigSchema = z.object({
 		maxPinnedWorlds: z.number().positive().default(25),
 		maxNFTItems: z.number().positive().default(50),
 		maxNFTSerialsPerItem: z.number().positive().default(10),
+		maxNLFItems: z.number().positive().default(50),
 		maxBlockedTraders: z.number().positive().default(200),
 		maxPublishedThemes: z.number().positive().default(15),
 		maxPinnedAchievements: z.number().positive().default(5),
 		minReviewPlaytimeMinutes: z.number().nonnegative().default(5),
+		maxStarredImages: z.number().positive().default(100),
 	}),
 	users: z.object({
 		generativeAI: z.array(z.number()),
@@ -33,7 +35,6 @@ export const ExtensionConfigSchema = z.object({
 export type ExtensionConfig = z.infer<typeof ExtensionConfigSchema>;
 
 export const MetadataSchema = z.object({
-	updateLogUrl: z.string().nullable(),
 	endpoints: z.object({
 		public: z.string(),
 		internal: z.string(),
@@ -198,6 +199,26 @@ export const BlockedTraders = z.object({
 });
 export type BlockedTradersApi = z.infer<typeof BlockedTraders>;
 
+export const LikeCountApi = z.object({
+	data: z.object({ count: z.number() }),
+});
+export type LikeCountApi = z.infer<typeof LikeCountApi>;
+
+export const KilnUsageApi = z.object({
+	data: z.object({ linkedAt: z.string().nullable() }),
+});
+export type KilnUsageApi = z.infer<typeof KilnUsageApi>;
+
+export const UserTimezoneApi = z.object({
+	data: z.object({ timezone: z.string().nullable() }),
+});
+export type UserTimezoneApi = z.infer<typeof UserTimezoneApi>;
+
+export const LikeStatusApi = z.object({
+	data: z.object({ liked: z.boolean() }),
+});
+export type LikeStatusApi = z.infer<typeof LikeStatusApi>;
+
 export const PublishThemeApi = z.object({
 	data: z.object({
 		id: z.string(),
@@ -277,6 +298,8 @@ const PublishedThemeEffect = z.object({
 		"text-transform",
 		"frame-image",
 		"frame-shape",
+		"clicking-sound",
+		"background-music",
 	]),
 	value: z.union([z.string(), z.number()]),
 });
@@ -308,6 +331,8 @@ const GalleryTheme = z.object({
 	fontFamily: z.string().nullable().optional(),
 	backgroundImage: z.string().nullable().optional(),
 	thumbnailUrl: z.string().nullable().optional(),
+	effects: z.array(PublishedThemeEffect).nullable().optional(),
+	hasCustomCss: z.boolean().optional(),
 });
 export const ThemeGalleryApi = z.object({
 	data: z.array(GalleryTheme),
@@ -325,6 +350,150 @@ export const ReportThemeApi = z.object({
 });
 export type ReportThemeApi = z.infer<typeof ReportThemeApi>;
 
+export const ProfileLayout = z.object({
+	order: z.array(z.string()),
+	hidden: z.array(z.string()),
+});
+export type ProfileLayout = z.infer<typeof ProfileLayout>;
+
+export const ProfileUsernameStyle = z.object({
+	mode: z.enum(["solid", "gradient"]),
+	color1: z.string(),
+	color2: z.string().optional(),
+	animated: z.boolean().optional(),
+	glowColor: z.string().optional(),
+	glowSize: z.number().optional(),
+	fontFamily: z.string().optional(),
+});
+export type ProfileUsernameStyle = z.infer<typeof ProfileUsernameStyle>;
+
+export const ProfileBanner = z.object({
+	url: z.string(),
+	height: z.number(),
+	position: z.enum(["top", "center", "bottom"]),
+});
+export type ProfileBanner = z.infer<typeof ProfileBanner>;
+
+export const PROFILE_AMBIENT_TYPES = [
+	"snow",
+	"stars",
+	"rain",
+	"bubbles",
+	"fireflies",
+	"petals",
+] as const;
+
+export const ProfileAmbient = z.object({
+	type: z.enum(PROFILE_AMBIENT_TYPES),
+	density: z.number(),
+	color: z.string().optional(),
+});
+export type ProfileAmbient = z.infer<typeof ProfileAmbient>;
+
+export const ProfileSticker = z.object({
+	id: z.string(),
+	url: z.string(),
+	anchor: z.string(),
+	x: z.number(),
+	y: z.number(),
+	size: z.number(),
+	rotation: z.number(),
+	layer: z.enum(["front", "back"]),
+});
+export type ProfileSticker = z.infer<typeof ProfileSticker>;
+
+export const ProfileNote = z.object({
+	id: z.string(),
+	text: z.string(),
+	anchor: z.string(),
+	x: z.number(),
+	y: z.number(),
+	size: z.number(),
+	rotation: z.number(),
+	color: z.string(),
+	background: z.string(),
+	layer: z.enum(["front", "back"]),
+});
+export type ProfileNote = z.infer<typeof ProfileNote>;
+
+export const ProfileCardStyle = z.object({
+	preset: z.enum(["solid", "glass", "outline", "gradient"]),
+	tint: z.string().optional(),
+	opacity: z.number().optional(),
+	radius: z.number().optional(),
+	hover: z.enum(["none", "lift", "glow", "tilt"]).optional(),
+});
+export type ProfileCardStyle = z.infer<typeof ProfileCardStyle>;
+
+export const ProfileAvatarBackdrop = z.discriminatedUnion("type", [
+	z.object({
+		type: z.literal("gradient"),
+		color1: z.string(),
+		color2: z.string(),
+		angle: z.number(),
+		opacity: z.number().optional(),
+	}),
+	z.object({
+		type: z.literal("image"),
+		url: z.string(),
+		fit: z.enum(["cover", "contain"]),
+		opacity: z.number().optional(),
+	}),
+]);
+export type ProfileAvatarBackdrop = z.infer<typeof ProfileAvatarBackdrop>;
+
+export const ProfilePointerEffects = z.object({
+	click: z.enum(["sparkles", "hearts", "ripples", "confetti"]).optional(),
+	trail: z.enum(["sparkles", "dots", "hearts", "glow"]).optional(),
+	color: z.string().optional(),
+});
+export type ProfilePointerEffects = z.infer<typeof ProfilePointerEffects>;
+
+const ProfileTheme = z.object({
+	userId: z.number(),
+	accentColor: z.string(),
+	navbarColor: z.string(),
+	fontFamily: z.string().nullable().optional(),
+	customCss: z.string().nullable().optional(),
+	backgroundImage: z.string().nullable().optional(),
+	backgroundOverlayColor: z.string().nullable().optional(),
+	backgroundOverlayOpacity: z.number().nullable().optional(),
+	navbarIconColor: z.string().nullable().optional(),
+	cursorUrl: z.string().nullable().optional(),
+	effects: z.array(PublishedThemeEffect).nullable().optional(),
+	colorTokens: z.record(z.string(), z.string()).nullable().optional(),
+	layout: ProfileLayout.nullable().optional(),
+	usernameStyle: ProfileUsernameStyle.nullable().optional(),
+	banner: ProfileBanner.nullable().optional(),
+	ambient: ProfileAmbient.nullable().optional(),
+	stickers: z.array(ProfileSticker).nullable().optional(),
+	notes: z.array(ProfileNote).nullable().optional(),
+	cardStyle: ProfileCardStyle.nullable().optional(),
+	avatarBackdrop: ProfileAvatarBackdrop.nullable().optional(),
+	pointerEffects: ProfilePointerEffects.nullable().optional(),
+	enabled: z.number(),
+	approvalStatus: z.string(),
+	createdAt: z.string().nullable().optional(),
+	updatedAt: z.string().nullable().optional(),
+});
+
+/** Data is null when the player has no theme, or none that's visible to the
+ *  requester. */
+export const ProfileThemeApi = z.object({ data: ProfileTheme.nullable() });
+export type ProfileThemeApi = z.infer<typeof ProfileThemeApi>;
+
+export const ProfileThemeOkApi = z.object({
+	data: z.object({ ok: z.boolean() }),
+});
+export type ProfileThemeOkApi = z.infer<typeof ProfileThemeOkApi>;
+
+export const AdminPendingProfileThemesApi = z.object({
+	data: z.array(ProfileTheme),
+});
+export type AdminPendingProfileThemesApi = z.infer<
+	typeof AdminPendingProfileThemesApi
+>;
+
 export const PinnedAchievementsApi = z.object({
 	data: z.array(z.number()),
 });
@@ -339,6 +508,11 @@ export const NFTItems = z.object({
 	),
 });
 export type NFTItemsApi = z.infer<typeof NFTItems>;
+
+export const NLFItems = z.object({
+	data: z.array(z.number()),
+});
+export type NLFItemsApi = z.infer<typeof NLFItems>;
 
 export const ItemThumbnailMap = z.object({
 	data: z.record(z.string(), z.number().nullable()),
@@ -409,12 +583,24 @@ export const AvatarOutfitApi = z.object({
 });
 export type AvatarOutfitApi = z.infer<typeof AvatarOutfitApi>;
 
+const PublicOutfit = z.object({
+	id: z.number(),
+	name: z.string(),
+	thumbnail: z.string(),
+});
+
+export const PublicOutfitsApi = z.object({
+	data: z.array(PublicOutfit),
+});
+export type PublicOutfitsApi = z.infer<typeof PublicOutfitsApi>;
+
 const PlaceReviewReply = z.object({
 	id: z.string(),
 	reviewId: z.string(),
 	userId: z.number(),
 	username: z.string(),
 	thumbnail: z.string().nullable(),
+	anonymous: z.boolean(),
 	body: z.string(),
 	createdAt: z.string(),
 	updatedAt: z.string(),
@@ -426,6 +612,7 @@ const PlaceReview = z.object({
 	userId: z.number(),
 	username: z.string(),
 	thumbnail: z.string().nullable(),
+	anonymous: z.boolean(),
 	rating: z.number().min(1).max(5),
 	body: z.string().nullable(),
 	createdAt: z.string(),
@@ -447,6 +634,13 @@ export const PlaceReviewApi = z.object({
 	data: PlaceReview,
 });
 export type PlaceReviewApi = z.infer<typeof PlaceReviewApi>;
+
+// Keyed by review id: null means playtime is unknown (PolyTrack unavailable),
+// not zero.
+export const PlaceReviewPlaytimesApi = z.object({
+	data: z.record(z.string(), z.number().nullable()),
+});
+export type PlaceReviewPlaytimesApi = z.infer<typeof PlaceReviewPlaytimesApi>;
 
 export const PlaceReviewReplyApi = z.object({
 	data: PlaceReviewReply,
@@ -526,6 +720,11 @@ export const ActivitySearchApi = z.object({
 });
 export type ActivitySearchApi = z.infer<typeof ActivitySearchApi>;
 
+export const AvatarHashesApi = z.object({
+	data: z.record(z.string(), z.string()),
+});
+export type AvatarHashesApi = z.infer<typeof AvatarHashesApi>;
+
 const FeedbackEntry = z.object({
 	id: z.string(),
 	type: z.enum(["feature", "general", "bug"]),
@@ -568,3 +767,125 @@ export const AdminDeleteFeedbackApi = z.object({
 	data: z.object({ ok: z.boolean() }),
 });
 export type AdminDeleteFeedbackApi = z.infer<typeof AdminDeleteFeedbackApi>;
+
+export const DataExportApi = z.object({
+	data: z.object({
+		exportedAt: z.string(),
+		profile: z
+			.object({
+				id: z.number(),
+				likes: z.number().nullable(),
+				linkedAt: z.string().nullable(),
+				version: z.string().nullable(),
+				bannedAt: z.string().nullable(),
+			})
+			.nullable(),
+		sessions: z.array(
+			z.object({
+				id: z.string(),
+				createdAt: z.string(),
+				expiresAt: z.coerce.date(),
+				lastUsedAt: z.coerce.date().nullable(),
+				revokedAt: z.coerce.date().nullable(),
+				os: z.string().nullable(),
+				browser: z.string().nullable(),
+			}),
+		),
+		likes: z.object({
+			received: z.array(z.object({ id: z.number(), originator: z.number() })),
+			given: z.array(z.object({ id: z.number(), target: z.number() })),
+		}),
+		favoritedPlaces: z.array(
+			z.object({
+				id: z.number(),
+				placeId: z.number(),
+				favoritedAt: z.string(),
+			}),
+		),
+		pinnedAchievements: z.array(
+			z.object({ achievementId: z.number(), pinnedAt: z.string() }),
+		),
+		blockedTraders: z.array(z.number()),
+		nfts: z.object({
+			items: z.array(z.number()),
+			serials: z.array(z.object({ itemId: z.number(), serial: z.number() })),
+		}),
+		nlfItems: z.array(z.number()),
+		placeReviews: z.array(
+			z.object({
+				id: z.string(),
+				placeId: z.number(),
+				rating: z.number(),
+				body: z.string().nullable(),
+				anonymous: z.boolean(),
+				approvalStatus: z.string(),
+				createdAt: z.string(),
+				updatedAt: z.string(),
+			}),
+		),
+		placeReviewReplies: z.array(
+			z.object({
+				id: z.string(),
+				reviewId: z.string(),
+				body: z.string(),
+				approvalStatus: z.string(),
+				createdAt: z.string(),
+				updatedAt: z.string(),
+			}),
+		),
+		notifications: z.array(KilnNotification),
+		avatarOutfits: z.array(
+			z.object({
+				id: z.string(),
+				name: z.string(),
+				data: AvatarState,
+				createdAt: z.string(),
+				updatedAt: z.string().nullable(),
+			}),
+		),
+		publicOutfits: z.array(
+			z.object({
+				userId: z.number(),
+				outfitId: z.number(),
+				name: z.string(),
+				thumbnail: z.string(),
+				position: z.number(),
+				syncedAt: z.string(),
+			}),
+		),
+		themes: z.array(
+			z.object({
+				id: z.string(),
+				name: z.string(),
+				accentColor: z.string(),
+				navbarColor: z.string(),
+				fontFamily: z.string().nullable(),
+				customCss: z.string().nullable(),
+				backgroundImage: z.string().nullable(),
+				effects: z.string().nullable(),
+				navbarIconColor: z.string().nullable(),
+				cursorUrl: z.string().nullable(),
+				colorTokens: z.string().nullable(),
+				published: z.number(),
+				approvalStatus: z.string(),
+				createdAt: z.string().nullable(),
+				thumbnailUpdatedAt: z.string().nullable(),
+			}),
+		),
+		feedback: z.array(
+			z.object({
+				id: z.string(),
+				type: z.enum(["feature", "general", "bug"]),
+				message: z.string(),
+				version: z.string().nullable(),
+				username: z.string().nullable(),
+				status: z.enum(["open", "resolved"]),
+				response: z.string().nullable(),
+				respondedAt: z.string().nullable(),
+				createdAt: z.string(),
+				updatedAt: z.string(),
+			}),
+		),
+	}),
+});
+export type DataExportApi = z.infer<typeof DataExportApi>;

@@ -19,16 +19,15 @@ import { onMessage } from "@/utils/messaging";
 import { pullBulkKVCache, pullKVCache } from "@/utils/utilities";
 import { checkRateLimit, handle, safeFetch } from "./shared";
 
-onMessage("rejectTrade", ({ data: tradeId }) => {
+onMessage("rejectTrade", ({ data: tradeId, sender }) => {
 	handle(async () => {
-		const tabs = await browser.tabs.query({
-			active: true,
-			currentWindow: true,
-		});
-		if (!tabs[0]) return;
+		const tabId =
+			sender.tab?.id ??
+			(await browser.tabs.query({ active: true, currentWindow: true }))[0]?.id;
+		if (tabId === undefined) return;
 
 		browser.scripting.executeScript({
-			target: { tabId: tabs[0].id! },
+			target: { tabId },
 			world: "MAIN",
 			args: [tradeId],
 			func: async (tradeId: number) => {

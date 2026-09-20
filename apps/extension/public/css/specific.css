@@ -224,3 +224,29 @@ body:has(.kiln-extension-modal[open]) {
 	line-height: inherit;
 	border-radius: 2px;
 }
+
+.kiln-image-star-wrapper {
+	position: relative;
+	display: inline-block;
+	max-width: 100%;
+	line-height: 0;
+}
+
+.kiln-image-star-wrapper img {
+	vertical-align: bottom;
+}
+
+.kiln-image-star-btn {
+	position: absolute !important;
+	right: 6px !important;
+	bottom: 6px !important;
+	left: auto !important;
+	top: auto !important;
+	opacity: 0;
+	transition: opacity 0.15s ease;
+}
+
+.kiln-image-star-wrapper:hover .kiln-image-star-btn,
+.kiln-image-star-btn.kiln-image-starred {
+	opacity: 1;
+}

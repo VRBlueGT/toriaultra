@@ -110,6 +110,7 @@ const trendMetrics: {
 	id: TrendMetric;
 	label: string;
 	format: (value: number) => string;
+	lowerIsBetter?: boolean;
 }[] = [
 	{
 		id: "uniqueVisits",
@@ -135,6 +136,7 @@ const trendMetrics: {
 		id: "dislikes",
 		label: "Dislikes",
 		format: (v) => Math.round(v).toLocaleString(),
+		lowerIsBetter: true,
 	},
 	{
 		id: "likeRate",
@@ -258,6 +260,7 @@ export function worldTrends() {
 		points: TrendPoint[],
 		format: (v: number) => string,
 		rangeDays: number,
+		lowerIsBetter: boolean,
 	) => {
 		if (points.length === 0) {
 			chartContainer.innerHTML = `<div class="d-flex justify-content-center align-items-center h-100 text-muted small fst-italic">No data available.</div>`;
@@ -318,8 +321,9 @@ export function worldTrends() {
 		const last = values[values.length - 1]!;
 		const first = values[0]!;
 		const delta = last - first;
+		const improving = lowerIsBetter ? delta < 0 : delta > 0;
 		const trendColor =
-			delta > 0 ? "#2ecc71" : delta < 0 ? "#e74c3c" : "#6c757d";
+			delta === 0 ? "#6c757d" : improving ? "#2ecc71" : "#e74c3c";
 		const trendArrow = delta === 0 ? "" : delta > 0 ? "▲" : "▼";
 
 		currentEl.innerHTML = `${format(last)} <span class="small" style="color:${trendColor};">${trendArrow} ${format(Math.abs(delta))}</span>`;
@@ -381,10 +385,12 @@ export function worldTrends() {
 
 		showLoading();
 		const points = await fetchMetric(metric, range);
+		const metricConfig = trendMetrics.find((m) => m.id === metric)!;
 		renderChart(
 			points,
-			trendMetrics.find((m) => m.id === metric)!.format,
+			metricConfig.format,
 			range.days,
+			metricConfig.lowerIsBetter ?? false,
 		);
 	};
 

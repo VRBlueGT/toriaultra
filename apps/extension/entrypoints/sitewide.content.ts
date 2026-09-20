@@ -25,23 +25,33 @@ const preferencesData = _preferencesJson.preferences;
 
 import type { FeatureId } from "@/utils/featureIds.generated";
 import { PATH_FEATURES } from "@/utils/featurePaths.generated";
+import { checkForumMentions } from "@/utils/forumMentionNotifications";
+import { syncPublicOutfits } from "@/utils/publicOutfits";
+import { syncPublicTimezone } from "@/utils/publicTimezone";
 import {
+	_pastNotifications,
 	_savedThemes,
 	_showKilnDisclosures,
+	type PastNotification,
 	preferences,
+	UNASSIGNED_PAST_NOTIFICATIONS,
 } from "@/utils/storage";
 import { applyKilnTheme, THEME_PRESETS } from "@/utils/theme";
+import { screenTradeNotifications } from "@/utils/tradeScreening";
 import type { CurrencyCode } from "@/utils/types";
 import {
 	applyKilnDisclosureTitle,
 	bricksToCurrency,
 	createKilnDisclosureBadge,
+	createModal,
+	formatNotificationRelativeTime,
 	getApiSession,
 	getUserDetails,
 	injectNoticeBanners,
 	injectPostUpdateBanner,
 	injectUpdateBanner,
 	kilnDisclosureBadgeHtml,
+	parseNotificationRelativeTime,
 	renderKilnNotifications,
 } from "@/utils/utilities";
 
@@ -139,6 +149,18 @@ export default defineContentScript({
 				]).then(async ([values, showDisclosures]) => {
 					footerInjectionInfo(values.enabled);
 
+					syncPublicTimezone(
+						user.userId,
+						values.enabled.includes("timezoneSharing") &&
+							(values.config.timezoneSharing?.shareTimezone ?? false),
+					);
+
+					syncPublicOutfits(
+						user.userId,
+						values.enabled.includes("publicAvatarOutfits") &&
+							(values.config.publicAvatarOutfits?.shareOutfits ?? false),
+					);
+
 					if (values.enabled.includes("localizedTimestamps")) {
 						localizedTimestamps(showDisclosures);
 					}
@@ -174,6 +196,10 @@ export default defineContentScript({
 
 					if (values.enabled.includes("membershipThemes")) {
 						membershipThemes(values.config.membershipThemes.themeId);
+					}
+
+					if (values.enabled.includes("disableMembershipThemes")) {
+						disableMembershipThemes();
 					}
 
 					if (values.enabled.includes("legacySidebar")) {
@@ -247,6 +273,29 @@ export default defineContentScript({
 					if (values.enabled.includes("streakFreezeDisplay")) {
 						streakFreezeDisplay(showDisclosures);
 					}
+
+					if (
+						values.enabled.includes("forumMentions") &&
+						values.config.forumMentions.notifications
+					) {
+						checkForumMentions(user).catch((err) =>
+							console.warn("[Kiln] Failed to check forum mentions", err),
+						);
+					}
+
+					if (values.enabled.includes("pastNotifications")) {
+						pastNotifications(user.userId, showDisclosures);
+					}
+
+					const screenNFT = values.enabled.includes("nftItems");
+					const screenNLF = values.enabled.includes("nlfItems");
+					if (screenNFT || screenNLF) {
+						screenTradeNotifications(
+							user,
+							{ nft: screenNFT, nlf: screenNLF },
+							showDisclosures,
+						);
+					}
 				});
 			});
 
@@ -303,6 +352,9 @@ function registerErrorTracking(): void {
 	});
 }
 
+const FREE_NAVBAR_LOGO_URL =
+	"https://cdn.polytoria.com/static/icon-B17Jdbl0.svg";
+
 const THEME_BLOCKING_ITEM_IDS = new Set([
 	151140, 43548, 35699, 34715, 34698, 34419, 34418, 34416, 34392, 34391, 34390,
 	34389, 34380, 34379,
@@ -356,12 +408,28 @@ function membershipThemes(themeId: "plus" | "plusdx") {
 	}
 }
 
+function disableMembershipThemes() {
+	const navbar = document.querySelector(
+		".navbar.navbar-expand-lg.navbar-light.bg-navbar.nav-topbar",
+	)!;
+	const secondaryNavbar = document.querySelector(
+		".navbar.navbar-expand-lg.navbar-light.bg-navbar.nav-secondary",
+	);
+
+	navbar.classList.remove("navbar-plus", "navbar-plusdx");
+	secondaryNavbar?.classList.remove("navbar-plus", "navbar-plusdx");
+
+	const logo = navbar.getElementsByClassName("navbar-brand")[0]?.children[0] as
+		| HTMLImageElement
+		| undefined;
+	if (logo) logo.src = FREE_NAVBAR_LOGO_URL;
+}
+
 function createSidebarElement(
 	membershipStyle: "free" | "plus" | "plusdx",
 	showUpgradeBtn: boolean = true,
 ) {
-	const freeLogo = "B17Jdbl0.svg";
-	const logoUrl = `https://cdn.polytoria.com/static/icon-${freeLogo}`;
+	const logoUrl = FREE_NAVBAR_LOGO_URL;
 
 	const logoFilters: Record<"free" | "plus" | "plusdx", string> = {
 		free: "",
@@ -1302,4 +1370,256 @@ function streakFreezeDisplay(showDisclosures: boolean): void {
 
 		sendMessage("registerBootstrapElements");
 	})();
+}
+
+const PAST_NOTIFICATIONS_LIMIT = 500;
+
+const PAST_NOTIFICATION_TYPES = [
+	{ id: "reply", label: "Replies", pattern: /replied to your post/i },
+	{ id: "quote", label: "Quotes", pattern: /quoted your post/i },
+	{
+		id: "friend",
+		label: "Friend requests",
+		pattern: /friend request/i,
+	},
+	{
+		id: "shout",
+		label: "Guild shouts",
+		pattern: /^A new shout has been posted/i,
+	},
+	{
+		id: "wall",
+		label: "Wall messages",
+		pattern: /left a message on your wall/i,
+	},
+	{
+		id: "message",
+		label: "Private messages",
+		pattern: /sent you a private message/i,
+	},
+	{ id: "trade", label: "Trades", pattern: /trade request/i },
+] as const;
+
+function getPastNotificationType(message: string): string {
+	return (
+		PAST_NOTIFICATION_TYPES.find((t) => t.pattern.test(message))?.id ?? "other"
+	);
+}
+
+async function pastNotifications(
+	userId: number,
+	showDisclosures: boolean,
+): Promise<void> {
+	const popup = document.querySelector<HTMLElement>(".notifications-popup");
+	if (!popup) return;
+
+	injectPastNotificationsButton(popup, userId, showDisclosures);
+	await recordPastNotifications(popup, userId);
+}
+
+async function recordPastNotifications(
+	popup: HTMLElement,
+	userId: number,
+): Promise<void> {
+	const all = await _pastNotifications.getValue();
+	const stored = all[userId] ?? {};
+	let changed = false;
+
+	const unassigned = all[UNASSIGNED_PAST_NOTIFICATIONS];
+	if (unassigned) {
+		delete all[UNASSIGNED_PAST_NOTIFICATIONS];
+		for (const notification of Object.values(unassigned)) {
+			stored[notification.id] ??= notification;
+		}
+		changed = true;
+	}
+
+	for (const anchor of popup.querySelectorAll<HTMLAnchorElement>(
+		':scope > a[href^="/my/notifications/"]',
+	)) {
+		const href = anchor.getAttribute("href")!;
+		const idMatch = href.match(/^\/my\/notifications\/(\d+)\/?$/);
+		if (!idMatch) continue;
+
+		const id = Number(idMatch[1]);
+		if (stored[id]) continue;
+
+		const message = anchor
+			.querySelector(".notification-item > div > div:first-child")
+			?.textContent?.trim();
+		if (!message) continue;
+
+		const timeText =
+			anchor.querySelector(".small.text-muted")?.textContent?.trim() ?? "";
+
+		stored[id] = {
+			id,
+			message,
+			url: href,
+			avatarUrl: anchor.querySelector("img")?.getAttribute("src") ?? "",
+			date: (
+				parseNotificationRelativeTime(timeText) ?? new Date()
+			).toISOString(),
+		};
+		changed = true;
+	}
+
+	if (!changed) return;
+
+	const pruned = Object.values(stored)
+		.sort((a, b) => b.id - a.id)
+		.slice(0, PAST_NOTIFICATIONS_LIMIT);
+	await _pastNotifications.setValue({
+		...all,
+		[userId]: Object.fromEntries(pruned.map((n) => [n.id, n])),
+	});
+}
+
+function injectPastNotificationsButton(
+	popup: HTMLElement,
+	userId: number,
+	showDisclosures: boolean,
+): void {
+	const header = popup.querySelector<HTMLElement>(":scope > div > .d-flex");
+	if (!header || header.querySelector('[data-kiln="past-notifications"]'))
+		return;
+
+	const button = document.createElement("a");
+	button.href = "#";
+	button.className = "text-muted";
+	button.dataset.kiln = "past-notifications";
+	button.innerHTML =
+		'<i class="fas fa-clock-rotate-left me-1"></i>Past Notifications';
+	applyKilnDisclosureTitle(button, showDisclosures);
+	header.prepend(button);
+
+	let openModal: (() => Promise<void>) | null = null;
+	button.addEventListener("click", async (e) => {
+		e.preventDefault();
+		e.stopPropagation();
+		openModal ??= createPastNotificationsModal(userId, showDisclosures);
+		await openModal();
+	});
+}
+
+function createPastNotificationsModal(
+	userId: number,
+	showDisclosures: boolean,
+): () => Promise<void> {
+	const modal = createModal("lg");
+	modal.innerHTML = `
+		<div class="d-flex justify-content-between align-items-center mb-3">
+			<h5 class="mb-0 text-white">
+				<i class="fas fa-clock-rotate-left me-2"></i>Past Notifications${kilnDisclosureBadgeHtml(showDisclosures)}
+			</h5>
+			<button type="button" class="btn btn-sm btn-secondary" data-kiln="close-past-notifications">✕</button>
+		</div>
+		<div class="d-flex gap-2 mb-2">
+			<input type="search" class="form-control form-control-sm" placeholder="Search notifications..." data-kiln="past-notifications-search">
+			<select class="form-select form-select-sm w-auto flex-shrink-0" data-kiln="past-notifications-type">
+				<option value="all">All types</option>
+				${PAST_NOTIFICATION_TYPES.map((t) => `<option value="${t.id}">${t.label}</option>`).join("")}
+				<option value="other">Other</option>
+			</select>
+		</div>
+		<div data-kiln="past-notifications-body" style="max-height: 60vh; overflow-y: auto;"></div>
+		<div class="d-flex justify-content-between align-items-center mt-3">
+			<small class="text-muted" data-kiln="past-notifications-count"></small>
+			<button type="button" class="btn btn-sm btn-outline-danger" data-kiln="clear-past-notifications">
+				<i class="fas fa-trash me-1"></i>Clear History
+			</button>
+		</div>
+	`;
+
+	const search = modal.querySelector<HTMLInputElement>(
+		'[data-kiln="past-notifications-search"]',
+	)!;
+	const typeFilter = modal.querySelector<HTMLSelectElement>(
+		'[data-kiln="past-notifications-type"]',
+	)!;
+	const body = modal.querySelector<HTMLElement>(
+		'[data-kiln="past-notifications-body"]',
+	)!;
+	const count = modal.querySelector<HTMLElement>(
+		'[data-kiln="past-notifications-count"]',
+	)!;
+
+	let notifications: PastNotification[] = [];
+
+	const renderList = () => {
+		const query = search.value.trim().toLowerCase();
+		const type = typeFilter.value;
+		const matches = notifications.filter(
+			(n) =>
+				(type === "all" || getPastNotificationType(n.message) === type) &&
+				(!query || n.message.toLowerCase().includes(query)),
+		);
+
+		count.textContent = `${notifications.length} saved notification${notifications.length === 1 ? "" : "s"}`;
+		body.innerHTML = "";
+
+		if (matches.length === 0) {
+			body.innerHTML = `<div class="text-center text-muted py-3">${
+				notifications.length === 0
+					? "No past notifications saved yet."
+					: "No notifications match your search."
+			}</div>`;
+			return;
+		}
+
+		for (const notification of matches) {
+			body.appendChild(renderPastNotificationEntry(notification));
+		}
+	};
+
+	const load = async () => {
+		const all = await _pastNotifications.getValue();
+		notifications = Object.values(all[userId] ?? {}).sort(
+			(a, b) => b.id - a.id,
+		);
+		renderList();
+	};
+
+	search.addEventListener("input", renderList);
+	typeFilter.addEventListener("change", renderList);
+
+	modal
+		.querySelector<HTMLButtonElement>('[data-kiln="close-past-notifications"]')!
+		.addEventListener("click", () => modal.close());
+
+	modal
+		.querySelector<HTMLButtonElement>('[data-kiln="clear-past-notifications"]')!
+		.addEventListener("click", async () => {
+			if (!confirm("Clear all saved past notifications?")) return;
+			const all = await _pastNotifications.getValue();
+			delete all[userId];
+			await _pastNotifications.setValue(all);
+			await load();
+		});
+
+	return async () => {
+		search.value = "";
+		typeFilter.value = "all";
+		await load();
+		modal.showModal();
+	};
+}
+
+function renderPastNotificationEntry(
+	notification: PastNotification,
+): HTMLAnchorElement {
+	const date = new Date(notification.date);
+
+	const anchor = document.createElement("a");
+	anchor.href = notification.url;
+	anchor.className =
+		"text-reset text-decoration-none d-flex align-items-center gap-3 p-2 border-bottom border-secondary";
+	anchor.innerHTML = `
+		<img src="${escapeHtml(notification.avatarUrl || errorIcon)}" class="rounded-circle border border-2 border-secondary flex-shrink-0" width="38" height="38">
+		<div style="min-width: 0;">
+			<div>${escapeHtml(notification.message)}</div>
+			<div class="small text-muted" title="Approximately ${escapeHtml(date.toLocaleString())}">${formatNotificationRelativeTime(date)}</div>
+		</div>
+	`;
+	return anchor;
 }

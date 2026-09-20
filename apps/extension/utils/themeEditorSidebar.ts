@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import { POLYTORIA_CDN_URL, resolveDecalUrl } from "@/utils/decal";
 import { sendMessage } from "@/utils/messaging";
 import { _savedThemes, apiSessions, preferences } from "@/utils/storage";
 import {
@@ -23,74 +24,26 @@ import {
 	EFFECT_TYPE_CONFIGS,
 	extractDominantColor,
 	FONTS,
-	hexToRgb,
 	isValidHex,
 	lightenHex,
-	rgbToHex,
-	SELECTOR_REFERENCE,
+	parseAssetVolume,
 	THEME_PRESETS,
 } from "@/utils/theme";
-import type { ThemeEffect } from "@/utils/types";
-import { createModal, getConfig } from "@/utils/utilities";
-
-const RANDOM_ADJECTIVES = [
-	"Solar",
-	"Lunar",
-	"Crimson",
-	"Azure",
-	"Ember",
-	"Frost",
-	"Golden",
-	"Cobalt",
-	"Scarlet",
-	"Jade",
-	"Violet",
-	"Onyx",
-	"Ivory",
-	"Amber",
-	"Slate",
-	"Coral",
-	"Sage",
-	"Midnight",
-	"Dawn",
-	"Dusk",
-	"Neon",
-	"Pastel",
-	"Misty",
-	"Velvet",
-];
-const RANDOM_NOUNS = [
-	"Harbor",
-	"Prism",
-	"Drift",
-	"Bloom",
-	"Forge",
-	"Haven",
-	"Ridge",
-	"Shore",
-	"Glow",
-	"Crest",
-	"Vale",
-	"Peak",
-	"Void",
-	"Spark",
-	"Haze",
-	"Pulse",
-	"Echo",
-	"Surge",
-	"Wave",
-	"Dune",
-	"Ash",
-	"Mist",
-	"Stone",
-	"Flare",
-];
-function generateRandomThemeName(): string {
-	const adj =
-		RANDOM_ADJECTIVES[Math.floor(Math.random() * RANDOM_ADJECTIVES.length)];
-	const noun = RANDOM_NOUNS[Math.floor(Math.random() * RANDOM_NOUNS.length)];
-	return `${adj} ${noun}`;
-}
+import {
+	deleteSavedTheme,
+	formatEffectValue,
+	friendlyApiError,
+	generateRandomThemeName,
+	openNewThemeModal,
+	openThemeGallery,
+	readEffectValue,
+	renderEffectValueInput as renderEffectValueInputShared,
+	renderSelectorReference,
+	showConfirmImport,
+} from "@/utils/themeEditorShared";
+import type { EffectType, ThemeEffect } from "@/utils/types";
+import { getConfig } from "@/utils/utilities";
+import { createVisualCssEditor } from "@/utils/visualCssEditor";
 
 interface TeWindowState {
 	isOpen?: boolean;
@@ -117,51 +70,24 @@ function saveTeState(state: TeWindowState) {
 	} catch {}
 }
 
-function friendlyApiError(
-	message: string,
-	fallback = "Something went wrong. Please try again.",
-): string {
-	if (message.includes("401"))
-		return "Your session has expired. Reconnect your account and try again.";
-	if (message.includes("403")) return "You don't have permission to do this.";
-	if (message.includes("404")) return "The requested resource was not found.";
-	if (message.includes("409"))
-		return "A conflict occurred. This name may already be taken.";
-	if (message.includes("422"))
-		return "The theme data is invalid. Check your colors and settings.";
-	if (message.includes("429"))
-		return "Too many requests. Please wait a moment and try again.";
-	if (message.includes("500") || message.includes("503"))
-		return "Server error. Please try again later.";
-	return fallback;
-}
-
-function parseColorAlpha(value: string | number): [string, number] {
-	const s = String(value);
-	const m = s.match(
-		/rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)/,
-	);
-	if (m) {
-		const hex = rgbToHex(
-			parseInt(m[1], 10),
-			parseInt(m[2], 10),
-			parseInt(m[3], 10),
-		);
-		const alpha = Math.round(parseFloat(m[4]) * 100);
-		return [hex, alpha];
-	}
-	if (isValidHex(s)) return [s, 100];
-	return ["#1a1a1a", 100];
-}
-
 export function restoreThemeEditorIfNeeded(): void {
 	if (loadTeState().isOpen && !document.getElementById("kiln-te-sidebar")) {
 		openThemeEditorSidebar();
 	}
 }
 
-export async function openThemeEditorSidebar(): Promise<void> {
-	if (document.getElementById("kiln-te-sidebar")) return;
+let sidebarOpenPromise: Promise<void> | null = null;
+
+export function openThemeEditorSidebar(): Promise<void> {
+	if (document.getElementById("kiln-te-sidebar")) return Promise.resolve();
+	if (sidebarOpenPromise) return sidebarOpenPromise;
+	sidebarOpenPromise = doOpenThemeEditorSidebar().finally(() => {
+		sidebarOpenPromise = null;
+	});
+	return sidebarOpenPromise;
+}
+
+async function doOpenThemeEditorSidebar(): Promise<void> {
 	saveTeState({ ...loadTeState(), isOpen: true });
 
 	const values = await preferences.getPreferences();
@@ -287,6 +213,10 @@ export async function openThemeEditorSidebar(): Promise<void> {
 				return workingAccent;
 			case "mutedText":
 				return "#888888";
+			case "studsColor":
+				return "#da8b51";
+			case "bricksColor":
+				return "#28a745";
 		}
 	}
 
@@ -402,6 +332,10 @@ export async function openThemeEditorSidebar(): Promise<void> {
 			        style="display:none;background:rgba(128,128,128,0.12);border:1px solid rgba(128,128,128,0.25);border-radius:5px;padding:4px 8px;cursor:pointer;color:inherit;flex-shrink:0;">
 				<i class="fas fa-pencil" style="font-size:0.7rem;"></i>
 			</button>
+			<button id="kiln-te-new-btn" title="New theme"
+			        style="background:rgba(128,128,128,0.12);border:1px solid rgba(128,128,128,0.25);border-radius:5px;padding:4px 8px;cursor:pointer;color:inherit;flex-shrink:0;">
+				<i class="fas fa-plus" style="font-size:0.7rem;"></i>
+			</button>
 		</div>
 
 		<span id="kiln-te-published-badge" class="badge mb-2 w-100" style="display:none;"></span>
@@ -441,18 +375,19 @@ export async function openThemeEditorSidebar(): Promise<void> {
 						</label>
 						<input type="text" id="kiln-te-image-url" class="form-control form-control-sm flex-fill"
 						       placeholder="…or image URL" style="min-width:0;" />
-						<button class="btn btn-outline-secondary btn-sm" id="kiln-te-image-url-btn">Extract</button>
+						<button class="btn btn-outline-secondary btn-sm flex-shrink-0" id="kiln-te-image-url-btn">Extract</button>
 					</div>
 					<div id="kiln-te-image-status" class="small text-muted mt-1" style="min-height:1.1em;"></div>
 				</div>
 				<div>
 					<label class="form-label small text-muted mb-1">Background Image</label>
 					<div class="d-flex gap-1 align-items-center">
-						<input type="text" id="kiln-te-bg-url" class="form-control form-control-sm flex-fill"
-						       placeholder="Image URL…" style="min-width:0;" />
-						<button class="btn btn-outline-secondary btn-sm" id="kiln-te-bg-set">Set</button>
-						<button class="btn btn-outline-danger btn-sm" id="kiln-te-bg-clear" style="display:none;">Clear</button>
+						<input type="text" id="kiln-te-bg-id" class="form-control form-control-sm flex-fill"
+						       placeholder="Decal ID or store link…" style="min-width:0;" />
+						<button class="btn btn-outline-secondary btn-sm flex-shrink-0" id="kiln-te-bg-set">Set</button>
+						<button class="btn btn-outline-danger btn-sm flex-shrink-0" id="kiln-te-bg-clear" style="display:none;">Clear</button>
 					</div>
+					<div id="kiln-te-bg-status" class="small text-muted mt-1" style="min-height:1.1em;"></div>
 					<div id="kiln-te-bg-overlay-row" class="mt-2" style="display:none;">
 						<label class="form-label small text-muted mb-1">Overlay</label>
 						<div class="d-flex align-items-center gap-2">
@@ -465,13 +400,12 @@ export async function openThemeEditorSidebar(): Promise<void> {
 				<div class="mt-2">
 					<label class="form-label small text-muted mb-1">Custom Cursor</label>
 					<div class="d-flex gap-1 align-items-center">
-						<label class="btn btn-outline-secondary btn-sm mb-0 flex-shrink-0" style="cursor:pointer;">
-							<i class="fas fa-mouse-pointer me-1"></i>Choose Image
-							<input type="file" id="kiln-te-cursor-file" accept="image/*" style="display:none;" />
-						</label>
-						<span id="kiln-te-cursor-name" class="small text-muted flex-fill" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+						<input type="text" id="kiln-te-cursor-id" class="form-control form-control-sm flex-fill"
+						       placeholder="Decal ID or store link…" style="min-width:0;" />
+						<button class="btn btn-outline-secondary btn-sm flex-shrink-0" id="kiln-te-cursor-set">Set</button>
 						<button class="btn btn-outline-danger btn-sm flex-shrink-0" id="kiln-te-cursor-clear" style="display:none;">Clear</button>
 					</div>
+					<div id="kiln-te-cursor-name" class="small text-muted mt-1" style="min-height:1.1em;"></div>
 					<div id="kiln-te-cursor-scale-row" class="d-flex align-items-center gap-2 mt-1" style="display:none!important;">
 						<label class="form-label small text-muted mb-0" style="white-space:nowrap;">Size</label>
 						<input type="range" id="kiln-te-cursor-scale" min="16" max="128" step="4" value="32" class="flex-fill" style="min-width:0;" />
@@ -566,6 +500,7 @@ export async function openThemeEditorSidebar(): Promise<void> {
 				<span>Custom CSS</span><i class="fas fa-chevron-down"></i>
 			</div>
 			<div class="card-body" id="kiln-te-css-body" style="display:none;">
+				<div id="kiln-te-vce-mount" class="mb-2"></div>
 				<textarea id="kiln-te-custom-css" class="form-control form-control-sm mb-2" rows="5"
 				          placeholder="/* e.g. .navbar { border-bottom: 2px solid var(--bs-primary); } */"
 				          style="font-family:monospace;font-size:0.75rem;resize:vertical;"></textarea>
@@ -830,6 +765,27 @@ export async function openThemeEditorSidebar(): Promise<void> {
 		"#kiln-te-selector-ref-btn",
 	)!;
 	selectorRefBtn.addEventListener("click", () => openSelectorRefOverlay());
+
+	let visualCssPending = "";
+	let visualCssFlush: Promise<void> | null = null;
+	const visualCss = createVisualCssEditor({
+		mount: sidebar.querySelector<HTMLElement>("#kiln-te-vce-mount")!,
+		sidebar,
+		idPrefix: "te",
+		getCss: () => workingCss,
+		setCss: (css) => {
+			visualCssPending = css;
+			visualCssFlush ??= (async () => {
+				await clonePresetIfNeeded();
+				workingCss = visualCssPending;
+				cssTextarea.value = workingCss;
+				refreshPreview();
+			})().finally(() => {
+				visualCssFlush = null;
+			});
+			return visualCssFlush;
+		},
+	});
 	const imageInput = sidebar.querySelector<HTMLInputElement>("#kiln-te-image")!;
 	const imageUrlInput =
 		sidebar.querySelector<HTMLInputElement>("#kiln-te-image-url")!;
@@ -839,8 +795,8 @@ export async function openThemeEditorSidebar(): Promise<void> {
 	const imageStatus = sidebar.querySelector<HTMLElement>(
 		"#kiln-te-image-status",
 	)!;
-	const bgUrlInput =
-		sidebar.querySelector<HTMLInputElement>("#kiln-te-bg-url")!;
+	const bgIdInput = sidebar.querySelector<HTMLInputElement>("#kiln-te-bg-id")!;
+	const bgStatus = sidebar.querySelector<HTMLElement>("#kiln-te-bg-status")!;
 	const bgSetBtn = sidebar.querySelector<HTMLButtonElement>("#kiln-te-bg-set")!;
 	const bgClearBtn =
 		sidebar.querySelector<HTMLButtonElement>("#kiln-te-bg-clear")!;
@@ -856,8 +812,10 @@ export async function openThemeEditorSidebar(): Promise<void> {
 	const bgOverlayLabel = sidebar.querySelector<HTMLElement>(
 		"#kiln-te-bg-overlay-label",
 	)!;
-	const cursorFileInput = sidebar.querySelector<HTMLInputElement>(
-		"#kiln-te-cursor-file",
+	const cursorIdInput =
+		sidebar.querySelector<HTMLInputElement>("#kiln-te-cursor-id")!;
+	const cursorSetBtn = sidebar.querySelector<HTMLButtonElement>(
+		"#kiln-te-cursor-set",
 	)!;
 	const cursorNameEl = sidebar.querySelector<HTMLElement>(
 		"#kiln-te-cursor-name",
@@ -908,6 +866,7 @@ export async function openThemeEditorSidebar(): Promise<void> {
 				applyKilnTheme(THEME_PRESETS[activeId]);
 			else applyKilnTheme(savedThemes.find((t) => t.id === activeId) ?? null);
 		}
+		visualCss.destroy();
 		document.removeEventListener("mousemove", onResizeMouseMove);
 		document.removeEventListener("mouseup", onResizeMouseUp);
 		document.removeEventListener("mousemove", onWindowDragMove);
@@ -938,7 +897,7 @@ export async function openThemeEditorSidebar(): Promise<void> {
 				myGroup.appendChild(new Option(t.name, t.id));
 			themeSelect.add(myGroup);
 		}
-		themeSelect.add(new Option("— New Theme —", "__new__"));
+		if (isNew()) themeSelect.add(new Option(workingName, "__new__"));
 		themeSelect.value = currentId;
 	}
 
@@ -974,24 +933,6 @@ export async function openThemeEditorSidebar(): Promise<void> {
 					? workingColorTokens
 					: undefined,
 		});
-	}
-
-	function formatEffectValue(effect: ThemeEffect): string {
-		const cfg = EFFECT_TYPE_CONFIGS[effect.type];
-		if (cfg.input.kind === "slider") return `${effect.value}${cfg.input.unit}`;
-		if (cfg.input.kind === "select") {
-			return (
-				cfg.input.options.find((o) => o.value === effect.value)?.label ??
-				String(effect.value)
-			);
-		}
-		if (cfg.input.kind === "url")
-			return effect.value ? "Custom frame" : "(none)";
-		if (cfg.input.kind === "color-alpha") {
-			const [hex, alpha] = parseColorAlpha(effect.value);
-			return alpha < 100 ? `${hex} (${alpha}%)` : hex;
-		}
-		return String(effect.value);
 	}
 
 	function renderEffectsList() {
@@ -1033,7 +974,13 @@ export async function openThemeEditorSidebar(): Promise<void> {
 		navbarHex.value = workingNavbar;
 		fontSelect.value = workingFont;
 		cssTextarea.value = workingCss;
-		bgUrlInput.value = workingBg;
+		visualCss.syncFromText();
+		bgIdInput.value = "";
+		bgStatus.textContent = !workingBg
+			? ""
+			: POLYTORIA_CDN_URL.test(workingBg)
+				? "Background set."
+				: "Using an older image URL. Replace it with a decal ID to change it.";
 		bgClearBtn.style.display = workingBg ? "" : "none";
 		bgOverlayRow.style.display = workingBg ? "" : "none";
 		bgOverlayColor.value = workingOverlayColor;
@@ -1209,7 +1156,7 @@ export async function openThemeEditorSidebar(): Promise<void> {
 
 			if (mode === "update") {
 				publishStatus.innerHTML = isPending
-					? `<span class="text-warning"><i class="fas fa-clock me-1"></i>Submitted for re-review</span><div class="text-muted small mt-1">Changes to CSS or background require approval before going live.</div>`
+					? `<span class="text-warning"><i class="fas fa-clock me-1"></i>Submitted for re-review</span><div class="text-muted small mt-1">This theme needs approval before going live again.</div>`
 					: `<span class="text-success"><i class="fas fa-check me-1"></i>Published version updated!</span>`;
 			} else {
 				publishStatus.innerHTML = isPending
@@ -1258,10 +1205,8 @@ export async function openThemeEditorSidebar(): Promise<void> {
 		moreMenu.innerHTML = "";
 		const savedTheme = getCurrentSavedTheme();
 
-		if (!isNew()) {
-			const newBtn = addMenuItem("New", "fas fa-plus", "text-primary");
-			newBtn.addEventListener("click", () => switchTheme("__new__"));
-		}
+		const newBtn = addMenuItem("New", "fas fa-plus", "text-primary");
+		newBtn.addEventListener("click", () => startNewTheme());
 
 		if (savedTheme) {
 			const deleteBtn = addMenuItem("Delete", "fas fa-trash", "text-danger");
@@ -1338,10 +1283,26 @@ export async function openThemeEditorSidebar(): Promise<void> {
 			galleryBtn.className = "btn btn-sm btn-outline-secondary flex-fill";
 			galleryBtn.innerHTML = '<i class="fas fa-store me-1"></i>Gallery';
 			leftActions.appendChild(galleryBtn);
-			galleryBtn.addEventListener("click", () => showGalleryFlow());
+			galleryBtn.addEventListener("click", () =>
+				openThemeGallery(handleImported),
+			);
 		}
 
 		moreWrap.style.display = moreMenu.children.length > 0 ? "" : "none";
+	}
+
+	async function handleImported(localId: string) {
+		appliedOnce = true;
+		savedThemes = await _savedThemes.getValue();
+		switchTheme(localId);
+	}
+
+	function startNewTheme() {
+		openNewThemeModal(async (create) => {
+			const theme = await create();
+			savedThemes = await _savedThemes.getValue();
+			switchTheme(theme.id);
+		});
 	}
 
 	function switchTheme(id: string) {
@@ -1445,6 +1406,9 @@ export async function openThemeEditorSidebar(): Promise<void> {
 		}
 	}
 
+	sidebar
+		.querySelector("#kiln-te-new-btn")!
+		.addEventListener("click", () => startNewTheme());
 	namePencil.addEventListener("click", () => {
 		if (!isCustomTheme() && !isNew()) return;
 		openRenameOverlay();
@@ -1534,7 +1498,13 @@ export async function openThemeEditorSidebar(): Promise<void> {
 			: `User #${fetched.userId}`;
 
 		closeImportOverlay();
-		await showConfirmImport(fetched, creatorName);
+		await showConfirmImport(
+			fetched,
+			creatorName,
+			undefined,
+			undefined,
+			handleImported,
+		);
 		importLoadBtn.disabled = false;
 	});
 
@@ -1570,22 +1540,7 @@ export async function openThemeEditorSidebar(): Promise<void> {
 		const savedTheme = themeToDelete;
 		if (!savedTheme) return;
 
-		const apiSlug =
-			savedTheme.publishedSlug ?? savedTheme.previousPublishedSlug;
-		if (apiSlug) {
-			const sessions = await apiSessions.getValue();
-			const verified = sessions.find(
-				(s) => s.state === "verified" && s.accessToken,
-			);
-			if (verified) {
-				await sendMessage("deletePublishedTheme", {
-					userId: verified.userId,
-					id: apiSlug,
-				});
-			}
-		}
-		const current = await _savedThemes.getValue();
-		await _savedThemes.setValue(current.filter((t) => t.id !== savedTheme.id));
+		await deleteSavedTheme(savedTheme);
 		const activeId = (values.config.themeCreator as any).activeThemeId;
 		if (activeId === savedTheme.id) {
 			(values.config as any).themeCreator = { activeThemeId: "default" };
@@ -1651,43 +1606,81 @@ export async function openThemeEditorSidebar(): Promise<void> {
 	cssTextarea.addEventListener("input", async () => {
 		await clonePresetIfNeeded();
 		workingCss = cssTextarea.value;
+		visualCss.syncFromText();
 		refreshPreview();
 	});
 	bgSetBtn.addEventListener("click", async () => {
-		const url = bgUrlInput.value.trim();
+		bgSetBtn.disabled = true;
+		bgStatus.textContent = "Looking up decal…";
+		const url = await resolveDecalUrl(bgIdInput.value);
+		bgSetBtn.disabled = false;
+		if (!url) {
+			bgStatus.textContent =
+				"Couldn't find that decal. Check the ID and try again.";
+			return;
+		}
 		await clonePresetIfNeeded();
 		workingBg = url;
-		bgClearBtn.style.display = url ? "" : "none";
-		bgOverlayRow.style.display = url ? "" : "none";
+		bgIdInput.value = "";
+		bgStatus.textContent = "Background set.";
+		bgClearBtn.style.display = "";
+		bgOverlayRow.style.display = "";
 		refreshPreview();
 	});
-	bgUrlInput.addEventListener("keydown", (e) => {
+	bgIdInput.addEventListener("keydown", (e) => {
 		if (e.key === "Enter") bgSetBtn.click();
 	});
 	bgClearBtn.addEventListener("click", async () => {
 		await clonePresetIfNeeded();
 		workingBg = "";
-		bgUrlInput.value = "";
+		bgIdInput.value = "";
+		bgStatus.textContent = "";
 		bgClearBtn.style.display = "none";
 		bgOverlayRow.style.display = "none";
 		refreshPreview();
 	});
-	cursorFileInput.addEventListener("change", async () => {
-		const file = cursorFileInput.files?.[0];
-		if (!file) return;
-		cursorFileInput.value = "";
-		await clonePresetIfNeeded();
-		const bitmap = await createImageBitmap(file);
-		const srcCanvas = document.createElement("canvas");
-		srcCanvas.width = 128;
-		srcCanvas.height = 128;
-		srcCanvas.getContext("2d")!.drawImage(bitmap, 0, 0, 128, 128);
-		bitmap.close();
-		workingCursorSrc = srcCanvas.toDataURL("image/png");
-		cursorNameEl.textContent = file.name;
+	cursorSetBtn.addEventListener("click", async () => {
+		cursorSetBtn.disabled = true;
+		cursorNameEl.textContent = "Looking up decal…";
+		try {
+			const url = await resolveDecalUrl(cursorIdInput.value);
+			if (!url) {
+				cursorNameEl.textContent =
+					"Couldn't find that decal. Check the ID and try again.";
+				return;
+			}
+			const image = await sendMessage("fetchCdnImageDataUrl", url).catch(
+				() => null,
+			);
+			if (!image?.ok) {
+				cursorNameEl.textContent = "Couldn't load that image. Try again.";
+				return;
+			}
+			// An <img> rather than fetch(): the page's CSP allows data: images.
+			const img = new Image();
+			img.src = image.data;
+			await img.decode();
+			await clonePresetIfNeeded();
+			// Browsers ignore cursors over 128px, and decals are usually bigger.
+			const srcCanvas = document.createElement("canvas");
+			srcCanvas.width = 128;
+			srcCanvas.height = 128;
+			srcCanvas.getContext("2d")!.drawImage(img, 0, 0, 128, 128);
+			workingCursorSrc = srcCanvas.toDataURL("image/png");
+		} catch {
+			cursorNameEl.textContent = "Couldn't load that image. Try again.";
+			return;
+		} finally {
+			cursorSetBtn.disabled = false;
+		}
+		cursorIdInput.value = "";
+		cursorNameEl.textContent = "Custom cursor set";
 		cursorClearBtn.style.display = "";
 		cursorScaleRow.style.display = "flex";
 		await applyScaledCursor();
+	});
+	cursorIdInput.addEventListener("keydown", (e) => {
+		if (e.key === "Enter") cursorSetBtn.click();
 	});
 	cursorScaleInput.addEventListener("input", async () => {
 		workingCursorScale = Number(cursorScaleInput.value);
@@ -1700,6 +1693,7 @@ export async function openThemeEditorSidebar(): Promise<void> {
 		workingCursorSrc = "";
 		workingCursorScale = 32;
 		workingCursor = "";
+		cursorIdInput.value = "";
 		cursorNameEl.textContent = "";
 		cursorClearBtn.style.display = "none";
 		cursorScaleRow.style.display = "none";
@@ -2030,106 +2024,6 @@ export async function openThemeEditorSidebar(): Promise<void> {
 		.querySelector<HTMLButtonElement>("#kiln-te-close")!
 		.addEventListener("click", closeSidebar);
 
-	async function showConfirmImport(
-		fetched: {
-			id: string;
-			userId: number;
-			name: string;
-			accentColor: string;
-			navbarColor: string;
-			fontFamily?: string | null;
-			customCss?: string | null;
-			backgroundImage?: string | null;
-			effects?: ThemeEffect[] | null;
-			navbarIconColor?: string | null;
-			cursorUrl?: string | null;
-			colorTokens?: Record<string, string> | null;
-		},
-		creatorName: string,
-		thumbnailUrl?: string | null,
-	) {
-		const confirmModal = createModal();
-		const thumbnailHtml = thumbnailUrl
-			? `<img src="${thumbnailUrl}" style="width:100%;height:100%;object-fit:cover;" />`
-			: `<div style="width:100%;height:50%;background:${fetched.navbarColor};"></div>
-				<div style="width:100%;height:50%;background:${fetched.accentColor};"></div>`;
-		confirmModal.innerHTML = `
-			<div class="d-flex justify-content-between align-items-center mb-3">
-				<h5 class="mb-0 fw-bold">Import Theme</h5>
-				<button class="btn-close btn-close-white" id="kiln-confirm-close" aria-label="Close"></button>
-			</div>
-			<div style="width:100%;height:180px;border-radius:8px;overflow:hidden;display:flex;flex-direction:column;">
-				${thumbnailHtml}
-			</div>
-			<div class="mt-2 mb-3">
-				<div class="fw-semibold">${fetched.name}</div>
-				<div class="text-muted small">by ${creatorName}</div>
-			</div>
-			<div class="d-flex gap-2 justify-content-end">
-				<button class="btn btn-sm btn-secondary" id="kiln-confirm-cancel">Cancel</button>
-				<button class="btn btn-sm btn-primary" id="kiln-confirm-import">
-					<i class="fas fa-download me-1"></i>Import
-				</button>
-			</div>
-		`;
-
-		confirmModal
-			.querySelector("#kiln-confirm-close")!
-			.addEventListener("click", () => confirmModal.close());
-		confirmModal
-			.querySelector("#kiln-confirm-cancel")!
-			.addEventListener("click", () => confirmModal.close());
-
-		confirmModal
-			.querySelector<HTMLButtonElement>("#kiln-confirm-import")!
-			.addEventListener("click", async () => {
-				const current = await _savedThemes.getValue();
-				const alreadyImported = current.find(
-					(t) => t.importedSlug === fetched.id,
-				);
-				const localId = alreadyImported?.id ?? crypto.randomUUID();
-
-				if (!alreadyImported) {
-					current.push({
-						id: localId,
-						name: fetched.name,
-						accentColor: fetched.accentColor,
-						navbarColor: fetched.navbarColor,
-						fontFamily: fetched.fontFamily ?? undefined,
-						customCss: fetched.customCss ?? undefined,
-						backgroundImage: fetched.backgroundImage ?? undefined,
-						effects: fetched.effects?.length ? fetched.effects : undefined,
-						navbarIconColor: fetched.navbarIconColor ?? undefined,
-						cursorUrl: fetched.cursorUrl ?? undefined,
-						colorTokens: fetched.colorTokens ?? undefined,
-						importedSlug: fetched.id,
-					});
-					await _savedThemes.setValue(current);
-				}
-
-				(values.config as any).themeCreator = { activeThemeId: localId };
-				await preferences.setValue(values);
-				applyKilnTheme({
-					accentColor: fetched.accentColor,
-					navbarColor: fetched.navbarColor,
-					fontFamily: fetched.fontFamily ?? undefined,
-					customCss: fetched.customCss ?? undefined,
-					backgroundImage: fetched.backgroundImage ?? undefined,
-					effects: fetched.effects ?? undefined,
-					navbarIconColor: fetched.navbarIconColor ?? undefined,
-					cursorUrl: fetched.cursorUrl ?? undefined,
-					colorTokens: fetched.colorTokens ?? undefined,
-				});
-				appliedOnce = true;
-
-				confirmModal.close();
-				savedThemes = await _savedThemes.getValue();
-				switchTheme(localId);
-			});
-
-		confirmModal.showModal();
-	}
-
 	function showVerificationModal(): Promise<{
 		userId: number;
 		accessToken: string;
@@ -2167,276 +2061,7 @@ export async function openThemeEditorSidebar(): Promise<void> {
 	);
 
 	function renderSelectorRef(filter: string) {
-		const needle = filter.trim().toLowerCase();
-		const groups = SELECTOR_REFERENCE.map((group) => ({
-			category: group.category,
-			items: group.items.filter(
-				(item) =>
-					!needle ||
-					item.label.toLowerCase().includes(needle) ||
-					item.selector.toLowerCase().includes(needle),
-			),
-		})).filter((group) => group.items.length > 0);
-
-		if (groups.length === 0) {
-			selRefBody.innerHTML = `<p class="text-muted small text-center py-4">No selectors match your search.</p>`;
-			return;
-		}
-		const expandAll = needle.length > 0;
-		selRefBody.innerHTML = groups
-			.map(
-				(group, i) => `
-			<div class="card mb-2">
-				<div class="card-header small fw-semibold d-flex justify-content-between align-items-center kiln-selref-cat-hdr" style="cursor:pointer;${expandAll ? "" : "border-radius:inherit;border:none;"}" data-cat="${i}">
-					<span>${group.category} <span class="text-muted fw-normal">(${group.items.length})</span></span>
-					<i class="fas fa-chevron-down" style="font-size:0.75rem;transition:transform 200ms;${expandAll ? "transform:rotate(180deg);" : ""}"></i>
-				</div>
-				<div class="card-body py-2" id="kiln-selref-cat-${i}" style="display:${expandAll ? "" : "none"};">
-					${group.items
-						.map(
-							(item) => `
-					<div class="d-flex align-items-center gap-2 mb-1 kiln-selref-row" data-selector="${item.selector.replace(/"/g, "&quot;")}" title="${item.selector.replace(/"/g, "&quot;")}" style="cursor:pointer;padding:4px 6px;border-radius:4px;">
-						<div class="flex-fill" style="min-width:0;">
-							<div class="small">${item.label}</div>
-							${item.note ? `<div class="small text-muted">${item.note}</div>` : ""}
-						</div>
-						<i class="fas fa-copy small text-muted flex-shrink-0"></i>
-					</div>`,
-						)
-						.join("")}
-				</div>
-			</div>`,
-			)
-			.join("");
-
-		selRefBody
-			.querySelectorAll<HTMLElement>(".kiln-selref-cat-hdr")
-			.forEach((hdr) => {
-				hdr.addEventListener("click", () => {
-					const catBody = document.getElementById(
-						`kiln-selref-cat-${hdr.dataset.cat}`,
-					)!;
-					const opening = catBody.style.display === "none";
-					catBody.style.display = opening ? "" : "none";
-					hdr.querySelector<HTMLElement>("i")!.style.transform = opening
-						? "rotate(180deg)"
-						: "";
-					if (opening) {
-						hdr.style.borderRadius = "";
-						hdr.style.border = "";
-					} else {
-						hdr.style.borderRadius = "inherit";
-						hdr.style.border = "none";
-					}
-				});
-			});
-
-		selRefBody.querySelectorAll<HTMLElement>(".kiln-selref-row").forEach((row) => {
-			row.addEventListener("mouseenter", () => {
-				row.style.background = "rgba(128,128,128,0.12)";
-			});
-			row.addEventListener("mouseleave", () => {
-				row.style.background = "";
-			});
-			row.addEventListener("click", (e) => {
-				e.stopPropagation();
-				navigator.clipboard.writeText(row.dataset.selector!);
-				const icon = row.querySelector("i")!;
-				icon.className = "fas fa-check small text-success flex-shrink-0";
-				setTimeout(() => {
-					icon.className = "fas fa-copy small text-muted flex-shrink-0";
-				}, 1200);
-			});
-		});
-	}
-
-	function showGalleryFlow() {
-		let galleryPage = 1;
-		let galleryTotalPages = 1;
-
-		const galleryModal = createModal("lg");
-
-		function renderGalleryShell() {
-			galleryModal.innerHTML = `
-				<div class="d-flex justify-content-between align-items-center mb-3">
-					<h5 class="mb-0 fw-bold">Theme Gallery</h5>
-					<button class="btn-close btn-close-white" id="kiln-gallery-close" aria-label="Close"></button>
-				</div>
-				<div id="kiln-gallery-body"></div>
-				<div class="d-flex justify-content-between align-items-center mt-3">
-					<button class="btn btn-sm btn-outline-secondary" id="kiln-gallery-prev" disabled>‹ Prev</button>
-					<span id="kiln-gallery-page" class="small text-muted"></span>
-					<button class="btn btn-sm btn-outline-secondary" id="kiln-gallery-next" disabled>Next ›</button>
-				</div>
-			`;
-			galleryModal
-				.querySelector("#kiln-gallery-close")!
-				.addEventListener("click", () => galleryModal.close());
-			galleryModal
-				.querySelector("#kiln-gallery-prev")!
-				.addEventListener("click", () => {
-					if (galleryPage > 1) loadGalleryPage(galleryPage - 1);
-				});
-			galleryModal
-				.querySelector("#kiln-gallery-next")!
-				.addEventListener("click", () => {
-					if (galleryPage < galleryTotalPages) loadGalleryPage(galleryPage + 1);
-				});
-		}
-
-		async function loadGalleryPage(page: number) {
-			const body =
-				galleryModal.querySelector<HTMLElement>("#kiln-gallery-body")!;
-			const prevBtn =
-				galleryModal.querySelector<HTMLButtonElement>("#kiln-gallery-prev")!;
-			const nextBtn =
-				galleryModal.querySelector<HTMLButtonElement>("#kiln-gallery-next")!;
-			const pageLabel =
-				galleryModal.querySelector<HTMLElement>("#kiln-gallery-page")!;
-
-			body.innerHTML = `<p class="text-muted small text-center py-4">Loading…</p>`;
-			prevBtn.disabled = true;
-			nextBtn.disabled = true;
-
-			const result = await sendMessage("getThemeGallery", page);
-			if (!result.ok) {
-				body.innerHTML = `<p class="text-danger small text-center py-4">Failed to load gallery.</p>`;
-				return;
-			}
-
-			galleryPage = result.data.meta.currentPage;
-			galleryTotalPages = result.data.meta.totalPages;
-			pageLabel.textContent = `Page ${galleryPage} of ${galleryTotalPages}`;
-			prevBtn.disabled = galleryPage <= 1;
-			nextBtn.disabled = galleryPage >= galleryTotalPages;
-
-			const themes = result.data.data;
-			if (themes.length === 0) {
-				body.innerHTML = `<p class="text-muted small text-center py-4">No themes yet.</p>`;
-				return;
-			}
-
-			const uniqueUserIds = [...new Set(themes.map((t) => t.userId))];
-			const userResults = await Promise.all(
-				uniqueUserIds.map((id) => sendMessage("getUser", id)),
-			);
-			const usernameMap: Record<number, string> = {};
-			for (let i = 0; i < uniqueUserIds.length; i++) {
-				const r = userResults[i];
-				usernameMap[uniqueUserIds[i]] = r.ok
-					? r.data.username
-					: `User #${uniqueUserIds[i]}`;
-			}
-
-			body.innerHTML = `<div class="row g-2" id="kiln-gallery-grid"></div>`;
-			const grid = body.querySelector("#kiln-gallery-grid")!;
-			for (const theme of themes) {
-				const creatorName = usernameMap[theme.userId];
-				const col = document.createElement("div");
-				col.className = "col-6 col-md-4 col-lg-3";
-				col.innerHTML = `
-					<div class="card h-100" style="cursor:pointer;" data-theme-id="${theme.id}">
-						${
-							theme.thumbnailUrl
-								? `<img src="${theme.thumbnailUrl}" loading="lazy" style="height:96px;width:100%;object-fit:cover;border-radius:var(--bs-card-border-radius) var(--bs-card-border-radius) 0 0;" />`
-								: `<div style="height:48px;display:flex;border-radius:var(--bs-card-border-radius) var(--bs-card-border-radius) 0 0;overflow:hidden;">
-							<div style="flex:1;background:${theme.navbarColor};"></div>
-							<div style="flex:1;background:${theme.accentColor};"></div>
-						</div>`
-						}
-						<div class="card-body py-2 px-2">
-							<div class="fw-semibold small text-truncate">${theme.name}</div>
-							<div class="d-flex align-items-center justify-content-between">
-								<div class="text-muted text-truncate" style="font-size:0.75em;">by ${creatorName}</div>
-								<button class="kiln-gallery-report btn btn-link p-0 text-muted" title="Report theme" style="font-size:0.7em;flex-shrink:0;line-height:1;">
-									<i class="fas fa-flag"></i>
-								</button>
-							</div>
-						</div>
-					</div>
-				`;
-				col.querySelector(".card")!.addEventListener("click", async (e) => {
-					if ((e.target as HTMLElement).closest(".kiln-gallery-report")) return;
-					const fetchResult = await sendMessage("getPublishedTheme", theme.id);
-					if (!fetchResult.ok) return;
-					const fetched = fetchResult.data.data;
-					galleryModal.close();
-					await showConfirmImport(fetched, creatorName, theme.thumbnailUrl);
-				});
-				col
-					.querySelector(".kiln-gallery-report")!
-					.addEventListener("click", (e) => {
-						e.stopPropagation();
-						const reportModal = createModal();
-						reportModal.innerHTML = `
-						<div class="d-flex justify-content-between align-items-center mb-3">
-							<h5 class="mb-0 fw-bold">Report Theme</h5>
-							<button class="btn-close btn-close-white" id="kiln-report-close" aria-label="Close"></button>
-						</div>
-						<p class="small text-muted mb-2">Describe the issue with <strong>${theme.name}</strong>:</p>
-						<textarea id="kiln-report-reason" class="form-control form-control-sm mb-3" rows="3" maxlength="500" placeholder="e.g. hides page content, inappropriate imagery…"></textarea>
-						<div id="kiln-report-status" class="small text-danger mb-2" style="min-height:1em;"></div>
-						<div class="d-flex gap-2 justify-content-end">
-							<button class="btn btn-sm btn-secondary" id="kiln-report-cancel">Cancel</button>
-							<button class="btn btn-sm btn-danger" id="kiln-report-submit">
-								<i class="fas fa-flag me-1"></i>Report
-							</button>
-						</div>
-					`;
-						reportModal
-							.querySelector("#kiln-report-close")!
-							.addEventListener("click", () => reportModal.close());
-						reportModal
-							.querySelector("#kiln-report-cancel")!
-							.addEventListener("click", () => reportModal.close());
-						reportModal
-							.querySelector("#kiln-report-submit")!
-							.addEventListener("click", async () => {
-								const reason = reportModal
-									.querySelector<HTMLTextAreaElement>("#kiln-report-reason")!
-									.value.trim();
-								const status = reportModal.querySelector<HTMLElement>(
-									"#kiln-report-status",
-								)!;
-								const submitBtn = reportModal.querySelector<HTMLButtonElement>(
-									"#kiln-report-submit",
-								)!;
-								if (!reason) {
-									status.textContent =
-										"Please describe the issue before submitting.";
-									return;
-								}
-								submitBtn.disabled = true;
-								const result = await sendMessage("reportTheme", {
-									id: theme.id,
-									reason,
-								});
-								if (result.ok) {
-									reportModal.innerHTML = `
-								<p class="fw-bold mb-1">Report submitted</p>
-								<p class="text-muted small mb-3">Thank you — we'll review this theme shortly.</p>
-								<div class="d-flex justify-content-end">
-									<button class="btn btn-sm btn-secondary" id="kiln-report-done">Close</button>
-								</div>
-							`;
-									reportModal
-										.querySelector("#kiln-report-done")!
-										.addEventListener("click", () => reportModal.close());
-								} else {
-									status.textContent =
-										"Failed to submit report. Please try again.";
-									submitBtn.disabled = false;
-								}
-							});
-						reportModal.showModal();
-					});
-				grid.appendChild(col);
-			}
-		}
-
-		renderGalleryShell();
-		galleryModal.showModal();
-		loadGalleryPage(1);
+		renderSelectorReference(selRefBody, filter);
 	}
 
 	function showImportFlow() {
@@ -2472,135 +2097,19 @@ export async function openThemeEditorSidebar(): Promise<void> {
 	}
 
 	function renderEffectValueInput() {
-		const type = effectTypeSelect.value as keyof typeof EFFECT_TYPE_CONFIGS;
-		const cfg = EFFECT_TYPE_CONFIGS[type]?.input;
-		if (!cfg) {
-			effectValueRow.innerHTML = "";
-			return;
-		}
-		if (cfg.kind === "slider") {
-			effectValueRow.innerHTML = `
-				<label class="form-label small text-muted mb-1">Value</label>
-				<div class="d-flex align-items-center gap-2">
-					<input type="range" id="kiln-te-efv-slider" min="${cfg.min}" max="${cfg.max}" step="${cfg.step}" value="${cfg.default}" class="flex-fill" style="min-width:0;" />
-					<span id="kiln-te-efv-label" class="small text-muted" style="min-width:3em;text-align:right;">${cfg.default}${cfg.unit}</span>
-				</div>`;
-			const slider = effectValueRow.querySelector<HTMLInputElement>(
-				"#kiln-te-efv-slider",
-			)!;
-			const label =
-				effectValueRow.querySelector<HTMLElement>("#kiln-te-efv-label")!;
-			slider.addEventListener("input", () => {
-				label.textContent = `${slider.value}${cfg.unit}`;
-			});
-		} else if (cfg.kind === "select") {
-			effectValueRow.innerHTML = `
-				<label class="form-label small text-muted mb-1">Value</label>
-				<select id="kiln-te-efv-select" class="form-select form-select-sm">
-					${cfg.options.map((o) => `<option value="${o.value}"${o.value === cfg.default ? " selected" : ""}>${o.label}</option>`).join("")}
-				</select>`;
-		} else if (cfg.kind === "url") {
-			effectValueRow.innerHTML = `
-				<label class="form-label small text-muted mb-1">Frame Image URL</label>
-				<input type="text" id="kiln-te-efv-url" class="form-control form-control-sm"
-				       placeholder="https://…" value="${cfg.default}" />
-				<div class="small text-muted mt-1">Use a PNG with a transparent center. The image will be overlaid on top of the avatar.</div>`;
-		} else if (cfg.kind === "color-alpha") {
-			const [initHex, initAlpha] = parseColorAlpha(cfg.default);
-			effectValueRow.innerHTML = `
-				<label class="form-label small text-muted mb-1">Color</label>
-				<div class="d-flex align-items-center gap-2 mb-2">
-					<input type="color" id="kiln-te-efv-color" class="kiln-te-color-picker" value="${initHex}" />
-					<input type="text" id="kiln-te-efv-hex" class="form-control form-control-sm kiln-te-hex-input" maxlength="7" value="${initHex}" />
-				</div>
-				<div class="d-flex align-items-center gap-2">
-					<span class="small text-muted" style="white-space:nowrap;min-width:4.5em;">Opacity</span>
-					<input type="range" id="kiln-te-efv-alpha" min="0" max="100" step="1" value="${initAlpha}" class="flex-fill" style="min-width:0;" />
-					<span id="kiln-te-efv-alpha-label" class="small text-muted" style="min-width:2.5em;text-align:right;">${initAlpha}%</span>
-				</div>`;
-			const colorPicker =
-				effectValueRow.querySelector<HTMLInputElement>("#kiln-te-efv-color")!;
-			const hexInput =
-				effectValueRow.querySelector<HTMLInputElement>("#kiln-te-efv-hex")!;
-			const alphaSlider =
-				effectValueRow.querySelector<HTMLInputElement>("#kiln-te-efv-alpha")!;
-			const alphaLabel = effectValueRow.querySelector<HTMLElement>(
-				"#kiln-te-efv-alpha-label",
-			)!;
-			colorPicker.addEventListener("input", () => {
-				hexInput.value = colorPicker.value;
-			});
-			hexInput.addEventListener("change", () => {
-				const v = hexInput.value.startsWith("#")
-					? hexInput.value
-					: `#${hexInput.value}`;
-				if (isValidHex(v)) {
-					colorPicker.value = v;
-					hexInput.value = v;
-				} else hexInput.value = colorPicker.value;
-			});
-			alphaSlider.addEventListener("input", () => {
-				alphaLabel.textContent = `${alphaSlider.value}%`;
-			});
-		} else {
-			effectValueRow.innerHTML = `
-				<label class="form-label small text-muted mb-1">Value</label>
-				<div class="d-flex align-items-center gap-2">
-					<input type="color" id="kiln-te-efv-color" class="kiln-te-color-picker" value="${cfg.default}" />
-					<input type="text" id="kiln-te-efv-hex" class="form-control form-control-sm kiln-te-hex-input" maxlength="7" value="${cfg.default}" />
-				</div>`;
-			const colorPicker =
-				effectValueRow.querySelector<HTMLInputElement>("#kiln-te-efv-color")!;
-			const hexInput =
-				effectValueRow.querySelector<HTMLInputElement>("#kiln-te-efv-hex")!;
-			colorPicker.addEventListener("input", () => {
-				hexInput.value = colorPicker.value;
-			});
-			hexInput.addEventListener("change", () => {
-				const v = hexInput.value.startsWith("#")
-					? hexInput.value
-					: `#${hexInput.value}`;
-				if (isValidHex(v)) {
-					colorPicker.value = v;
-					hexInput.value = v;
-				} else hexInput.value = colorPicker.value;
-			});
-		}
+		renderEffectValueInputShared(
+			effectValueRow,
+			effectTypeSelect.value as EffectType,
+			"kiln-te",
+		);
 	}
 
-	function getEffectFormValue(): string | number {
-		const type = effectTypeSelect.value as keyof typeof EFFECT_TYPE_CONFIGS;
-		const cfg = EFFECT_TYPE_CONFIGS[type]?.input;
-		if (!cfg) return "";
-		if (cfg.kind === "slider") {
-			return Number(
-				effectValueRow.querySelector<HTMLInputElement>("#kiln-te-efv-slider")!
-					.value,
-			);
-		} else if (cfg.kind === "select") {
-			return effectValueRow.querySelector<HTMLSelectElement>(
-				"#kiln-te-efv-select",
-			)!.value;
-		} else if (cfg.kind === "url") {
-			return effectValueRow
-				.querySelector<HTMLInputElement>("#kiln-te-efv-url")!
-				.value.trim();
-		} else if (cfg.kind === "color-alpha") {
-			const color =
-				effectValueRow.querySelector<HTMLInputElement>(
-					"#kiln-te-efv-color",
-				)!.value;
-			const alpha = Number(
-				effectValueRow.querySelector<HTMLInputElement>("#kiln-te-efv-alpha")!
-					.value,
-			);
-			const [r, g, b] = hexToRgb(color);
-			return `rgba(${r},${g},${b},${(alpha / 100).toFixed(2)})`;
-		} else {
-			return effectValueRow.querySelector<HTMLInputElement>(
-				"#kiln-te-efv-color",
-			)!.value;
-		}
+	function getEffectFormValue(): Promise<string | number | null> {
+		return readEffectValue(
+			effectValueRow,
+			effectTypeSelect.value as EffectType,
+			"kiln-te",
+		);
 	}
 
 	function closeAddEffectForm() {
@@ -2626,10 +2135,13 @@ export async function openThemeEditorSidebar(): Promise<void> {
 	sidebar
 		.querySelector("#kiln-te-effect-confirm")!
 		.addEventListener("click", async () => {
-			await clonePresetIfNeeded();
 			const slot = effectSlotSelect.value as keyof typeof EFFECT_SLOTS;
 			const type = effectTypeSelect.value as keyof typeof EFFECT_TYPE_CONFIGS;
-			const value = getEffectFormValue();
+			const value = await getEffectFormValue();
+			if (value === null) return;
+			if (type === "clicking-sound" && Number(value) <= 0) return;
+			if (type === "background-music" && !parseAssetVolume(value)) return;
+			await clonePresetIfNeeded();
 			const existingIdx = workingEffects.findIndex(
 				(e) => e.slot === slot && e.type === type,
 			);

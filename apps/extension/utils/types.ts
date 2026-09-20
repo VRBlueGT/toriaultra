@@ -158,7 +158,9 @@ export type EffectType =
 	| "letter-spacing"
 	| "text-transform"
 	| "frame-image"
-	| "frame-shape";
+	| "frame-shape"
+	| "clicking-sound"
+	| "background-music";
 
 export type ThemeEffect = {
 	id: string;
@@ -252,6 +254,15 @@ export type PlacesListingApi = {
 	meta: { nextPageURL: string | null };
 };
 
+export type FeaturedPlace = {
+	id: number;
+	imageUrl: string;
+	featuredAt: string;
+	place: Polytoria.PlaceApi;
+};
+
+export type FeaturedPlacesApi = FeaturedPlace[];
+
 export type ForumSearchFilters = {
 	page: number;
 	search: string;
@@ -261,6 +272,7 @@ export type ForumSearchFilters = {
 	categoryIds: number[];
 	postedAfter: string;
 	postedBefore: string;
+	literal?: boolean;
 };
 
 export type FeedSearchFilters = {

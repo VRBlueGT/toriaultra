@@ -19,6 +19,7 @@ import { defineExtensionMessaging } from "@webext-core/messaging";
 import type { PolytoriaTradeOwnerHistory } from "../../../packages/schemas/src/apis/love";
 import type {
 	AvatarIFrameState,
+	FeaturedPlacesApi,
 	FeedApi,
 	FeedSearchFilters,
 	ForumSearchFilters,
@@ -47,6 +48,7 @@ export interface ProtocolMap {
 	getPlacesListing(
 		filters: PlacesListingFilters,
 	): Promise<Result<PlacesListingApi>>;
+	getFeaturedPlaces(): Promise<Result<FeaturedPlacesApi>>;
 	getForumSearch(
 		filters: ForumSearchFilters,
 	): Promise<Result<PolyTrack.ForumSearchApi>>;
@@ -118,6 +120,7 @@ export interface ProtocolMap {
 	getItemMesh(id: number): Promise<Result<Polytoria.MeshApi>>;
 	getAssetAudio(id: number): Promise<Result<Polytoria.AudioApi>>;
 	getItemTexture(id: number): Promise<Result<Polytoria.TextureApi>>;
+	fetchCdnImageDataUrl(url: string): Promise<Result<string>>;
 	getItemOwners(data: {
 		itemId: number;
 		limit?: number;
@@ -144,6 +147,7 @@ export interface ProtocolMap {
 	}): Promise<Result<null>>;
 	bulkWhitelist(data: { placeId: number; usernames: string[] }): void;
 	rollRandomPlace(): Promise<Result<void>>;
+	rollRandomPlaceStatus(status: string): void;
 
 	rejectTrade(tradeId: number): void;
 	getPolytoriaTradeItems(itemIds: number[]): Promise<
@@ -167,6 +171,15 @@ export interface ProtocolMap {
 		userId: number;
 		itemId: number;
 	}): Promise<Result<{ success: boolean }>>;
+	getNLFItems(userId: number): Promise<Result<Extension.NLFItemsApi>>;
+	markItemAsNLF(data: {
+		userId: number;
+		itemId: number;
+	}): Promise<Result<{ success: boolean }>>;
+	unmarkItemAsNLF(data: {
+		userId: number;
+		itemId: number;
+	}): Promise<Result<{ success: boolean }>>;
 	getPinnedAchievements(
 		userId: number,
 	): Promise<Result<Extension.PinnedAchievementsApi>>;
@@ -178,6 +191,33 @@ export interface ProtocolMap {
 		achievementId: number;
 		userId: number;
 	}): Promise<Result<null>>;
+
+	getLikeCount(userId: number): Promise<Result<Extension.LikeCountApi>>;
+	getKilnUsage(userId: number): Promise<Result<Extension.KilnUsageApi>>;
+	getUserTimezone(userId: number): Promise<Result<Extension.UserTimezoneApi>>;
+	setUserTimezone(data: {
+		userId: number;
+		timezone: string;
+	}): Promise<Result<{ success: boolean }>>;
+	clearUserTimezone(userId: number): Promise<Result<{ success: boolean }>>;
+	getPublicOutfits(userId: number): Promise<Result<Extension.PublicOutfitsApi>>;
+	syncPublicOutfits(data: {
+		userId: number;
+		outfits: { id: number; name: string; thumbnail: string }[];
+	}): Promise<Result<{ success: boolean }>>;
+	clearPublicOutfits(userId: number): Promise<Result<{ success: boolean }>>;
+	getLikeStatus(data: {
+		userId: number;
+		targetUserId: number;
+	}): Promise<Result<Extension.LikeStatusApi>>;
+	likeUser(data: {
+		userId: number;
+		targetUserId: number;
+	}): Promise<Result<{ success: boolean }>>;
+	unlikeUser(data: {
+		userId: number;
+		targetUserId: number;
+	}): Promise<Result<{ success: boolean }>>;
 
 	getBlockedTraders(
 		userId: number,
@@ -240,6 +280,43 @@ export interface ProtocolMap {
 		id: string;
 		reason: string;
 	}): Promise<Result<Extension.ReportThemeApi>>;
+
+	getProfileTheme(userId: number): Promise<Result<Extension.ProfileThemeApi>>;
+	getMyProfileTheme(userId: number): Promise<Result<Extension.ProfileThemeApi>>;
+	saveProfileTheme(data: {
+		userId: number;
+		accentColor: string;
+		navbarColor: string;
+		fontFamily?: string;
+		customCss?: string;
+		backgroundImage?: string;
+		backgroundOverlayColor?: string;
+		backgroundOverlayOpacity?: number;
+		effects?: import("./types").ThemeEffect[];
+		navbarIconColor?: string;
+		cursorUrl?: string;
+		colorTokens?: Record<string, string>;
+		layout?: Extension.ProfileLayout;
+		usernameStyle?: Extension.ProfileUsernameStyle;
+		banner?: Extension.ProfileBanner;
+		ambient?: Extension.ProfileAmbient;
+		stickers?: Extension.ProfileSticker[];
+		notes?: Extension.ProfileNote[];
+		cardStyle?: Extension.ProfileCardStyle;
+		avatarBackdrop?: Extension.ProfileAvatarBackdrop;
+		pointerEffects?: Extension.ProfilePointerEffects;
+	}): Promise<Result<Extension.ProfileThemeApi>>;
+	setProfileThemeEnabled(data: {
+		userId: number;
+		enabled: boolean;
+	}): Promise<Result<Extension.ProfileThemeOkApi>>;
+	deleteProfileTheme(
+		userId: number,
+	): Promise<Result<Extension.ProfileThemeOkApi>>;
+	reportProfileTheme(data: {
+		userId: number;
+		reason: string;
+	}): Promise<Result<Extension.ProfileThemeOkApi>>;
 
 	adminGetPendingThemes(
 		userId: number,
@@ -330,11 +407,17 @@ export interface ProtocolMap {
 		placeId: number;
 		userId: number;
 	}): Promise<Result<Extension.PlaceReviewsApi>>;
+	getPlaceReviewPlaytimes(data: {
+		placeId: number;
+		userId: number;
+		reviewIds: string[];
+	}): Promise<Result<Extension.PlaceReviewPlaytimesApi>>;
 	submitPlaceReview(data: {
 		placeId: number;
 		userId: number;
 		rating: number;
 		body?: string;
+		anonymous?: boolean;
 	}): Promise<Result<Extension.PlaceReviewApi>>;
 	deleteMyPlaceReview(data: {
 		placeId: number;
@@ -377,14 +460,26 @@ export interface ProtocolMap {
 		Result<Record<string, { active: boolean; registeredAt: string | null }>>
 	>;
 
+	getAvatarHashes(userIds: number[]): Promise<Result<Record<string, string>>>;
+
 	showSecurityKeyRenamePrompt(data: {
 		currentName: string;
 	}): Promise<Result<string | null>>;
 	showHomepageReorderModal(data: {
-		sections: Array<{ id: string; label: string; locked?: boolean }>;
+		sections: Array<{
+			id: string;
+			label: string;
+			locked?: boolean;
+			group?: string;
+		}>;
 	}): Promise<Result<string[] | null>>;
+	showBannedUserAlert(
+		data: Extension.ActivitySearchApi["data"][number],
+	): Promise<Result<void>>;
 
 	updateOutfit(data: { id: number; name: string }): Promise<Result<unknown>>;
+
+	exportUserData(userId: number): Promise<Result<Extension.DataExportApi>>;
 }
 
 export const { sendMessage, onMessage } =

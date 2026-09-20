@@ -16,30 +16,17 @@
 
 import { sendMessage } from "@/utils/messaging";
 import metadata from "@/utils/static/metadata.json";
-import { _lastViewedPlaces } from "@/utils/storage";
 import type { CurrencyCode } from "@/utils/types";
 import {
 	applyKilnDisclosureTitle,
+	condenseTabBar,
 	formatNotificationRelativeTime,
 	getConfig,
 	kilnDisclosureBadgeHtml,
-	markKilnNotificationRead,
 	pullKVCache,
 } from "@/utils/utilities";
 
 const placeID = +window.location.pathname.split("/")[2];
-
-export async function recordPlaceView() {
-	const placeResult = await sendMessage("getPlace", placeID);
-	if (!placeResult.ok) return;
-
-	const lastViewed = await _lastViewedPlaces.getValue();
-	lastViewed[placeID] =
-		placeResult.data.updatedAt ?? placeResult.data.createdAt;
-	await _lastViewedPlaces.setValue(lastViewed);
-
-	await markKilnNotificationRead(`place-update:${placeID}`);
-}
 
 export async function favoritedPlaces(
 	userId: number,
@@ -123,6 +110,49 @@ export async function favoritedPlaces(
 			}
 		}
 		update();
+	});
+}
+
+export function downloadableCopyableWorlds(showDisclosures: boolean) {
+	const favoriteBtn = document.getElementById("favorite-btn");
+	if (!favoriteBtn) return;
+
+	const infoRow = document.querySelector(".card-body .row:has(.fa-calendar)");
+	const [labels, values] = infoRow?.querySelectorAll("ul") ?? [];
+	const protectionIndex = [...(labels?.children ?? [])].findIndex((li) =>
+		li.textContent?.trim().startsWith("Protection"),
+	);
+	if (protectionIndex === -1) return;
+	if (
+		!values?.children[protectionIndex]?.textContent
+			?.toLowerCase()
+			.includes("copyable")
+	) {
+		return;
+	}
+
+	const button = document.createElement("button");
+	button.id = "kiln-download-btn";
+	button.className = favoriteBtn.className.replace(
+		"btn-outline-warning",
+		"btn-outline-primary",
+	);
+	button.innerHTML = `<i class="fas fa-download"></i><span class="ms-1">Download</span>`;
+	applyKilnDisclosureTitle(button, showDisclosures, "Download this world");
+
+	favoriteBtn.after(button);
+
+	button.addEventListener("click", async () => {
+		const original = button.innerHTML;
+		button.disabled = true;
+		button.innerHTML = `<span class="spinner-grow spinner-grow-sm" aria-hidden="true"></span><span class="visually-hidden" role="status">Loading...</span>`;
+
+		try {
+			await sendMessage("downloadPlaceFile", placeID);
+		} finally {
+			button.innerHTML = original;
+			button.disabled = false;
+		}
 	});
 }
 
@@ -550,10 +580,14 @@ export async function playtimeTracking(
 	) => {
 		const { totalPlaytime, sessions } = data;
 
+		const visibleSessions = sessions.filter(
+			(session) => session.isOpen || Math.round(session.duration / 60_000) > 0,
+		);
+
 		const rowsHTML =
-			sessions.length === 0
+			visibleSessions.length === 0
 				? `<div class="text-muted small fst-italic">No sessions recorded for this world yet.</div>`
-				: sessions
+				: visibleSessions
 						.map(
 							(session) => `
 						<div class="d-flex justify-content-between align-items-center py-1 border-bottom border-secondary" style="font-size:0.85rem;">
@@ -565,10 +599,12 @@ export async function playtimeTracking(
 
 		const totalMinutes = Math.round(totalPlaytime / 60_000);
 		const avgMinutes =
-			sessions.length > 0 ? Math.round(totalMinutes / sessions.length) : 0;
+			visibleSessions.length > 0
+				? Math.round(totalMinutes / visibleSessions.length)
+				: 0;
 
 		const summaryHTML =
-			sessions.length > 0
+			visibleSessions.length > 0
 				? `<div class="small text-muted mb-2">
 					<i class="fas fa-chart-bar me-1"></i>avg ${formatMinutes(avgMinutes)}/session
 				</div>`
@@ -810,7 +846,10 @@ export function creatorCommentLabels(creatorId: string) {
 	}).observe(container, { attributes: false, childList: true, subtree: false });
 }
 
-export function legacyPlaceViewLayout(showDisclosures: boolean): void {
+export function legacyPlaceViewLayout(
+	showDisclosures: boolean,
+	newerFeatures: boolean,
+): void {
 	const container = document.querySelector<HTMLElement>(
 		'div[style*="min-height: 60vh"]',
 	);
@@ -852,6 +891,13 @@ export function legacyPlaceViewLayout(showDisclosures: boolean): void {
 	const ratingsContainer =
 		container.querySelector<HTMLElement>(".ratings-container");
 	const likesDataContainer = document.getElementById("likes-data-container");
+
+	const followBtn = newerFeatures
+		? container.querySelector<HTMLElement>("#follow-btn")
+		: null;
+	const favoriteBtn = newerFeatures
+		? container.querySelector<HTMLElement>("#favorite-btn")
+		: null;
 
 	const leftCol = document.createElement("div");
 	leftCol.className = "col-12 col-xl-7 mb-2";
@@ -945,13 +991,43 @@ export function legacyPlaceViewLayout(showDisclosures: boolean): void {
 			.catch(() => {});
 	}
 
-	if (ratingsContainer) {
-		ratingsContainer.classList.add("mb-2");
-		rightCol.appendChild(ratingsContainer);
-	}
+	if (followBtn || favoriteBtn) {
+		const ratingsRow = document.createElement("div");
+		ratingsRow.className = "d-flex flex-wrap mb-2";
 
-	if (likesDataContainer) {
-		rightCol.appendChild(likesDataContainer);
+		const ratingsWrapper = document.createElement("div");
+		if (likesDataContainer) ratingsWrapper.appendChild(likesDataContainer);
+		if (ratingsContainer) {
+			const ratingsInner = document.createElement("div");
+			ratingsInner.className = "d-flex justify-content-center";
+			ratingsInner.appendChild(ratingsContainer);
+			ratingsWrapper.appendChild(ratingsInner);
+		}
+		ratingsRow.appendChild(ratingsWrapper);
+
+		if (followBtn) {
+			followBtn.classList.remove("ms-3");
+			followBtn.classList.remove("mt-3");
+			followBtn.classList.add("ms-2");
+			ratingsRow.appendChild(followBtn);
+		}
+		if (favoriteBtn) {
+			favoriteBtn.classList.remove("ms-3");
+			favoriteBtn.classList.remove("mt-3");
+			favoriteBtn.classList.add("ms-2");
+			ratingsRow.appendChild(favoriteBtn);
+		}
+
+		rightCol.appendChild(ratingsRow);
+	} else {
+		if (ratingsContainer) {
+			ratingsContainer.classList.add("mb-2");
+			rightCol.appendChild(ratingsContainer);
+		}
+
+		if (likesDataContainer) {
+			rightCol.appendChild(likesDataContainer);
+		}
 	}
 
 	if (aboutBody.length > 0) {
@@ -1095,6 +1171,7 @@ function waitForPlaceTabs(): Promise<{
 export async function detailedPlaceReviews(
 	userId: number,
 	showDisclosures: boolean,
+	condensedTabBar: boolean,
 ) {
 	const elements = await waitForPlaceTabs();
 	if (!elements) return;
@@ -1114,6 +1191,21 @@ export async function detailedPlaceReviews(
 		return html;
 	};
 
+	const renderAnonymousAvatar = (size: number) => `
+		<span class="rounded-circle border border-2 border-secondary bg-dark text-muted d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:${size}px;height:${size}px;">
+			<i class="fas fa-user-secret" style="font-size:${Math.round(size * 0.45)}px;"></i>
+		</span>`;
+
+	const anonymousBadge = `<span class="badge bg-secondary" style="margin-left:5px;vertical-align:text-top;" data-bs-toggle="tooltip" data-bs-title="Other users see this as Anonymous.">ANONYMOUS</span>`;
+
+	const renderAnonymousCheckbox = (checked: boolean) => `
+		<div class="form-check mb-2">
+			<input class="form-check-input kiln-review-anonymous" type="checkbox" id="kiln-review-anonymous"${checked ? " checked" : ""}>
+			<label class="form-check-label text-muted small" for="kiln-review-anonymous">
+				<i class="fas fa-user-secret me-1"></i>Post anonymously
+			</label>
+		</div>`;
+
 	const renderTimestamp = (iso: string) => {
 		const date = new Date(iso);
 		const absolute = date.toLocaleString(undefined, {
@@ -1126,12 +1218,22 @@ export async function detailedPlaceReviews(
 		return `<span data-bs-toggle="tooltip" data-bs-placement="top" data-bs-original-title="${absolute}">${formatNotificationRelativeTime(date)}</span>`;
 	};
 
+	const formatMinutes = (minutes: number) => {
+		if (minutes < 60) return `${minutes}min${minutes === 1 ? "" : "s"}`;
+		const h = Math.floor(minutes / 60);
+		const m = minutes % 60;
+		return m > 0 ? `${h}hrs ${m}mins` : `${h}hrs`;
+	};
+
+	const playtimesByReviewId = new Map<string, number | null>();
+
 	interface ReviewReply {
 		id: string;
 		reviewId: string;
 		userId: number;
 		username: string;
 		thumbnail: string | null;
+		anonymous: boolean;
 		body: string;
 		createdAt: string;
 		updatedAt: string;
@@ -1139,13 +1241,23 @@ export async function detailedPlaceReviews(
 
 	const renderReplyRow = (reply: ReviewReply, creatorId: number | null) => {
 		const date = renderTimestamp(reply.createdAt);
+		const masked = reply.anonymous && reply.userId !== userId;
 
 		return `
 			<div class="d-flex align-items-start gap-2 mt-2 ps-3 border-start border-secondary" data-reply-id="${reply.id}">
-				<img src="${reply.thumbnail ?? ""}" alt="${reply.username}" class="rounded-circle border border-secondary" width="28" height="28">
+				${
+					masked
+						? renderAnonymousAvatar(28)
+						: `<img src="${reply.thumbnail ?? ""}" alt="${reply.username}" class="rounded-circle border border-secondary" width="28" height="28">`
+				}
 				<div class="flex-grow-1">
 					<div class="small">
-						<a href="/u/${reply.username}" class="text-reset"><span class="userlink-default">${reply.username}</span></a>
+						${
+							masked
+								? `<a href="#" class="text-reset"><span class="userlink-default fst-italic">${reply.username}</span></a>`
+								: `<a href="/u/${reply.username}" class="text-reset"><span class="userlink-default">${reply.username}</span></a>`
+						}
+						${reply.anonymous && !masked ? anonymousBadge : ""}
 						${
 							creatorId !== null && reply.userId === creatorId
 								? `<span class="badge bg-primary" style="margin-left:5px;vertical-align:text-top;" data-bs-toggle="tooltip" data-bs-title="This user created this world.">CREATOR</span>`
@@ -1185,6 +1297,7 @@ export async function detailedPlaceReviews(
 			id: string;
 			username: string;
 			thumbnail: string | null;
+			anonymous: boolean;
 			rating: number;
 			body: string | null;
 			createdAt: string;
@@ -1194,22 +1307,39 @@ export async function detailedPlaceReviews(
 		isOwn = false,
 		isEditing = false,
 		pendingRating = review.rating,
+		pendingAnonymous = review.anonymous,
 	) => {
 		const date = renderTimestamp(review.createdAt);
+		const playtimeMs = playtimesByReviewId.get(review.id);
 
 		const editing = isOwn && isEditing;
+		const masked = review.anonymous && !isOwn;
 
 		return `
 			<div class="card mcard mb-2${isOwn ? " border border-primary" : ""}">
 				<div class="card-body p-3">
 					<div class="d-flex align-items-center gap-2 mb-2">
-						<a href="/u/${review.username}" class="flex-shrink-0">
-							<img src="${review.thumbnail}" alt="${review.username}" class="rounded-circle border border-2 border-secondary" width="40" height="40">
-						</a>
+						${
+							masked
+								? `<a href="#" class="flex-shrink-0">${renderAnonymousAvatar(40)}</a>`
+								: `<a href="/u/${review.username}" class="flex-shrink-0">
+							<img src="${review.thumbnail ?? ""}" alt="${review.username}" class="rounded-circle border border-2 border-secondary" width="40" height="40">
+						</a>`
+						}
 						<div class="min-w-0 flex-grow-1">
-							<a href="/u/${review.username}" class="text-reset"><span class="userlink-default fw-bold">${review.username}</span></a>
+							${
+								masked
+									? `<a href="#" class="text-reset"><span class="userlink-default fw-bold fst-italic">${review.username}</span></a>`
+									: `<a href="/u/${review.username}" class="text-reset"><span class="userlink-default fw-bold">${review.username}</span></a>`
+							}
+							${review.anonymous && !masked ? anonymousBadge : ""}
 							<div class="text-muted small">
 								<i class="fad fa-clock me-1"></i>${date}
+								${
+									playtimeMs
+										? ` <span class="mx-1">&middot;</span><i class="fas fa-gamepad me-1"></i>~${formatMinutes(Math.round(playtimeMs / 60_000))} played`
+										: ""
+								}
 							</div>
 						</div>
 						${
@@ -1229,6 +1359,7 @@ export async function detailedPlaceReviews(
 							? `<div class="d-flex gap-1 mb-2 kiln-star-picker">${renderStars(pendingRating, true)}</div>`
 							: `<div class="mb-2">${renderStars(review.rating)}</div>`
 					}
+					${editing ? renderAnonymousCheckbox(pendingAnonymous) : ""}
 					${
 						editing
 							? `<div class="d-flex gap-2 mb-2">
@@ -1255,6 +1386,7 @@ export async function detailedPlaceReviews(
 		</a>
 	`;
 	tabList.appendChild(navItem);
+	if (condensedTabBar) condenseTabBar(tabList);
 
 	const tabPane = document.createElement("div");
 	tabPane.id = "reviews-tabpane";
@@ -1320,15 +1452,9 @@ export async function detailedPlaceReviews(
 		const creatorId = placeResult.ok ? placeResult.data.creator.id : null;
 		const isCreator = creatorId !== null && creatorId === userId;
 
-		const formatMinutes = (minutes: number) => {
-			if (minutes < 60) return `${minutes}min${minutes === 1 ? "" : "s"}`;
-			const h = Math.floor(minutes / 60);
-			const m = minutes % 60;
-			return m > 0 ? `${h}hrs ${m}mins` : `${h}hrs`;
-		};
-
 		let { reviews, averageRating, totalReviews, myReview } = result.data.data;
 		let pendingRating = myReview?.rating ?? 0;
+		let pendingAnonymous = myReview?.anonymous ?? false;
 		let isSubmitting = false;
 		let isEditing = false;
 
@@ -1375,6 +1501,7 @@ export async function detailedPlaceReviews(
 					<div class="d-flex gap-1 mb-2 kiln-star-picker">
 						${renderStars(pendingRating, true)}
 					</div>
+					${renderAnonymousCheckbox(pendingAnonymous)}
 					<div class="d-flex gap-2">
 						<button class="btn btn-primary btn-sm kiln-review-submit" ${pendingRating === 0 ? "disabled" : ""}>
 							Submit
@@ -1386,7 +1513,14 @@ export async function detailedPlaceReviews(
 						: "";
 
 			const myReviewHTML = myReview
-				? renderReviewRow(myReview, creatorId, true, isEditing, pendingRating)
+				? renderReviewRow(
+						myReview,
+						creatorId,
+						true,
+						isEditing,
+						pendingRating,
+						pendingAnonymous,
+					)
 				: "";
 
 			const othersHTML =
@@ -1466,6 +1600,7 @@ export async function detailedPlaceReviews(
 				?.addEventListener("click", () => {
 					isEditing = true;
 					pendingRating = myReview?.rating ?? 0;
+					pendingAnonymous = myReview?.anonymous ?? false;
 					render();
 				});
 
@@ -1474,6 +1609,7 @@ export async function detailedPlaceReviews(
 				?.addEventListener("click", () => {
 					isEditing = false;
 					pendingRating = myReview?.rating ?? 0;
+					pendingAnonymous = myReview?.anonymous ?? false;
 					render();
 				});
 
@@ -1501,6 +1637,7 @@ export async function detailedPlaceReviews(
 				reviews = reviews.filter((r) => r.userId !== userId);
 				myReview = null;
 				pendingRating = 0;
+				pendingAnonymous = false;
 				isEditing = false;
 				totalReviews = Math.max(0, totalReviews - 1);
 				averageRating =
@@ -1520,6 +1657,13 @@ export async function detailedPlaceReviews(
 			const submitBtn = cardBody.querySelector<HTMLButtonElement>(
 				".kiln-review-submit",
 			)!;
+			const anonymousCheckbox = cardBody.querySelector<HTMLInputElement>(
+				".kiln-review-anonymous",
+			)!;
+
+			anonymousCheckbox.addEventListener("change", () => {
+				pendingAnonymous = anonymousCheckbox.checked;
+			});
 
 			starPicker.addEventListener("click", (e) => {
 				const star = (e.target as HTMLElement).closest<HTMLElement>(
@@ -1586,6 +1730,7 @@ export async function detailedPlaceReviews(
 					userId,
 					rating: pendingRating,
 					body,
+					anonymous: pendingAnonymous,
 				});
 
 				isSubmitting = false;
@@ -1600,6 +1745,7 @@ export async function detailedPlaceReviews(
 					reviews = reviews.filter((r) => r.userId !== userId);
 				}
 				myReview = submitted;
+				pendingAnonymous = submitted.anonymous;
 				reviews = [submitted, ...reviews.filter((r) => r.userId !== userId)];
 
 				const prevTotal = totalReviews;
@@ -1616,6 +1762,29 @@ export async function detailedPlaceReviews(
 		};
 
 		render();
+
+		const reviewIds = [
+			...new Set(
+				[
+					...(myReview ? [myReview.id] : []),
+					...reviews.map((r) => r.id),
+				].filter((id) => !playtimesByReviewId.has(id)),
+			),
+		];
+		if (reviewIds.length > 0) {
+			void (async () => {
+				const res = await sendMessage("getPlaceReviewPlaytimes", {
+					placeId: placeID,
+					userId,
+					reviewIds,
+				});
+				if (!res.ok) return;
+				for (const id of reviewIds) {
+					playtimesByReviewId.set(id, res.data.data[id] ?? null);
+				}
+				render();
+			})();
+		}
 	}
 }
 
@@ -1775,36 +1944,62 @@ export async function placeConsumablesTab(
 	});
 }
 
+function ensureServerList(tabPane: HTMLElement): HTMLElement {
+	const existing = tabPane.querySelector<HTMLElement>(
+		":scope > .kiln-server-list",
+	);
+	if (existing) return existing;
+
+	const list = document.createElement("div");
+	list.className = "kiln-server-list";
+	while (tabPane.firstChild) {
+		list.appendChild(tabPane.firstChild);
+	}
+	tabPane.appendChild(list);
+	return list;
+}
+
+function ensureServerToolbar(
+	tabPane: HTMLElement,
+	serverList: HTMLElement,
+): HTMLElement {
+	const existing = tabPane.querySelector<HTMLElement>(
+		":scope > .kiln-server-toolbar > .input-group",
+	);
+	if (existing) return existing;
+
+	const toolbar = document.createElement("div");
+	toolbar.className = "mb-2 kiln-server-toolbar";
+	toolbar.innerHTML = `<div class="input-group input-group-sm w-100"></div>`;
+	tabPane.insertBefore(toolbar, serverList);
+	return toolbar.firstElementChild as HTMLElement;
+}
+
+function syncServerRefreshWidth(group: HTMLElement) {
+	group
+		.querySelector(".kiln-servers-refresh-btn")
+		?.classList.toggle(
+			"w-100",
+			!group.querySelector(".kiln-server-search-input"),
+		);
+}
+
 export function serverRefreshing(
 	onRefresh?: (serverList: Element) => void,
 	showDisclosures = false,
 ) {
 	const tabPane = document.getElementById("servers-tabpane")!;
+	const serverList = ensureServerList(tabPane);
 
-	const serverList = document.createElement("div");
-	serverList.className = "kiln-server-list";
-	while (tabPane.firstChild) {
-		serverList.appendChild(tabPane.firstChild);
-	}
+	const group = ensureServerToolbar(tabPane, serverList);
 
-	const refreshBar = document.createElement("div");
-	refreshBar.className = "d-flex justify-content-end mb-2";
-	Object.assign(refreshBar.style, {
-		position: "absolute",
-		top: 0,
-		margin: "8px",
-		right: 0,
-	});
-	refreshBar.innerHTML = `
-		<button class="btn btn-sm btn-outline-secondary kiln-servers-refresh-btn" type="button">
-			<i class="fas fa-sync-alt me-1"></i>Refresh
-		</button>
-	`;
-	tabPane.append(refreshBar, serverList);
-
-	const refreshBtn = refreshBar.querySelector<HTMLButtonElement>(
-		".kiln-servers-refresh-btn",
-	)!;
+	const refreshBtn = document.createElement("button");
+	refreshBtn.className =
+		"btn btn-sm btn-outline-secondary kiln-servers-refresh-btn";
+	refreshBtn.type = "button";
+	refreshBtn.innerHTML = `<i class="fas fa-sync-alt me-1"></i>Refresh`;
+	group.appendChild(refreshBtn);
+	syncServerRefreshWidth(group);
 	applyKilnDisclosureTitle(refreshBtn, showDisclosures, "Refresh servers");
 
 	refreshBtn.addEventListener("click", async () => {
@@ -1826,5 +2021,86 @@ export function serverRefreshing(
 			refreshBtn.disabled = false;
 			refreshBtn.innerHTML = `<i class="fas fa-sync-alt me-1"></i>Refresh`;
 		}
+	});
+}
+
+export function serverUserSearch(showDisclosures = false) {
+	const tabPane = document.getElementById("servers-tabpane")!;
+	const serverList = ensureServerList(tabPane);
+
+	const group = ensureServerToolbar(tabPane, serverList);
+	group.insertAdjacentHTML(
+		"afterbegin",
+		`
+		<span class="input-group-text bg-dark border-secondary text-muted">
+			<i class="fas fa-search"></i>
+		</span>
+		<input type="text" class="form-control kiln-server-search-input" placeholder="Search by username...">
+	`,
+	);
+	syncServerRefreshWidth(group);
+
+	const noResults = document.createElement("div");
+	noResults.className =
+		"text-muted small fst-italic mb-2 kiln-server-search-empty";
+	noResults.style.display = "none";
+	noResults.textContent = "No servers found with that player.";
+	tabPane.insertBefore(noResults, serverList);
+
+	const input = group.querySelector<HTMLInputElement>(
+		".kiln-server-search-input",
+	)!;
+	applyKilnDisclosureTitle(
+		input,
+		showDisclosures,
+		"Search servers by a player's username",
+	);
+
+	const highlightAvatar = (img: HTMLImageElement, matched: boolean) => {
+		if (matched) {
+			img.style.outline = "3px solid #f0b429";
+			img.style.outlineOffset = "1px";
+		} else {
+			img.style.removeProperty("outline");
+			img.style.removeProperty("outline-offset");
+		}
+	};
+
+	const filterServers = () => {
+		const query = input.value.trim().toLowerCase();
+		let visibleCount = 0;
+
+		for (const card of Array.from(serverList.children)) {
+			if (!(card instanceof HTMLElement)) continue;
+
+			const avatars = Array.from(
+				card.querySelectorAll<HTMLImageElement>('a[href^="/users/"] img[alt]'),
+			);
+
+			if (!query) {
+				card.style.removeProperty("display");
+				for (const img of avatars) highlightAvatar(img, false);
+				visibleCount++;
+				continue;
+			}
+
+			let matched = false;
+			for (const img of avatars) {
+				const isMatch = img.alt.toLowerCase().includes(query);
+				highlightAvatar(img, isMatch);
+				if (isMatch) matched = true;
+			}
+
+			card.style.display = matched ? "" : "none";
+			if (matched) visibleCount++;
+		}
+
+		noResults.style.display = query && visibleCount === 0 ? "" : "none";
+	};
+
+	input.addEventListener("input", filterServers);
+
+	new MutationObserver(filterServers).observe(serverList, {
+		childList: true,
 	});
 }

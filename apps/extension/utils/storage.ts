@@ -103,12 +103,115 @@ export const defaultPreferences = {
 		themeCreator: {
 			activeThemeId: "default" as string,
 		},
+		favoredDevelopmentGuild: {
+			guildId: null as number | null,
+		},
 	} as Record<string, Record<string, any>>,
 };
 
 export type preferencesSchema = typeof defaultPreferences & {
 	[key: string]: any;
 };
+
+const FORUM_COMPOSER_SPLIT: Array<{ id: string; oldSubsetting?: string }> = [
+	{ id: "forumCharacterCount", oldSubsetting: "showCharacterCount" },
+	{ id: "forumMarkdownButtons", oldSubsetting: "showMarkdownBtns" },
+	{ id: "forumFilteredWordHighlight", oldSubsetting: "highlightFilteredWords" },
+	{ id: "forumImageLibrary", oldSubsetting: "showImageLibrary" },
+	{ id: "forumPostPreview" },
+];
+
+function splitForumComposer(oldValue: any) {
+	const enabled: string[] = oldValue?.enabled ?? [];
+	const disabled: string[] = oldValue?.disabled ?? [];
+	const { improvedForumComposer: oldConfig, ...config } =
+		oldValue?.config ?? {};
+
+	const wasOn =
+		enabled.includes("improvedForumComposer") ||
+		!disabled.includes("improvedForumComposer");
+
+	const isOn = ({ oldSubsetting }: (typeof FORUM_COMPOSER_SPLIT)[number]) =>
+		wasOn && (oldSubsetting ? (oldConfig?.[oldSubsetting] ?? true) : true);
+
+	const replaced = [
+		"improvedForumComposer",
+		...FORUM_COMPOSER_SPLIT.map((f) => f.id),
+	];
+
+	if (oldConfig?.autoShowPreview !== undefined) {
+		config.forumPostPreview = {
+			...config.forumPostPreview,
+			autoShow: oldConfig.autoShowPreview,
+		};
+	}
+
+	return {
+		...oldValue,
+		enabled: [
+			...enabled.filter((id) => !replaced.includes(id)),
+			...FORUM_COMPOSER_SPLIT.filter(isOn).map((f) => f.id),
+		],
+		disabled: [
+			...disabled.filter((id) => !replaced.includes(id)),
+			...FORUM_COMPOSER_SPLIT.filter((f) => !isOn(f)).map((f) => f.id),
+		],
+		config,
+	};
+}
+
+function fixIrlBrickPriceCurrency(oldValue: any) {
+	const currency = oldValue?.config?.irlBrickPrice?.currency;
+	if (currency === undefined || irlBrickPriceCurrencies.has(currency)) {
+		return oldValue;
+	}
+	return {
+		...oldValue,
+		config: {
+			...oldValue?.config,
+			irlBrickPrice: {
+				...oldValue?.config?.irlBrickPrice,
+				currency: "USD",
+			},
+		},
+	};
+}
+
+export const PREFERENCES_VERSION = 6;
+
+const preferenceMigrations: Record<number, (oldValue: any) => any> = {
+	3: () => defaultPreferences,
+	4: (oldValue: any) => ({
+		...oldValue,
+		disabled: defaultPreferences.enabled.filter(
+			(id) => !((oldValue?.enabled as string[]) ?? []).includes(id),
+		),
+	}),
+	5: fixIrlBrickPriceCurrency,
+	6: splitForumComposer,
+};
+
+const UNVERSIONED_EXPORT_VERSION = 4;
+
+export class PreferencesVersionError extends Error {}
+
+export function migrateImportedPreferences(imported: any) {
+	const { version = UNVERSIONED_EXPORT_VERSION, ...value } = imported;
+	if (!Number.isInteger(version) || version < UNVERSIONED_EXPORT_VERSION) {
+		throw new Error("Invalid format");
+	}
+	if (version > PREFERENCES_VERSION) {
+		throw new PreferencesVersionError(
+			"This file was exported from a newer version of Kiln. Update Kiln and try again.",
+		);
+	}
+
+	let migrated = value;
+	for (let v = version + 1; v <= PREFERENCES_VERSION; v++) {
+		migrated = preferenceMigrations[v](migrated);
+	}
+	return migrated;
+}
 
 interface PreferencesStorageItem
 	// biome-ignore lint/complexity/noBannedTypes: WXT
@@ -120,32 +223,8 @@ export const preferences: PreferencesStorageItem = storage.defineItem(
 	"sync:preferences",
 	{
 		fallback: defaultPreferences,
-		version: 5,
-		migrations: {
-			3: () => defaultPreferences,
-			4: (oldValue: any) => ({
-				...oldValue,
-				disabled: defaultPreferences.enabled.filter(
-					(id) => !((oldValue?.enabled as string[]) ?? []).includes(id),
-				),
-			}),
-			5: (oldValue: any) => {
-				const currency = oldValue?.config?.irlBrickPrice?.currency;
-				if (currency === undefined || irlBrickPriceCurrencies.has(currency)) {
-					return oldValue;
-				}
-				return {
-					...oldValue,
-					config: {
-						...oldValue?.config,
-						irlBrickPrice: {
-							...oldValue?.config?.irlBrickPrice,
-							currency: "USD",
-						},
-					},
-				};
-			},
-		},
+		version: PREFERENCES_VERSION,
+		migrations: preferenceMigrations,
 	},
 ) as PreferencesStorageItem;
 
@@ -162,14 +241,6 @@ export const _bestFriends = storage.defineItem("sync:bestFriends", {
 	version: 1,
 });
 
-export const _lastViewedPlaces = storage.defineItem<Record<number, string>>(
-	"local:lastViewedPlaces",
-	{
-		fallback: {},
-		version: 1,
-	},
-);
-
 export const _viewedForumThreads = storage.defineItem<number[]>(
 	"local:viewedForumThreads",
 	{
@@ -179,12 +250,14 @@ export const _viewedForumThreads = storage.defineItem<number[]>(
 );
 
 export interface KilnNotification {
+	userId?: number;
 	message: string;
 	date: string;
 	url: string;
 	avatarUrl: string;
 	read: boolean;
 	dedupeValue: string;
+	notifiedAt?: string;
 }
 
 export const _kilnNotifications = storage.defineItem<
@@ -192,6 +265,42 @@ export const _kilnNotifications = storage.defineItem<
 >("local:kilnNotifications", {
 	fallback: {},
 	version: 1,
+});
+
+export const _forumMentionChecks = storage.defineItem<
+	Record<number, { since: string; checkedAt: number }>
+>("local:forumMentionChecks", {
+	fallback: {},
+	version: 1,
+});
+
+export const _notificationBellOpenedAt = storage.defineItem<
+	Record<number, number>
+>("local:notificationBellOpenedAt", {
+	fallback: {},
+	version: 1,
+});
+
+export interface PastNotification {
+	id: number;
+	message: string;
+	url: string;
+	avatarUrl: string;
+	date: string;
+}
+
+export const UNASSIGNED_PAST_NOTIFICATIONS = "unassigned";
+
+export const _pastNotifications = storage.defineItem<
+	Record<string, Record<number, PastNotification>>
+>("local:pastNotifications", {
+	fallback: {},
+	version: 2,
+	migrations: {
+		2: (old: Record<number, PastNotification>) => ({
+			[UNASSIGNED_PAST_NOTIFICATIONS]: old,
+		}),
+	},
 });
 
 export type SavedTheme = {
@@ -204,6 +313,7 @@ export type SavedTheme = {
 	publishedSlug?: string;
 	previousPublishedSlug?: string;
 	importedSlug?: string;
+	importedFromProfile?: number;
 	autoUpdate?: boolean;
 	backgroundImage?: string;
 	backgroundOverlayColor?: string;
@@ -223,7 +333,6 @@ export const _savedThemes = storage.defineItem<SavedTheme[]>(
 	},
 );
 
-// Retained only for the one-time sync to local migration; do not use elsewhere.
 const _savedThemesSync = storage.defineItem<SavedTheme[]>("sync:savedThemes", {
 	fallback: [],
 	version: 1,
@@ -247,6 +356,14 @@ export const _seenTradeIds = storage.defineItem<number[]>(
 		version: 1,
 	},
 );
+
+export const _screenedNotificationIds = storage.defineItem<
+	Record<number, number[]>
+>("local:screenedNotificationIds", {
+	fallback: {},
+	version: 2,
+	migrations: { 2: () => ({}) },
+});
 
 export const _viewedTradeIds = storage.defineItem<number[]>(
 	"local:viewedTradeIds",
@@ -279,6 +396,28 @@ export const _homepageSectionOrder = storage.defineItem<string[]>(
 		version: 1,
 	},
 );
+
+export interface PendingAssetApproval {
+	userId?: number;
+	assetId: number;
+	addedAt: string;
+}
+
+export const _pendingAssetApprovals = storage.defineItem<
+	Record<number, PendingAssetApproval>
+>("local:pendingAssetApprovals", {
+	fallback: {},
+	version: 1,
+});
+
+export async function addPendingAssetApproval(
+	assetId: number,
+	userId: number,
+): Promise<void> {
+	const pending = await _pendingAssetApprovals.getValue();
+	pending[assetId] = { userId, assetId, addedAt: new Date().toISOString() };
+	await _pendingAssetApprovals.setValue(pending);
+}
 
 preferences.getPreferences = async function () {
 	const userPreferences = await this.getValue();
@@ -385,10 +524,32 @@ export const dismissedNotices = storage.defineItem<string[]>(
 	},
 );
 
+export const _reportedTimezones = storage.defineItem<
+	Record<number, { timezone: string; reportedAt: number }>
+>("local:reportedTimezones", {
+	fallback: {},
+	version: 1,
+});
+
+export const _reportedOutfits = storage.defineItem<
+	Record<number, { signature: string; checkedAt: number; uploadedAt: number }>
+>("local:reportedOutfits", {
+	fallback: {},
+	version: 1,
+});
+
 export const _showKilnDisclosures = storage.defineItem<boolean>(
 	"local:showKilnDisclosures",
 	{
 		fallback: false,
+		version: 1,
+	},
+);
+
+export const _condensedTabBars = storage.defineItem<boolean>(
+	"local:condensedTabBars",
+	{
+		fallback: true,
 		version: 1,
 	},
 );
@@ -407,6 +568,72 @@ export const _bookmarkedThreads = storage.defineItem<
 	fallback: {},
 	version: 1,
 });
+
+export interface BookmarkedReply {
+	replyId: number;
+	threadId: number;
+	categoryId?: number;
+	title: string;
+	author: string;
+	content: string;
+	bookmarkedAt: string;
+}
+
+export const _bookmarkedReplies = storage.defineItem<
+	Record<number, BookmarkedReply>
+>("local:bookmarkedReplies", {
+	fallback: {},
+	version: 1,
+});
+
+export interface ForumDraft {
+	id: string;
+	categoryId: number;
+	title: string;
+	content: string;
+	updatedAt: string;
+}
+
+export const _forumDrafts = storage.defineItem<Record<string, ForumDraft>>(
+	"local:forumDrafts",
+	{
+		fallback: {},
+		version: 1,
+	},
+);
+
+export interface SavedForumImage {
+	imageId: number;
+	starredAt: string;
+}
+
+export const _forumImages = storage.defineItem<Record<number, SavedForumImage>>(
+	"local:forumImages",
+	{
+		fallback: {},
+		version: 1,
+	},
+);
+
+export async function removeForumImage(imageId: number): Promise<void> {
+	const current = await _forumImages.getValue();
+	const { [imageId]: _removed, ...rest } = current;
+	await _forumImages.setValue(rest);
+}
+
+export async function setForumImageStarred(
+	imageId: number,
+	starred: boolean,
+): Promise<void> {
+	if (!starred) {
+		await removeForumImage(imageId);
+		return;
+	}
+
+	const current = await _forumImages.getValue();
+	current[imageId] = { imageId, starredAt: new Date().toISOString() };
+	await _forumImages.setValue(current);
+}
 
 export const _securityKeyNames = storage.defineItem<Record<number, string>>(
 	"local:securityKeyNames",

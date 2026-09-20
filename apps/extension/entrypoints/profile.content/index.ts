@@ -14,11 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import { _showKilnDisclosures, preferences } from "@/utils/storage";
+import {
+	_condensedTabBars,
+	_showKilnDisclosures,
+	preferences,
+} from "@/utils/storage";
 import { kilnDisclosureBadgeHtml } from "@/utils/utilities";
 import * as discovery from "./discovery";
 import * as inventory from "./inventory";
 import * as view from "./view";
+
+function isProfileNotFoundPage(): boolean {
+	return Array.from(document.querySelectorAll("h1.display-4")).some(
+		(el) => el.textContent?.trim() === "Page Not Found",
+	);
+}
 
 export default defineContentScript({
 	matches: [
@@ -30,7 +40,8 @@ export default defineContentScript({
 		Promise.all([
 			preferences.getPreferences(),
 			_showKilnDisclosures.getValue(),
-		]).then(async ([values, showDisclosures]) => {
+			_condensedTabBars.getValue(),
+		]).then(async ([values, showDisclosures, condensedTabBars]) => {
 			const segment = window.location.pathname.split("/")[2];
 			const isLegacyUrl = window.location.pathname.split("/")[1] === "users";
 
@@ -49,6 +60,33 @@ export default defineContentScript({
 			if (isLegacyUrl) {
 				userId = Number(segment);
 			} else {
+				const username = decodeURIComponent(segment);
+
+				if (
+					values.enabled.includes("bannedUserDetail") &&
+					isProfileNotFoundPage()
+				) {
+					const search = await sendMessage("searchUsersByActivity", username);
+					const match =
+						search.ok &&
+						search.data.find(
+							(u) => u.username.toLowerCase() === username.toLowerCase(),
+						);
+
+					if (match) {
+						(async () => {
+							const result = await sendMessage("showBannedUserAlert", match);
+							if (!result.ok) {
+								console.warn(
+									"[Kiln] Failed to show banned user alert:",
+									result.message,
+								);
+							}
+						})();
+						return;
+					}
+				}
+
 				const r = await sendMessage("findUserByUsername", segment);
 				if (!r.ok) throw new Error(r.message);
 				userId = r.data;
@@ -133,36 +171,46 @@ export default defineContentScript({
 					if (values.enabled.includes("pinnedAchievements")) {
 						view.pinnedAchievements(userId, showDisclosures);
 					}
+					if (values.enabled.includes("likeUser")) {
+						getUserDetails().then((self) => {
+							if (self) view.likeButton(self.userId, userId, showDisclosures);
+						});
+					}
+					if (
+						values.enabled.includes("customProfileThemes") &&
+						/^\/(u\/[^/]+|users\/\d+)\/?$/.test(window.location.pathname)
+					) {
+						getUserDetails().then((self) => {
+							view.customProfileThemes(
+								self?.userId ?? null,
+								userId,
+								showDisclosures,
+								values.config.customProfileThemes?.viewOthers ?? true,
+							);
+						});
+					}
 					if (values.enabled.includes("userAliases")) {
 						_userAliases.getValue().then((aliases) => {
 							view.userAliases(userId, aliases, showDisclosures);
 						});
 					}
 					if (values.enabled.includes("userCreationsTab")) {
-						view.creationsTab(userId);
-
-						/*
-						const style = document.createElement("style");
-						style.textContent = `
-							#user-info-tabs {
-								flex-wrap: nowrap;
-								overflow-x: auto;
-								overflow-y: hidden;
-								scrollbar-width: none;
-								-ms-overflow-style: none;
-							}
-							#user-info-tabs::-webkit-scrollbar {
-								display: none;
-							}
-						`;
-						document.head.appendChild(style);
-						*/
+						view.creationsTab(userId, condensedTabBars);
+					}
+					if (values.enabled.includes("publicAvatarOutfits")) {
+						view.publicAvatarOutfits(userId, showDisclosures, condensedTabBars);
 					}
 					if (values.enabled.includes("userNotes")) {
 						view.userNotes(userId, showDisclosures);
 					}
 					if (values.enabled.includes("avatarMeshDownloader")) {
 						view.avatarMeshDownloader(userId);
+					}
+					if (values.enabled.includes("kilnRegistrationDate")) {
+						view.kilnRegistrationDate(userId, showDisclosures);
+					}
+					if (values.enabled.includes("timezoneSharing")) {
+						view.publicTimezone(userId, showDisclosures);
 					}
 				} else if (values.enabled.includes("basicBlockedInfo")) {
 					blocked.appendChild(document.createElement("hr"));

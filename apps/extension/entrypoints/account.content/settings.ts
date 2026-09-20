@@ -19,15 +19,18 @@ import data from "@/public/preferences.json";
 import type { FeatureId } from "@/utils/featureIds.generated";
 import { sendMessage } from "@/utils/messaging";
 import {
+	_condensedTabBars,
 	_errorLog,
 	_savedThemes,
 	_showKilnDisclosures,
 	apiSessions,
 	cache,
-	type defaultPreferences,
 	dismissedNotices,
 	isChrome,
 	isMobileDevice,
+	migrateImportedPreferences,
+	PREFERENCES_VERSION,
+	PreferencesVersionError,
 	preferences,
 } from "@/utils/storage";
 import { applyKilnTheme, THEME_PRESETS } from "@/utils/theme";
@@ -40,6 +43,7 @@ import {
 	renderMarkdownLinks,
 	updateApiSession,
 } from "@/utils/utilities";
+import { initThemeManager } from "./themeManager";
 
 const KILN_ID_REGEX =
 	/(?<![A-Za-z0-9_-])kiln:[A-Za-z0-9_-]{10}(?![A-Za-z0-9_-])/;
@@ -236,17 +240,11 @@ export async function kilnSettings() {
 					<h5 class="mb-0">The Future of Kiln</h5>
 				</div>
 				<div class="card-body">
-					<p class="mb-3">The next update of Kiln, v2.13.0, will be the last feature-packed update. Future updates, if they happen at all, will be mostly bug fixes.</p>
+					<p class="mb-3">v2.13.0 is the last feature-packed update for now. Future updates will be mostly bug fixes until Polytoria's new site comes out, which then Kiln might return.</p>
 
 					<p class="mb-3">As some may already know, Polytoria is in the process of remaking the website from scratch, which will make most of Kiln redundant (if they chose to copy its features). That and it'd require significant refactoring to work with the new page layouts.</p>
 
-					<p class="mb-3">This also partly has to do with how I don't like how Polytoria is being managed moderation-wise. I'm not here to rehash old things, and despite *cough* what some people might think, I'm not going to list my grievances just for the sake of drama.</p>
-
-					<p class="mb-3">I'll still be around in the community, and I do have a somewhat experimental project in the works. Most people won't be interested in it, so not sure if it'll ever come out.</p>
-
-					<p class="mb-3">Speak now for the features you want (and they MIGHT be added to the next update whenever that may be down the road), or forever hold your peace 👀</p>
-
-					<p class="mb-3">Features that depend on my API will still work for the foreseeable future.</p>
+					<p class="mb-3">Features that depend on my API will still work for the foreseeable future. Don't worry about that (though I'm sure nobody is).</p>
 
 					<p class="mb-3">Making Kiln has been so much fun, and it was awesome to see so many people install it &lt;3</p>
 
@@ -359,6 +357,10 @@ export async function kilnSettings() {
 					<div class="form-check form-switch mb-0 mt-2">
 						<input class="form-check-input" type="checkbox" id="kiln-show-disclosures-toggle">
 						<label class="form-check-label small" for="kiln-show-disclosures-toggle">Clearly label every feature as added by Kiln</label>
+					</div>
+					<div class="form-check form-switch mb-0 mt-2">
+						<input class="form-check-input" type="checkbox" id="kiln-condensed-tab-bars-toggle">
+						<label class="form-check-label small" for="kiln-condensed-tab-bars-toggle">Condense tab bars (World Reviews & User Creations Tab)</label>
 					</div>
 				</div>
 			</div>
@@ -505,6 +507,14 @@ export async function kilnSettings() {
 		showDisclosuresToggle.checked = await _showKilnDisclosures.getValue();
 		showDisclosuresToggle.addEventListener("change", async () => {
 			await _showKilnDisclosures.setValue(showDisclosuresToggle.checked);
+		});
+
+		const condensedTabBarsToggle = document.getElementById(
+			"kiln-condensed-tab-bars-toggle",
+		) as HTMLInputElement;
+		condensedTabBarsToggle.checked = await _condensedTabBars.getValue();
+		condensedTabBarsToggle.addEventListener("change", async () => {
+			await _condensedTabBars.setValue(condensedTabBarsToggle.checked);
 		});
 
 		const config = await getConfig();
@@ -857,12 +867,7 @@ export async function kilnSettings() {
 				const configContainer = card.querySelector(
 					".kiln-config",
 				) as HTMLElement;
-				const openBtn = document.createElement("button");
-				openBtn.className = "btn btn-sm btn-outline-secondary mt-2";
-				openBtn.innerHTML = '<i class="fas fa-palette me-1"></i>Manage Themes';
-				openBtn.disabled = !state;
-				configContainer.appendChild(openBtn);
-				openBtn.addEventListener("click", () => openThemeManager(values));
+				const themeManager = initThemeManager(configContainer, values, state);
 
 				if (!remotelyDisabled && !chromeOnlyUnavailable) {
 					card
@@ -892,7 +897,7 @@ export async function kilnSettings() {
 								}
 							}
 							updateRowState(card, newState);
-							openBtn.disabled = !newState;
+							themeManager.setEnabled(newState);
 							await preferences.setValue(values);
 						});
 				}
@@ -1169,7 +1174,11 @@ export async function kilnSettings() {
 		document
 			.getElementById("kiln-export-btn")!
 			.addEventListener("click", () => {
-				const json = JSON.stringify(values, null, 2);
+				const json = JSON.stringify(
+					{ version: PREFERENCES_VERSION, ...values },
+					null,
+					2,
+				);
 				const blob = new Blob([json], { type: "application/json" });
 				const url = URL.createObjectURL(blob);
 				const a = document.createElement("a");
@@ -1199,10 +1208,14 @@ export async function kilnSettings() {
 						) {
 							throw new Error("Invalid format");
 						}
-						await preferences.setValue(imported);
+						await preferences.setValue(migrateImportedPreferences(imported));
 						await initPrefsTab();
-					} catch {
-						alert("Failed to import: invalid or corrupted preferences file.");
+					} catch (error) {
+						alert(
+							error instanceof PreferencesVersionError
+								? error.message
+								: "Failed to import: invalid or corrupted preferences file.",
+						);
 					}
 				});
 				fileInput.click();
@@ -1220,10 +1233,6 @@ export async function kilnSettings() {
 
 	const tabParam = new URLSearchParams(window.location.search).get("tab");
 	switchTab(tabParam && tabParam in panels ? tabParam : "about");
-}
-
-async function openThemeManager(_values: typeof defaultPreferences) {
-	window.open("https://polytoria.com/home?kiln-theme-editor", "_blank");
 }
 
 function initAdminTab(userId: number) {
@@ -1757,10 +1766,53 @@ async function initSyncTab() {
 				<div class="card-body p-0" id="kiln-sync-sessions-list"></div>
 			</div>
 		</div>
+		<div class="card mt-2">
+			<div class="card-body d-flex align-items-center justify-content-between gap-3">
+				<div>
+					<div class="fw-semibold small">Download My Data</div>
+					<div class="text-muted" style="font-size:0.75rem;">Export everything Kiln has stored for your linked account as a JSON file.</div>
+				</div>
+				<button id="kiln-export-data-btn" class="btn btn-outline-secondary btn-sm flex-shrink-0">Download</button>
+			</div>
+		</div>
 		`
 				: ""
 		}
 	`;
+
+	document
+		.getElementById("kiln-export-data-btn")
+		?.addEventListener("click", async () => {
+			const btn = document.getElementById(
+				"kiln-export-data-btn",
+			) as HTMLButtonElement;
+			btn.disabled = true;
+			const originalText = btn.textContent;
+			btn.textContent = "Preparing…";
+
+			const result = await sendMessage("exportUserData", user!.userId);
+
+			if (!result.ok) {
+				btn.disabled = false;
+				btn.textContent = originalText;
+				alert(`Failed to export data: ${result.message}`);
+				return;
+			}
+
+			const json = JSON.stringify(result.data.data, null, 2);
+			const blob = new Blob([json], { type: "application/json" });
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement("a");
+			a.href = url;
+			a.download = `kiln-data-export-${user!.userId}.json`;
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			URL.revokeObjectURL(url);
+
+			btn.disabled = false;
+			btn.textContent = originalText;
+		});
 
 	document
 		.getElementById("kiln-sync-action-btn")

@@ -129,6 +129,9 @@ export async function accurateOwnerCount(showDisclosures: boolean) {
 export function hoardersList(
 	minCopies: number,
 	showAvatars: boolean,
+	inactiveDays: number,
+	showLabels: boolean,
+	ogYear: number,
 	showDisclosures: boolean,
 ) {
 	if (document.getElementById("resellers") === null) {
@@ -157,14 +160,22 @@ export function hoardersList(
 	`;
 	tabs2.appendChild(tab);
 
+	const loadingHtml = (text: string) => `
+	<div class="text-center text-muted py-4">
+		<div class="spinner-border mb-2" role="status">
+			<span class="visually-hidden">Loading...</span>
+		</div>
+		<small class="d-block" style="font-size: 0.8rem;" id="p-hoarders-status">${text}</small>
+	</div>
+	`;
+	const setStatus = (text: string) => {
+		const el = document.getElementById("p-hoarders-status");
+		if (el) el.textContent = text;
+	};
+
 	const tabContent = document.createElement("div");
 	tabContent.classList.add("d-none");
-	tabContent.innerHTML = `
-	<small class="d-block text-center text-muted" style="font-size: 0.8rem;">
-		Loading... (this may take a few seconds)
-	</small>
-	<lottie-player id="avatar-loading" src="https://cdn.polytoria.com/static/images/lottie/poly-brick-loading.2b51aa85.json" background="transparent" speed="1" style="width: 20%;height: auto;margin: -16px auto 50px;margin-top: 0px;" loop="" autoplay=""></lottie-player>
-	`;
+	tabContent.innerHTML = loadingHtml("Fetching owners...");
 	document.getElementById("owners")!.parentElement!.appendChild(tabContent);
 
 	for (const t of Array.from([...tabs.children, ...tabs2.children])) {
@@ -218,31 +229,131 @@ export function hoardersList(
 			}
 		}
 
-		let hoarders: FormattedHoarder[] = Object.values(formatted)
-			.filter((h) => h.copies >= minCopies)
-			.sort((a, b) => b.copies - a.copies);
+		const activity = new Map<
+			number,
+			{ active: boolean; registeredAt: string | null }
+		>();
+		let hideInactive = false;
+		let groups: FormattedHoarder[][] = [];
+		let buildToken = 0;
 
-		if (showAvatars) {
-			let avatarsFetched = 0;
-			for (const hoarder of hoarders) {
-				if (avatarsFetched < 15) {
-					avatarsFetched++;
-					const userResult = await sendMessage("getUser", hoarder.user.id);
-					if (userResult.ok) {
-						hoarder.user.thumbnail = userResult.data.thumbnail.icon;
-					} else {
-						hoarder.user.thumbnail = "";
-					}
+		const loadActivity = async (
+			list: FormattedHoarder[],
+			onProgress?: (done: number, total: number) => void,
+		) => {
+			const missing = list
+				.map((h) => h.user.id)
+				.filter((id) => !activity.has(id));
+
+			const chunks: number[][] = [];
+			for (let i = 0; i < missing.length; i += 5) {
+				chunks.push(missing.slice(i, i + 5));
+			}
+
+			onProgress?.(0, missing.length);
+			for (let i = 0; i < chunks.length; i += 4) {
+				await Promise.all(
+					chunks.slice(i, i + 4).map(async (chunk) => {
+						const result = await sendMessage("checkUserActivity", {
+							userIds: chunk,
+							days: inactiveDays,
+						});
+						if (!result.ok) return;
+						for (const id of chunk) {
+							const info = result.data[String(id)];
+							if (info) activity.set(id, info);
+						}
+					}),
+				);
+				onProgress?.(Math.min((i + 4) * 5, missing.length), missing.length);
+			}
+		};
+
+		const loadThumbnails = async (
+			list: FormattedHoarder[],
+			onProgress?: (done: number, total: number) => void,
+		) => {
+			const pending = list
+				.slice(0, 15)
+				.filter((h) => h.user.thumbnail === undefined);
+			let done = 0;
+			if (pending.length === 0) return;
+			onProgress?.(done, pending.length);
+
+			const hashResult = await sendMessage(
+				"getAvatarHashes",
+				pending.map((h) => h.user.id),
+			);
+			if (hashResult.ok) {
+				for (const hoarder of pending) {
+					const hash = hashResult.data[String(hoarder.user.id)];
+					if (!hash) continue;
+					hoarder.user.thumbnail = `https://cdn.polytoria.com/thumbnails/avatars/${hash}-icon.png`;
+					onProgress?.(++done, pending.length);
 				}
 			}
-		}
 
-		let groups: FormattedHoarder[][] = [];
-		while (hoarders.length > 0) {
-			groups.push(hoarders.splice(0, 4));
-		}
+			for (const hoarder of pending) {
+				if (hoarder.user.thumbnail !== undefined) continue;
+				const userResult = await sendMessage("getUser", hoarder.user.id);
+				hoarder.user.thumbnail = userResult.ok
+					? userResult.data.thumbnail.icon
+					: "";
+				onProgress?.(++done, pending.length);
+			}
+		};
 
-		const updateHoardersList = () => {
+		const activityProgress = (done: number, total: number) => {
+			if (total > 0) setStatus(`Checking activity (${done}/${total} users)...`);
+		};
+
+		const buildGroups = async () => {
+			const token = ++buildToken;
+
+			let hoarders = Object.values(formatted)
+				.filter((h) => h.copies >= minCopies)
+				.sort((a, b) => b.copies - a.copies);
+
+			if (hideInactive) {
+				await loadActivity(hoarders, activityProgress);
+				hoarders = hoarders.filter(
+					(h) => activity.get(h.user.id)?.active !== false,
+				);
+			}
+
+			if (showAvatars) {
+				await loadThumbnails(hoarders, (done, total) => {
+					if (total > 0) setStatus(`Loading avatars (${done}/${total})...`);
+				});
+			}
+
+			if (token !== buildToken) return false;
+
+			groups = [];
+			while (hoarders.length > 0) {
+				groups.push(hoarders.splice(0, 4));
+			}
+			return true;
+		};
+
+		const labelsHtml = (h: FormattedHoarder) => {
+			const info = activity.get(h.user.id);
+			if (!showLabels || !info) return "";
+
+			let html = "";
+			if (!info.active) {
+				html += `<span class="badge bg-secondary ms-1" style="font-size:0.65rem;vertical-align:middle;" data-bs-toggle="tooltip" data-bs-title="Hasn't been seen online in the last ${inactiveDays} days">Inactive</span>${kilnDisclosureBadgeHtml(showDisclosures)}`;
+			}
+			if (
+				info.registeredAt &&
+				info.registeredAt.slice(0, 10) < `${ogYear + 1}-01-01`
+			) {
+				html += `<span class="badge bg-warning text-dark ms-1" style="font-size:0.65rem;vertical-align:middle;" data-bs-toggle="tooltip" data-bs-title="Joined during ${ogYear} or earlier">OG</span>${kilnDisclosureBadgeHtml(showDisclosures)}`;
+			}
+			return html;
+		};
+
+		const renderHoardersPage = () => {
 			const container = document.getElementById("p-hoarders-container")!;
 			const currentPageSpan = document.getElementById("p-hoarders-current-pg")!;
 			const prevBtn = document.getElementById("p-hoarders-prev-pg")!;
@@ -271,7 +382,7 @@ export function hoardersList(
 							<div class="col d-flex align-items-center">
 								<div>
 									<h6 class="mb-1">
-										<a class="text-reset" href="/u/${h.user.name}">${h.user.name}</a>
+										<a class="text-reset" href="/u/${h.user.name}">${h.user.name}</a>${labelsHtml(h)}
 									</h6>
 									<small class="text-muted">${h.copies} Copies <i class="fa-solid fa-circle-info" data-bs-toggle="tooltip" data-bs-title="#${h.serials
 										.sort((a, b) => a - b)
@@ -316,6 +427,27 @@ export function hoardersList(
 			);
 		};
 
+		const updateHoardersList = () => {
+			renderHoardersPage();
+
+			const current = groups[page];
+			if (!showLabels || !current) return;
+			if (current.every((h) => activity.has(h.user.id))) return;
+
+			const token = buildToken;
+			const shownPage = page;
+			loadActivity(current).then(() => {
+				if (token !== buildToken || shownPage !== page) return;
+				renderHoardersPage();
+			});
+		};
+
+		setStatus("Counting copies...");
+		await buildGroups();
+		if (showLabels && groups[0]) {
+			await loadActivity(groups[0], activityProgress);
+		}
+
 		tabContent.innerHTML = `
 		<div id="p-hoarders-container"></div>
 		<nav aria-label="Hoarders">
@@ -329,6 +461,12 @@ export function hoardersList(
 						<option value="15">Min. 15+ Copies</option>
 						<option value="35">Min. 35+ Copies</option>
 					</select>
+				</li>
+				<li class="ms-2 me-2" style="margin-top: auto; margin-bottom: auto;">
+					<div class="form-check mb-0">
+						<input class="form-check-input" type="checkbox" id="p-hoarders-hide-inactive">
+						<label class="form-check-label" for="p-hoarders-hide-inactive" style="font-size: 0.85rem;">Hide inactive</label>
+					</div>
 				</li>
 				<li class="page-item disabled">
 					<a class="page-link" href="#!" id="p-hoarders-first-pg">«</a>
@@ -358,17 +496,33 @@ export function hoardersList(
 		) as HTMLSelectElement;
 		minCopiesSelect.value = minCopies.toString();
 
+		const hideInactiveCheck = document.getElementById(
+			"p-hoarders-hide-inactive",
+		) as HTMLInputElement;
+
+		const rebuild = async () => {
+			minCopiesSelect.disabled = true;
+			hideInactiveCheck.disabled = true;
+			document.getElementById("p-hoarders-container")!.innerHTML =
+				loadingHtml("Updating list...");
+
+			const applied = await buildGroups();
+			if (!applied) return;
+
+			minCopiesSelect.disabled = false;
+			hideInactiveCheck.disabled = false;
+			page = 0;
+			updateHoardersList();
+		};
+
 		minCopiesSelect.addEventListener("change", () => {
 			minCopies = parseInt(minCopiesSelect.value, 10);
-			page = 0;
-			hoarders = Object.values(formatted)
-				.filter((h) => h.copies >= minCopies)
-				.sort((a, b) => b.copies - a.copies);
-			groups = [];
-			while (hoarders.length > 0) {
-				groups.push(hoarders.splice(0, 4));
-			}
-			updateHoardersList();
+			rebuild();
+		});
+
+		hideInactiveCheck.addEventListener("change", () => {
+			hideInactive = hideInactiveCheck.checked;
+			rebuild();
 		});
 
 		document
@@ -669,6 +823,135 @@ export async function nftItems(userId: number, showDisclosures: boolean) {
 					removeBtn.disabled = false;
 					removeBtn.innerHTML = "Remove NFT";
 					document.getElementById("p-nft-status")!.innerHTML =
+						`<span class="text-danger">Failed to remove. Try again later.</span>`;
+				}
+			});
+	};
+
+	button.addEventListener("click", async () => {
+		await renderModal();
+		modal.showModal();
+	});
+}
+
+export async function nlfItems(userId: number, showDisclosures: boolean) {
+	const config = await getConfig();
+
+	const MAX_NLF_ITEMS = config.limits.maxNLFItems;
+
+	const favoriteBtn = document.getElementById("favorite-btn");
+	if (!favoriteBtn) return;
+
+	const sessionResult = await sendMessage("getApiSession", userId);
+	const hasSession = sessionResult.ok;
+
+	const button = document.createElement("button");
+	button.classList.add("btn", "btn-outline-primary", "btn-sm", "ms-2");
+	button.innerHTML = `<i class="fa-regular fa-eye-slash me-1"></i><span>Not Looking For</span>`;
+
+	if (!hasSession) {
+		button.innerHTML = `<i class="fa-regular fa-lock me-1"></i><span>Verify to Mark NLF</span>`;
+	}
+
+	applyKilnDisclosureTitle(button, showDisclosures, "Not Looking For");
+
+	favoriteBtn.parentElement!.appendChild(button);
+
+	const modal = createModal();
+
+	const renderModal = async () => {
+		modal.innerHTML = `
+		<div class="d-flex justify-content-between align-items-center mb-2">
+			<h5 class="mb-0" style="color: #fff;">Not Looking For Items${kilnDisclosureBadgeHtml(showDisclosures)}</h5>
+			<button class="btn btn-sm btn-secondary" id="p-nlf-close">✕</button>
+		</div>
+		<p class="text-muted mb-3" style="font-size: 0.8rem;">
+			Mark this item as "Not Looking For" to auto-reject incoming trades where someone offers it to you.
+		</p>
+		<div id="p-nlf-body">
+			<div class="text-center text-muted py-3">Loading...</div>
+		</div>
+		`;
+
+		document
+			.getElementById("p-nlf-close")!
+			.addEventListener("click", () => modal.close());
+
+		const body = document.getElementById("p-nlf-body")!;
+
+		if (!hasSession) {
+			body.innerHTML = `
+			<div class="text-center p-3">
+				<p class="text-muted mb-1">You need to verify your Kiln account to use this feature.</p>
+				<small class="text-muted">Verify in the Kiln extension preferences.</small>
+			</div>`;
+			return;
+		}
+
+		const nlfResult = await sendMessage("getNLFItems", userId);
+		const nlfIds = nlfResult.ok ? nlfResult.data.data : [];
+		const isNLF = nlfIds.includes(parseInt(itemID, 10));
+		const atNLFLimit = !isNLF && nlfIds.length >= MAX_NLF_ITEMS;
+
+		body.innerHTML = `
+			${isNLF ? `<div class="alert alert-warning py-2 mb-3" style="font-size: 0.8rem;">This item is currently marked as Not Looking For.</div>` : ""}
+			${atNLFLimit ? `<div class="alert alert-danger py-2 mb-3" style="font-size: 0.8rem;">You've reached the NLF item limit (${MAX_NLF_ITEMS}).</div>` : ""}
+			<small class="text-muted d-block mb-3" style="font-size: 0.7rem;">
+				Max ${MAX_NLF_ITEMS} NLF items total
+			</small>
+			<div class="d-flex gap-2">
+				${
+					isNLF
+						? `<button class="btn btn-sm btn-danger" id="p-nlf-remove">Remove NLF</button>`
+						: `<button class="btn btn-sm btn-primary" id="p-nlf-save" ${atNLFLimit ? "disabled" : ""}>Mark as NLF</button>`
+				}
+			</div>
+			<div id="p-nlf-status" class="mt-2" style="font-size: 0.8rem;"></div>`;
+
+		document
+			.getElementById("p-nlf-save")
+			?.addEventListener("click", async () => {
+				const saveBtn = document.getElementById(
+					"p-nlf-save",
+				) as HTMLButtonElement;
+				saveBtn.disabled = true;
+				saveBtn.innerHTML = "Saving...";
+
+				const result = await sendMessage("markItemAsNLF", {
+					userId,
+					itemId: parseInt(itemID, 10),
+				});
+
+				if (result.ok) {
+					await renderModal();
+				} else {
+					saveBtn.disabled = false;
+					saveBtn.innerHTML = "Mark as NLF";
+					document.getElementById("p-nlf-status")!.innerHTML =
+						`<span class="text-danger">Failed to save. Try again later.</span>`;
+				}
+			});
+
+		document
+			.getElementById("p-nlf-remove")
+			?.addEventListener("click", async () => {
+				const removeBtn = document.getElementById(
+					"p-nlf-remove",
+				) as HTMLButtonElement;
+				removeBtn.disabled = true;
+				removeBtn.innerHTML = "Removing...";
+
+				const result = await sendMessage("unmarkItemAsNLF", {
+					userId,
+					itemId: parseInt(itemID, 10),
+				});
+
+				if (result.ok) {
+					await renderModal();
+				} else {
+					removeBtn.disabled = false;
+					removeBtn.innerHTML = "Remove NLF";
+					document.getElementById("p-nlf-status")!.innerHTML =
 						`<span class="text-danger">Failed to remove. Try again later.</span>`;
 				}
 			});
@@ -1007,7 +1290,7 @@ export async function pinnedAchievements(userId: number) {
 	});
 }
 
-const CLOTHING_PREVIEW_BODIES: { id: number | null; name: string }[] = [
+export const CLOTHING_PREVIEW_BODIES: { id: number | null; name: string }[] = [
 	{ id: null, name: "Default" },
 	{ id: 203643, name: "Robes" },
 	{ id: 138708, name: "Athlete" },
@@ -1925,9 +2208,7 @@ export function legacyStoreLayout(showDisclosures: boolean): void {
 					} else if (typeof w.ItemView === "function") {
 						try {
 							new w.ItemView(canvasEl);
-						} catch {
-							/* noop */
-						}
+						} catch {}
 					} else {
 						const src = (
 							document.querySelector(

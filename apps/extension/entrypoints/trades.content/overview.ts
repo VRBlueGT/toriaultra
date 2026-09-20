@@ -276,6 +276,114 @@ export async function nftItems(user: UserDetails, showDisclosures: boolean) {
 	await _seenTradeIds.setValue(updated.slice(-500));
 }
 
+export async function nlfItems(user: UserDetails, showDisclosures: boolean) {
+	const FETCH_DELAY_MS = 500;
+
+	const nlfResult = await sendMessage("getNLFItems", user.userId);
+	if (!nlfResult.ok) return;
+
+	const nlfIds = new Set(nlfResult.data.data);
+	if (!nlfIds.size) return;
+
+	const container = document.querySelector(".col:has(.card-inbox)");
+	if (!container) return;
+
+	function injectBadge(
+		card: Element,
+		state: "checking" | "rejected" | "failed",
+	) {
+		const existing = card.querySelector(".kiln-nlf-badge");
+		if (existing) existing.remove();
+
+		const badge = document.createElement("span");
+		badge.className = "kiln-nlf-badge badge ms-2";
+
+		switch (state) {
+			case "checking":
+				badge.classList.add("bg-secondary");
+				badge.textContent = "⚙ Kiln checking...";
+				break;
+			case "rejected":
+				badge.classList.add("bg-danger");
+				badge.textContent = "⛔ Auto-rejected";
+				badge.setAttribute("data-bs-toggle", "tooltip");
+				badge.setAttribute(
+					"data-bs-title",
+					showDisclosures
+						? "Includes an item marked Not Looking For (This is a Kiln extension feature, not part of Polytoria.)"
+						: "Includes an item marked Not Looking For",
+				);
+				break;
+			case "failed":
+				badge.classList.add("bg-warning", "text-dark");
+				badge.textContent = "⚠ Could not reject";
+				applyKilnDisclosureTitle(badge, showDisclosures);
+				break;
+		}
+
+		card.querySelector("h6")?.appendChild(badge);
+		if (state === "rejected") sendMessage("registerBootstrapElements");
+	}
+
+	function getReceivingHashes(card: Element): string[] {
+		const receivingSide = card.querySelectorAll(".trd-items-preview")[0];
+		if (!receivingSide) return [];
+
+		return Array.from(receivingSide.querySelectorAll("img"))
+			.map((img) => {
+				if (!img.src.includes("cdn.polytoria.com")) return null;
+				return img.src.split("/").pop()!.replace(".png", "");
+			})
+			.filter((h): h is string => h !== null);
+	}
+
+	const trades: Array<{ tradeId: number; card: Element; hashes: string[] }> =
+		[];
+
+	for (const card of container.querySelectorAll(".card-inbox")) {
+		const viewLink = card.querySelector<HTMLAnchorElement>(
+			'a[href^="/trade/view/"]',
+		);
+		if (!viewLink) continue;
+		const tradeId = parseInt(viewLink.href.split("/").at(-1)!, 10);
+		if (Number.isNaN(tradeId)) continue;
+
+		const hashes = getReceivingHashes(card);
+		if (hashes.length) trades.push({ tradeId, card, hashes });
+	}
+
+	const uniqueHashes = [...new Set(trades.flatMap((t) => t.hashes))];
+	const hashToId: Record<string, number> = {};
+	for (let i = 0; i < uniqueHashes.length; i += 100) {
+		const resolved = await sendMessage(
+			"resolveItemThumbnails",
+			uniqueHashes.slice(i, i + 100),
+		);
+		if (!resolved.ok) continue;
+		for (const [hash, itemId] of Object.entries(resolved.data.data)) {
+			if (itemId !== null) hashToId[hash] = itemId;
+		}
+	}
+
+	const toReject = trades.filter(({ hashes }) =>
+		hashes.some((h) => nlfIds.has(hashToId[h])),
+	);
+
+	for (const { card } of toReject) injectBadge(card, "checking");
+
+	for (let i = 0; i < toReject.length; i++) {
+		if (i > 0)
+			await new Promise((resolve) => setTimeout(resolve, FETCH_DELAY_MS));
+		const { tradeId, card } = toReject[i];
+		try {
+			await sendMessage("rejectTrade", tradeId);
+			injectBadge(card, "rejected");
+		} catch {
+			injectBadge(card, "failed");
+		}
+	}
+}
+
 export async function blockedTraders(
 	user: UserDetails,
 	showDisclosures: boolean,
@@ -527,6 +635,7 @@ export async function tradeManager(user: UserDetails) {
 	const blockedIds = new Set<number>();
 	const blockedUsernames = new Map<number, string>();
 	const nftEntries: Array<{ itemId: number; serials: number[] | null }> = [];
+	const nlfEntries: number[] = [];
 	const nftItemDetails = new Map<number, { name: string; thumbnail: string }>();
 	let activeTab:
 		| "inbound"
@@ -534,7 +643,8 @@ export async function tradeManager(user: UserDetails) {
 		| "inactive"
 		| "completed"
 		| "blocked"
-		| "nft" = "inbound";
+		| "nft"
+		| "nlf" = "inbound";
 	let sortKey: "username" | "id-asc" | "id-desc" | "value-desc" | "value-asc" =
 		"id-desc";
 	let modalPage = 1;
@@ -562,13 +672,14 @@ export async function tradeManager(user: UserDetails) {
 			`<button id="${id}" style="background:${active ? "#2a2a2a" : "transparent"};border:1px solid ${active ? "#484848" : "transparent"};border-radius:6px;color:${active ? "#fff" : "#666"};cursor:pointer;padding:4px 12px;font-size:0.8rem;">${label}</button>`;
 
 		const tabBar = `
-			<div style="display:flex;gap:6px;margin-bottom:12px;border-bottom:1px solid #333;padding-bottom:8px;">
+			<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;border-bottom:1px solid #333;padding-bottom:8px;">
 				${tabBtn("kiln-tab-inbound", `Inbound`, activeTab === "inbound")}
 				${tabBtn("kiln-tab-outbound", `Outbound`, activeTab === "outbound")}
 				${tabBtn("kiln-tab-completed", `Completed`, activeTab === "completed")}
 				${tabBtn("kiln-tab-inactive", `Inactive`, activeTab === "inactive")}
 				${tabBtn("kiln-tab-blocked", `Blocked Traders${blockedIds.size ? ` (${blockedIds.size})` : ""}`, activeTab === "blocked")}
 				${tabBtn("kiln-tab-nft", `Not for Trade Items${nftEntries.length ? ` (${nftEntries.length})` : ""}`, activeTab === "nft")}
+				${tabBtn("kiln-tab-nlf", `Not Looking For Items${nlfEntries.length ? ` (${nlfEntries.length})` : ""}`, activeTab === "nlf")}
 			</div>
 		`;
 
@@ -613,6 +724,10 @@ export async function tradeManager(user: UserDetails) {
 				});
 			document.getElementById("kiln-tab-nft")!.addEventListener("click", () => {
 				activeTab = "nft";
+				renderModal();
+			});
+			document.getElementById("kiln-tab-nlf")!.addEventListener("click", () => {
+				activeTab = "nlf";
 				renderModal();
 			});
 		}
@@ -676,6 +791,65 @@ export async function tradeManager(user: UserDetails) {
 						});
 						const idx = nftEntries.findIndex((e) => e.itemId === itemId);
 						if (idx !== -1) nftEntries.splice(idx, 1);
+						renderModal();
+					});
+				});
+
+			return;
+		}
+
+		if (activeTab === "nlf") {
+			const rows =
+				nlfEntries
+					.map((itemId) => {
+						const details = nftItemDetails.get(itemId);
+						const img = details?.thumbnail
+							? `<img src="${escapeHtml(details.thumbnail)}" width="36" height="36" style="border-radius:6px;object-fit:cover;background:#222;flex-shrink:0;">`
+							: `<div style="width:36px;height:36px;border-radius:6px;background:#222;flex-shrink:0;"></div>`;
+						return `
+						<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid #222;">
+							<div style="display:flex;align-items:center;gap:10px;">
+								${img}
+								<div style="color:#fff;font-size:0.85rem;">${details ? escapeHtml(details.name) : `<span style="color:#555;font-size:0.8rem;">Item #${itemId}</span>`}</div>
+							</div>
+							<button class="btn btn-sm px-3 kiln-ts-unmark-nlf" data-item-id="${itemId}"
+								style="border:1px solid #555;background:transparent;color:#aaa;white-space:nowrap;">Unmark</button>
+						</div>`;
+					})
+					.join("") ||
+				`<div style="padding:18px;text-align:center;color:#555;font-size:0.85rem;">
+					<img class="mb-3" src="${sadFace}" width="75" height="75" style="filter: grayscale(1)">
+					<p class="text-muted mb-0">You don't have any items marked as "not looking for".</p>
+				</div>`;
+
+			modal.innerHTML = `
+				<span class="badge bg-warning mb-2">KILN</span>
+				<button id="kiln-ts-close" style="background:transparent;border:1px solid #484848;border-radius:8px;color:#aaa;cursor:pointer;padding:4px 10px;float:right;">✕</button>
+				<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+					<h5 style="color:#fff;margin:0;">Trade Manager</h5>
+				</div>
+				${tabBar}
+				${rows}
+			`;
+
+			document
+				.getElementById("kiln-ts-close")!
+				.addEventListener("click", () => modal.close());
+			attachTabHandlers();
+
+			modal
+				.querySelectorAll<HTMLButtonElement>(".kiln-ts-unmark-nlf")
+				.forEach((btn) => {
+					btn.addEventListener("click", async () => {
+						btn.disabled = true;
+						btn.textContent = "...";
+						const itemId = parseInt(btn.dataset.itemId!, 10);
+						await sendMessage("unmarkItemAsNLF", {
+							userId: user.userId,
+							itemId,
+						});
+						const idx = nlfEntries.indexOf(itemId);
+						if (idx !== -1) nlfEntries.splice(idx, 1);
 						renderModal();
 					});
 				});
@@ -1252,10 +1426,12 @@ export async function tradeManager(user: UserDetails) {
 		blockedIds.clear();
 		blockedUsernames.clear();
 		nftEntries.length = 0;
+		nlfEntries.length = 0;
 
-		const [blockedResult, nftResult] = await Promise.all([
+		const [blockedResult, nftResult, nlfResult] = await Promise.all([
 			sendMessage("getBlockedTraders", user.userId),
 			sendMessage("getNFTItems", user.userId),
+			sendMessage("getNLFItems", user.userId),
 		]);
 
 		if (blockedResult.ok) {
@@ -1263,6 +1439,9 @@ export async function tradeManager(user: UserDetails) {
 		}
 		if (nftResult.ok) {
 			nftEntries.push(...nftResult.data.data);
+		}
+		if (nlfResult.ok) {
+			nlfEntries.push(...nlfResult.data.data);
 		}
 
 		for (const id of blockedIds) {
@@ -1285,6 +1464,21 @@ export async function tradeManager(user: UserDetails) {
 							thumbnail: result.data.thumbnail,
 						});
 						if (activeTab === "nft") renderModal();
+					}
+				})();
+			}
+		}
+
+		for (const itemId of nlfEntries) {
+			if (!nftItemDetails.has(itemId)) {
+				(async () => {
+					const result = await sendMessage("getItem", itemId);
+					if (result.ok) {
+						nftItemDetails.set(itemId, {
+							name: result.data.name,
+							thumbnail: result.data.thumbnail,
+						});
+						if (activeTab === "nlf") renderModal();
 					}
 				})();
 			}

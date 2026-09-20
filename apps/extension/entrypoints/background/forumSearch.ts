@@ -30,6 +30,7 @@ onMessage("getForumSearch", ({ data: filters }) =>
 			query.set("categoryIds", filters.categoryIds.join(","));
 		if (filters.postedAfter) query.set("postedAfter", filters.postedAfter);
 		if (filters.postedBefore) query.set("postedBefore", filters.postedBefore);
+		if (filters.literal) query.set("literal", "true");
 
 		return safeFetch(
 			`https://polytrack.top/api/forums?${query.toString()}`,

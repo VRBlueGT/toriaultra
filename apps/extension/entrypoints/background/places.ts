@@ -16,8 +16,9 @@
 
 import { Extension, PolyTrack, Polytoria } from "@kiln/schemas";
 import z from "zod";
-import { onMessage } from "@/utils/messaging";
-import { pullKVCache } from "@/utils/utilities";
+import { onMessage, sendMessage } from "@/utils/messaging";
+import { DEFAULT_PLACE_THUMBNAILS, pullKVCache } from "@/utils/utilities";
+import { fetchPlacesListing } from "./placesListing";
 import {
 	ApiDisabledError,
 	ApiHttpError,
@@ -437,42 +438,124 @@ onMessage("bulkWhitelist", async ({ data: { placeId, usernames } }) => {
 	});
 });
 
-onMessage("rollRandomPlace", () => {
+const RANDOM_PLACE_SORTS = [
+	"rating",
+	"recommended",
+	"trending",
+	"topThisWeek",
+	"updated",
+] as const;
+const RANDOM_PLACE_POOL_PAGES = 50;
+const MAX_RANDOM_PLACE_PAGE_ATTEMPTS = 6;
+const MAX_RANDOM_PLACE_CANDIDATES_PER_PAGE = 8;
+
+function shuffle<T>(items: T[]): T[] {
+	const shuffled = [...items];
+	for (let i = shuffled.length - 1; i > 0; i--) {
+		const j = Math.floor(Math.random() * (i + 1));
+		[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+	}
+	return shuffled;
+}
+
+const MIN_PLACE_VISITS = 100;
+const MAX_PLACE_VISITS = 100_000;
+const MIN_PLACE_VOTES = 5;
+const MIN_PLACE_LIKE_RATIO = 0.5;
+const MIN_PLACE_AGE_MS = 24 * 60 * 60 * 1000;
+
+function isLowQualityPlace(place: Polytoria.PlaceApi): boolean {
+	if (place.updatedAt === null) return true;
+	if (DEFAULT_PLACE_THUMBNAILS.includes(place.thumbnail)) return true;
+	if (!place.description.trim()) return true;
+
+	if (place.visits < MIN_PLACE_VISITS || place.visits > MAX_PLACE_VISITS)
+		return true;
+
+	const totalVotes = place.rating.likes + place.rating.dislikes;
+	if (totalVotes < MIN_PLACE_VOTES) return true;
+	if (place.rating.likes / totalVotes < MIN_PLACE_LIKE_RATIO) return true;
+
+	if (!place.isActive) return true;
+	if (place.accessType !== "everyone") return true;
+	if (place.accessPrice !== null && place.accessPrice !== 0) return true;
+
+	if (Date.now() - new Date(place.createdAt).getTime() < MIN_PLACE_AGE_MS)
+		return true;
+
+	return false;
+}
+
+onMessage("rollRandomPlace", () =>
 	handle(async () => {
 		const config = await withApi("public_api", "public");
-		const placeId = (
-			await safeFetch(
-				`${config.resolvedUrls.extension}places/roll`,
-				z.object({ data: z.number() }),
-				{
-					method: "POST",
-					body: JSON.stringify({
-						types: [],
-					}),
-				},
-			)
-		).data;
-
-		const place = await pullKVCache(
-			"places",
-			String(placeId),
-			() =>
-				safeFetch(
-					`${config.resolvedUrls.public}places/${placeId}`,
-					Polytoria.PlaceApiSchema,
-				),
-			6 * 60 * 60 * 1000,
-			false,
-		);
 
 		const tabs = await browser.tabs.query({
 			active: true,
 			currentWindow: true,
 		});
-		if (!tabs[0]) return;
+		const tabId = tabs[0]?.id;
+
+		const reportStatus = (status: string) => {
+			if (tabId) sendMessage("rollRandomPlaceStatus", status, tabId).catch(() => {});
+		};
+
+		reportStatus("Finding a place...");
+
+		let place: Polytoria.PlaceApi | undefined;
+		for (
+			let pageAttempt = 0;
+			pageAttempt < MAX_RANDOM_PLACE_PAGE_ATTEMPTS && !place;
+			pageAttempt++
+		) {
+			const sort =
+				RANDOM_PLACE_SORTS[
+					Math.floor(Math.random() * RANDOM_PLACE_SORTS.length)
+				];
+			const page = 1 + Math.floor(Math.random() * RANDOM_PLACE_POOL_PAGES);
+
+			reportStatus("Browsing places...");
+			const listing = await fetchPlacesListing({
+				page,
+				search: "",
+				genre: "all",
+				sort,
+				branch: "all",
+			}).catch(() => null);
+			if (!listing?.data.length) continue;
+
+			const candidates = shuffle(
+				listing.data.filter(
+					(entry) =>
+						entry.rating !== null && !entry.iconUrl.includes("placeholders"),
+				),
+			).slice(0, MAX_RANDOM_PLACE_CANDIDATES_PER_PAGE);
+			if (!candidates.length) continue;
+
+			reportStatus(`Checking ${candidates.length} places...`);
+			const fetched = await Promise.all(
+				candidates.map((candidate) =>
+					safeFetch(
+						`${config.resolvedUrls.public}places/${candidate.id}`,
+						Polytoria.PlaceApiSchema,
+					).catch(() => null),
+				),
+			);
+
+			place = fetched.find(
+				(candidate): candidate is Polytoria.PlaceApi =>
+					candidate !== null && !isLowQualityPlace(candidate),
+			);
+		}
+		if (!place) {
+			throw new Error("Couldn't find a random place, please try again");
+		}
+
+		reportStatus("Found one!");
+		if (!tabId) return;
 
 		browser.scripting.executeScript({
-			target: { tabId: tabs[0].id! },
+			target: { tabId },
 			world: "MAIN",
 			args: [place],
 			func: async (place: Polytoria.PlaceApi) => {
@@ -520,8 +603,8 @@ onMessage("rollRandomPlace", () => {
 				});
 			},
 		});
-	});
-});
+	}),
+);
 
 onMessage(
 	"getWorldStatsChart",
@@ -576,6 +659,27 @@ onMessage("getPlaceReviews", ({ data: { placeId, userId } }) =>
 	),
 );
 
+onMessage(
+	"getPlaceReviewPlaytimes",
+	({ data: { placeId, userId, reviewIds } }) =>
+		handle(async () =>
+			withAuthSession(userId, (token, config) =>
+				safeFetch(
+					`${config.resolvedUrls.extension}places/reviews/playtimes/${placeId}`,
+					Extension.PlaceReviewPlaytimesApi,
+					{
+						method: "POST",
+						body: JSON.stringify({ reviewIds }),
+						headers: {
+							Authorization: `Bearer ${token}`,
+							"x-kiln-version": browser.runtime.getManifest().version,
+						},
+					},
+				),
+			),
+		),
+);
+
 async function showReviewErrorAlert(message: string) {
 	const tabs = await browser.tabs.query({ active: true, currentWindow: true });
 	if (!tabs[0]?.id) return;
@@ -595,32 +699,38 @@ async function showReviewErrorAlert(message: string) {
 	});
 }
 
-onMessage("submitPlaceReview", ({ data: { placeId, userId, rating, body } }) =>
-	handle(async () => {
-		try {
-			return await withAuthSession(userId, (token, config) =>
-				safeFetch(
-					`${config.resolvedUrls.extension}places/reviews/${placeId}/me`,
-					Extension.PlaceReviewApi,
-					{
-						method: "PUT",
-						body: JSON.stringify({ rating, body: body ?? null }),
-						headers: {
-							Authorization: `Bearer ${token}`,
-							"x-kiln-version": browser.runtime.getManifest().version,
+onMessage(
+	"submitPlaceReview",
+	({ data: { placeId, userId, rating, body, anonymous } }) =>
+		handle(async () => {
+			try {
+				return await withAuthSession(userId, (token, config) =>
+					safeFetch(
+						`${config.resolvedUrls.extension}places/reviews/${placeId}/me`,
+						Extension.PlaceReviewApi,
+						{
+							method: "PUT",
+							body: JSON.stringify({
+								rating,
+								body: body ?? null,
+								anonymous: anonymous ?? false,
+							}),
+							headers: {
+								Authorization: `Bearer ${token}`,
+								"x-kiln-version": browser.runtime.getManifest().version,
+							},
 						},
-					},
-				),
-			);
-		} catch (err) {
-			await showReviewErrorAlert(
-				err instanceof ApiHttpError
-					? err.message
-					: "Something went wrong submitting your review.",
-			);
-			throw err;
-		}
-	}),
+					),
+				);
+			} catch (err) {
+				await showReviewErrorAlert(
+					err instanceof ApiHttpError
+						? err.message
+						: "Something went wrong submitting your review.",
+				);
+				throw err;
+			}
+		}),
 );
 
 onMessage("deleteMyPlaceReview", ({ data: { placeId, userId } }) =>

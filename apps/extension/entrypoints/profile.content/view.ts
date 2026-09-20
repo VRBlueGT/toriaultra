@@ -15,10 +15,20 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import type { Extension, PolyTrack, Polytoria } from "@kiln/schemas";
+import { openProfileThemeEditor } from "@/utils/profileThemeEditor";
+import {
+	applyProfileExtras,
+	clearProfileExtras,
+	extrasFromTheme,
+} from "@/utils/profileThemeExtras";
 import { _savedThemes, _userNotes, preferences } from "@/utils/storage";
 import { applyKilnTheme, THEME_PRESETS } from "@/utils/theme";
 import {
 	applyKilnDisclosureTitle,
+	condenseTabBar,
+	createModal,
+	getConfig,
+	getFlag,
 	kilnDisclosureBadgeHtml,
 } from "@/utils/utilities";
 
@@ -91,6 +101,102 @@ export async function pinnedAchievements(
 	} else {
 		document.getElementsByClassName("user-right")[0]?.prepend(section);
 	}
+}
+
+export async function likeButton(
+	selfUserId: number,
+	targetUserId: number,
+	showDisclosures: boolean,
+) {
+	const card = document.getElementById("user-stats-card");
+	if (!card) return;
+
+	const isOwnProfile = selfUserId === targetUserId;
+
+	const [sessionResult, countResult, statusResult] = await Promise.all([
+		isOwnProfile ? null : sendMessage("getApiSession", selfUserId),
+		sendMessage("getLikeCount", targetUserId),
+		isOwnProfile
+			? null
+			: sendMessage("getLikeStatus", { userId: selfUserId, targetUserId }),
+	]);
+
+	const canToggle = !isOwnProfile && sessionResult?.ok;
+	let liked = !!(statusResult?.ok && statusResult.data.data.liked);
+	let count = countResult.ok ? countResult.data.data.count : 0;
+
+	const row = document.createElement("div");
+	row.classList.add("mb-2");
+	row.innerHTML = `
+    <b>
+        <i class="fad fa-heart text-center d-inline-block" style="width:1.3em"></i>
+        Likes${kilnDisclosureBadgeHtml(showDisclosures)}
+    </b>
+    <span class="float-end">
+        <a href="#" class="btn btn-sm btn-primary"><i class="fad fa-heart"></i> <span class="like-count"></span></a>
+    </span>
+    `;
+
+	const countEl = row.querySelector<HTMLElement>(".like-count")!;
+	const toggleBtn = row.getElementsByTagName("a")[0];
+	const icon = toggleBtn.getElementsByTagName("i")[0];
+
+	const render = () => {
+		countEl.textContent = count.toLocaleString();
+		toggleBtn.classList.remove("btn-primary", "btn-danger", "btn-secondary");
+		if (liked) {
+			toggleBtn.classList.add("btn-danger");
+			icon.setAttribute("class", "fas fa-heart");
+		} else {
+			toggleBtn.classList.add("btn-primary");
+			icon.setAttribute("class", "fad fa-heart");
+		}
+	};
+
+	if (isOwnProfile) {
+		toggleBtn.classList.add("btn-secondary", "disabled");
+		toggleBtn.setAttribute("aria-disabled", "true");
+		countEl.textContent = count.toLocaleString();
+		toggleBtn.addEventListener("click", (e) => e.preventDefault());
+	} else if (!canToggle) {
+		toggleBtn.classList.add("btn-secondary");
+		toggleBtn.href = "https://polytoria.com/my/settings/kiln?tab=sync";
+		icon.setAttribute("class", "fad fa-lock");
+		countEl.textContent = count.toLocaleString();
+		applyKilnDisclosureTitle(toggleBtn, showDisclosures, "Verify to like");
+	} else {
+		render();
+		let busy = false;
+		toggleBtn.addEventListener("click", async (e) => {
+			e.preventDefault();
+			if (busy) return;
+
+			busy = true;
+			toggleBtn.classList.add("disabled");
+			icon.setAttribute("class", "fad fa-spinner fa-spin");
+
+			const result = liked
+				? await sendMessage("unlikeUser", {
+						userId: selfUserId,
+						targetUserId,
+					})
+				: await sendMessage("likeUser", { userId: selfUserId, targetUserId });
+
+			if (result.ok) {
+				liked = !liked;
+				count += liked ? 1 : -1;
+			}
+			render();
+			toggleBtn.classList.remove("disabled");
+			busy = false;
+		});
+	}
+
+	const friendsRow = card.querySelector(".mb-1:has(.fa-users)");
+	if (friendsRow) friendsRow.insertAdjacentElement("afterend", row);
+	else card.children[0].appendChild(row);
+
+	sendMessage("registerBootstrapElements");
 }
 
 export async function userLabels(
@@ -190,6 +296,133 @@ export async function displayId(
 	} else {
 		card.appendChild(row);
 	}
+}
+
+function formatKilnDuration(linkedAt: string): string {
+	const start = new Date(linkedAt);
+	const now = new Date();
+
+	let months =
+		(now.getFullYear() - start.getFullYear()) * 12 +
+		(now.getMonth() - start.getMonth());
+	if (now.getDate() < start.getDate()) months--;
+
+	if (months < 1) {
+		const days = Math.max(
+			1,
+			Math.floor((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)),
+		);
+		return `${days} day${days === 1 ? "" : "s"}`;
+	}
+
+	const years = Math.floor(months / 12);
+	const remainingMonths = months % 12;
+
+	if (years === 0)
+		return `${remainingMonths} month${remainingMonths === 1 ? "" : "s"}`;
+	if (remainingMonths === 0) return `${years} year${years === 1 ? "" : "s"}`;
+	return `${years} year${years === 1 ? "" : "s"}, ${remainingMonths} month${remainingMonths === 1 ? "" : "s"}`;
+}
+
+export async function kilnRegistrationDate(
+	userId: number,
+	showDisclosures: boolean,
+) {
+	const card = document.getElementById("user-stats-card");
+	if (!card) return;
+
+	const result = await sendMessage("getKilnUsage", userId);
+	if (!result.ok || !result.data.data.linkedAt) return;
+
+	const linkedAt = result.data.data.linkedAt;
+	const exactTimestamp = new Date(linkedAt).toLocaleString("en-US", {
+		dateStyle: "long",
+		timeStyle: "short",
+	});
+
+	const row = document.createElement("div");
+	row.classList.add("mb-1");
+	row.dataset.kiln = "kiln-user-for";
+	row.innerHTML = `
+    <b>
+        <i class="fas fa-fire text-center d-inline-block" style="width:1.3em"></i>
+        Kiln User For${kilnDisclosureBadgeHtml(showDisclosures)}
+    </b>
+    <span class="float-end" data-bs-toggle="tooltip" data-bs-title="${exactTimestamp}">
+        ${formatKilnDuration(linkedAt)}
+    </span>
+    `;
+
+	const localTimeRow = card.querySelector('[data-kiln="local-time"]');
+	const activityBadge = card.querySelector(
+		".badge.bg-secondary, .badge.bg-warning",
+	);
+	if (localTimeRow) localTimeRow.insertAdjacentElement("afterend", row);
+	else if (activityBadge) activityBadge.insertAdjacentElement("beforebegin", row);
+	else card.children[0].appendChild(row);
+
+	sendMessage("registerBootstrapElements");
+}
+
+export async function publicTimezone(userId: number, showDisclosures: boolean) {
+	const card = document.getElementById("user-stats-card");
+	if (!card) return;
+
+	const result = await sendMessage("getUserTimezone", userId);
+	if (!result.ok || !result.data.data.timezone) return;
+
+	const timezone = result.data.data.timezone;
+	const formatLocalTime = () =>
+		new Date().toLocaleTimeString([], {
+			hour: "numeric",
+			minute: "2-digit",
+			timeZone: timezone,
+			timeZoneName: "short",
+		});
+
+	let initialTime: string;
+	try {
+		initialTime = formatLocalTime();
+	} catch {
+		return;
+	}
+
+	const row = document.createElement("div");
+	row.classList.add("mb-1");
+	row.dataset.kiln = "local-time";
+	row.innerHTML = `
+    <b>
+        <i class="fas fa-clock text-center d-inline-block" style="width:1.3em"></i>
+        Local Time${kilnDisclosureBadgeHtml(showDisclosures)}
+    </b>
+    <span class="float-end" data-bs-toggle="tooltip"></span>
+    `;
+
+	const timeEl = row.querySelector<HTMLElement>(".float-end")!;
+	timeEl.setAttribute("data-bs-title", timezone.replaceAll("_", " "));
+	timeEl.textContent = initialTime;
+
+	const kilnUserRow = card.querySelector('[data-kiln="kiln-user-for"]');
+	const activityBadge = card.querySelector(
+		".badge.bg-secondary, .badge.bg-warning",
+	);
+	if (kilnUserRow) kilnUserRow.insertAdjacentElement("beforebegin", row);
+	else if (activityBadge) activityBadge.insertAdjacentElement("beforebegin", row);
+	else card.children[0].appendChild(row);
+
+	const scheduleTick = () => {
+		setTimeout(
+			() => {
+				if (!row.isConnected) return;
+				timeEl.textContent = formatLocalTime();
+				scheduleTick();
+			},
+			60_000 - (Date.now() % 60_000),
+		);
+	};
+	scheduleTick();
+
+	sendMessage("registerBootstrapElements");
 }
 
 export async function outfitCost(
@@ -712,6 +945,10 @@ async function showCreationsPage(userId: number) {
 	const container = getProfileContainer();
 	if (!container || container.querySelector(".kiln-creations-page")) return;
 
+	releaseProfileThemeHold();
+	clearProfileExtras();
+	if (activeProfileTheme) applyKilnTheme(null);
+
 	const originalTitle = document.title;
 	const basePath = window.location.pathname;
 	const username = getProfileUsername();
@@ -775,8 +1012,9 @@ async function showCreationsPage(userId: number) {
 		hr.remove();
 		row.remove();
 		for (const child of existingChildren) child.style.display = "";
-		if (profileThemeStyle) profileThemeStyle.disabled = false;
-		if (!hadKilnTheme) applyKilnTheme(null);
+		if (profileThemeStyle) profileThemeStyle.disabled = nativeThemeSuppressed;
+		if (activeProfileTheme) holdProfileTheme(activeProfileTheme);
+		else if (!hadKilnTheme) applyKilnTheme(null);
 		restoreNavbarBlur?.();
 		activeAudio.current?.pause();
 	};
@@ -1063,7 +1301,7 @@ async function showCreationsPage(userId: number) {
 	sendMessage("registerBootstrapElements");
 }
 
-export async function creationsTab(userId: number) {
+export async function creationsTab(userId: number, condensedTabBar: boolean) {
 	const tabList = document.getElementById("user-info-tabs");
 	if (!tabList) return;
 
@@ -1076,6 +1314,7 @@ export async function creationsTab(userId: number) {
 		</a>
 	`;
 	tabList.appendChild(navItem);
+	if (condensedTabBar) condenseTabBar(tabList);
 
 	navItem.querySelector("a")!.addEventListener("click", (e) => {
 		e.preventDefault();
@@ -1205,6 +1444,135 @@ export async function userNotes(userId: number, showDisclosures: boolean) {
 	});
 }
 
+const OUTFITS_PER_PAGE = 8;
+
+export async function publicAvatarOutfits(
+	userId: number,
+	showDisclosures: boolean,
+	condensedTabBar: boolean,
+) {
+	const tabList = document.getElementById("user-info-tabs");
+	const tabContent = document.querySelector(
+		"#user-menu-tabs-card .tab-content",
+	);
+	if (!tabList || !tabContent) return;
+
+	const navItem = document.createElement("li");
+	navItem.classList.add("nav-item");
+	navItem.setAttribute("role", "presentation");
+	navItem.innerHTML = `
+		<a class="nav-link" href="#!" data-bs-toggle="tab" role="tab"
+		   data-bs-target="#user-outfits" aria-controls="user-outfits" aria-selected="false" tabindex="-1"
+		   ${condensedTabBar ? 'aria-label="Outfits"' : ""}>
+			<i class="fad fa-shirt${condensedTabBar ? "" : " me-1"}"></i>${condensedTabBar ? "" : " Outfits"}
+		</a>
+	`;
+	applyKilnDisclosureTitle(
+		navItem.querySelector("a")!,
+		showDisclosures,
+		condensedTabBar ? "Outfits" : "Outfits shared by this Kiln user",
+	);
+	tabList.appendChild(navItem);
+
+	const pane = document.createElement("div");
+	pane.id = "user-outfits";
+	pane.classList.add("tab-pane", "fade");
+	pane.setAttribute("role", "tabpanel");
+	pane.innerHTML = `
+		<div class="text-center text-muted p-4">
+			<span class="spinner-border spinner-border-sm" role="status"></span> Loading outfits...
+		</div>
+	`;
+	tabContent.appendChild(pane);
+
+	const result = await sendMessage("getPublicOutfits", userId);
+	if (!result.ok || result.data.data.length === 0) {
+		pane.innerHTML = `<div class="text-center text-muted p-4">${
+			result.ok
+				? "This user hasn't shared their outfits with Kiln."
+				: "Outfits are unavailable, please try again later."
+		}</div>`;
+		return;
+	}
+
+	const outfits = result.data.data;
+	const totalPages = Math.ceil(outfits.length / OUTFITS_PER_PAGE);
+	let page = 1;
+
+	const grid = document.createElement("div");
+	grid.classList.add("row", "g-3");
+
+	const pager = document.createElement("div");
+	pager.classList.add(
+		"d-flex",
+		"justify-content-center",
+		"align-items-center",
+		"gap-3",
+		"mt-3",
+	);
+	const prevBtn = document.createElement("button");
+	prevBtn.type = "button";
+	prevBtn.classList.add("btn", "btn-sm", "btn-secondary");
+	prevBtn.innerHTML = '<i class="fa-solid fa-chevron-left"></i>';
+	prevBtn.setAttribute("aria-label", "Previous page");
+	const pageLabel = document.createElement("span");
+	pageLabel.classList.add("text-muted", "small");
+	const nextBtn = document.createElement("button");
+	nextBtn.type = "button";
+	nextBtn.classList.add("btn", "btn-sm", "btn-secondary");
+	nextBtn.innerHTML = '<i class="fa-solid fa-chevron-right"></i>';
+	nextBtn.setAttribute("aria-label", "Next page");
+	pager.append(prevBtn, pageLabel, nextBtn);
+
+	const renderPage = () => {
+		const start = (page - 1) * OUTFITS_PER_PAGE;
+		grid.replaceChildren(
+			...outfits.slice(start, start + OUTFITS_PER_PAGE).map((outfit) => {
+				const col = document.createElement("div");
+				col.classList.add("col-6", "col-md-3");
+
+				const card = document.createElement("div");
+				card.classList.add("card", "bg-dark", "h-100", "text-center");
+
+				const img = document.createElement("img");
+				img.classList.add("card-img-top");
+				img.loading = "lazy";
+				img.alt = outfit.name;
+				img.src = outfit.thumbnail;
+
+				const body = document.createElement("div");
+				body.classList.add("card-body", "p-2");
+				const name = document.createElement("div");
+				name.classList.add("text-truncate", "fw-bold");
+				name.textContent = outfit.name;
+				name.title = outfit.name;
+				body.appendChild(name);
+
+				card.append(img, body);
+				col.appendChild(card);
+				return col;
+			}),
+		);
+
+		pageLabel.textContent = `Page ${page} of ${totalPages}`;
+		prevBtn.disabled = page <= 1;
+		nextBtn.disabled = page >= totalPages;
+	};
+
+	prevBtn.addEventListener("click", () => {
+		page--;
+		renderPage();
+	});
+	nextBtn.addEventListener("click", () => {
+		page++;
+		renderPage();
+	});
+
+	renderPage();
+	pane.replaceChildren(grid);
+	if (totalPages > 1) pane.appendChild(pager);
+}
+
 export async function avatarMeshDownloader(userId: number) {
 	const { AvatarRenderer } = await import(
 		"@/entrypoints/account.content/avatarRenderer"
@@ -1241,7 +1609,7 @@ export async function avatarMeshDownloader(userId: number) {
 			items: assets.filter((a) => a.type === "hat").map((a) => a.path),
 		});
 
-		const glb = await renderer.exportGLB();
+		const glb = await renderer.exportGLB(false);
 		renderer.dispose();
 
 		const a = Object.assign(document.createElement("a"), {
@@ -1348,4 +1716,343 @@ export async function rankingPositions(
 
 	document.getElementsByClassName("user-right")[0].appendChild(section);
 	sendMessage("registerBootstrapElements");
+}
+
+const PROFILE_THEME_QUERY_PARAM = "kiln-profile-theme";
+
+type PublicProfileTheme = NonNullable<Extension.ProfileThemeApi["data"]>;
+
+let nativeThemeSuppressed = false;
+let activeProfileTheme: PublicProfileTheme | null = null;
+
+function suppressNativeProfileTheme(suppress: boolean) {
+	nativeThemeSuppressed = suppress;
+	const style = getProfileThemeStyle();
+	if (style) style.disabled = suppress;
+}
+
+function applyProfileTheme(theme: PublicProfileTheme) {
+	suppressNativeProfileTheme(true);
+	applyKilnTheme({
+		accentColor: theme.accentColor,
+		navbarColor: theme.navbarColor,
+		fontFamily: theme.fontFamily ?? undefined,
+		customCss: theme.customCss ?? undefined,
+		backgroundImage: theme.backgroundImage ?? undefined,
+		backgroundOverlayColor: theme.backgroundOverlayColor ?? undefined,
+		backgroundOverlayOpacity: theme.backgroundOverlayOpacity ?? undefined,
+		effects: theme.effects ?? undefined,
+		navbarIconColor: theme.navbarIconColor ?? undefined,
+		cursorUrl: theme.cursorUrl ?? undefined,
+		colorTokens: theme.colorTokens ?? undefined,
+	});
+	document
+		.getElementById("kiln-custom-theme")
+		?.setAttribute("data-kiln-profile-theme", "1");
+	applyProfileExtras(extrasFromTheme(theme));
+}
+
+let profileThemeHold: MutationObserver | null = null;
+
+function releaseProfileThemeHold() {
+	profileThemeHold?.disconnect();
+	profileThemeHold = null;
+}
+
+function holdProfileTheme(theme: PublicProfileTheme) {
+	activeProfileTheme = theme;
+	applyProfileTheme(theme);
+
+	releaseProfileThemeHold();
+	profileThemeHold = new MutationObserver(() => {
+		const style = document.getElementById("kiln-custom-theme");
+		if (style?.getAttribute("data-kiln-profile-theme") === "1") return;
+		applyProfileTheme(theme);
+	});
+	profileThemeHold.observe(document.head, { childList: true });
+}
+
+async function fetchProfileTheme(
+	userId: number,
+): Promise<PublicProfileTheme | null> {
+	const result = await sendMessage("getProfileTheme", userId).catch(() => null);
+	return result?.ok ? (result.data.data ?? null) : null;
+}
+
+function showReportThemeModal(userId: number) {
+	const modal = createModal();
+	modal.innerHTML = `
+		<div class="d-flex justify-content-between align-items-center mb-3">
+			<h5 class="mb-0 fw-bold">Report Profile Theme</h5>
+			<button class="btn-close" data-kiln="close" aria-label="Close"></button>
+		</div>
+		<p class="text-muted small">Tell us what's wrong with this profile's theme.</p>
+		<textarea class="form-control mb-2" rows="4" maxlength="500" placeholder="Reason…"></textarea>
+		<div class="small mb-2" data-kiln="status"></div>
+		<div class="d-flex gap-2 justify-content-end">
+			<button class="btn btn-sm btn-secondary" data-kiln="cancel">Cancel</button>
+			<button class="btn btn-sm btn-danger" data-kiln="submit">
+				<i class="fas fa-flag me-1"></i>Report
+			</button>
+		</div>
+	`;
+
+	const textarea = modal.querySelector("textarea")!;
+	const status = modal.querySelector<HTMLElement>('[data-kiln="status"]')!;
+	const submit = modal.querySelector<HTMLButtonElement>(
+		'[data-kiln="submit"]',
+	)!;
+
+	for (const selector of ['[data-kiln="close"]', '[data-kiln="cancel"]']) {
+		modal
+			.querySelector(selector)!
+			.addEventListener("click", () => modal.close());
+	}
+
+	submit.addEventListener("click", async () => {
+		const reason = textarea.value.trim();
+		if (!reason) {
+			status.innerHTML =
+				'<span class="text-danger">Please add a reason.</span>';
+			return;
+		}
+		submit.disabled = true;
+		const result = await sendMessage("reportProfileTheme", { userId, reason });
+		submit.disabled = false;
+		if (!result.ok) {
+			status.innerHTML =
+				'<span class="text-danger">Failed to send the report. Try again later.</span>';
+			return;
+		}
+		status.innerHTML =
+			'<span class="text-success">Thanks — the theme has been reported.</span>';
+		setTimeout(() => modal.close(), 1200);
+	});
+
+	modal.showModal();
+}
+
+function addProfileThemeButton(
+	openEditor: () => void,
+	showDisclosures: boolean,
+) {
+	if (document.getElementById("kiln-profile-theme-btn")) return;
+
+	const customizeBtn = document.querySelector(
+		'a[href="/my/settings/theme"]',
+	) as HTMLAnchorElement | null;
+	const anchor =
+		customizeBtn?.closest(".row") ??
+		document.getElementById("user-avatar-card");
+	if (!anchor) return;
+
+	const wrapper = document.createElement("div");
+	wrapper.className = "d-grid mt-2";
+	wrapper.innerHTML = `
+		<button type="button" class="btn btn-outline-primary btn-outline-themed" id="kiln-profile-theme-btn">
+			<i class="fad fa-palette me-1"></i>
+			Edit Profile Theme${kilnDisclosureBadgeHtml(showDisclosures)}
+		</button>
+	`;
+	wrapper
+		.querySelector("button")!
+		.addEventListener("click", () => openEditor());
+	anchor.insertAdjacentElement("afterend", wrapper);
+}
+
+export async function customProfileThemes(
+	selfUserId: number | null,
+	targetUserId: number,
+	showDisclosures: boolean,
+	viewOthers: boolean,
+) {
+	const isOwnProfile = selfUserId !== null && selfUserId === targetUserId;
+
+	if (isOwnProfile) {
+		const restore = async () => {
+			const fresh = await fetchProfileTheme(targetUserId);
+			if (fresh) {
+				holdProfileTheme(fresh);
+				return;
+			}
+			activeProfileTheme = null;
+			clearProfileExtras();
+			suppressNativeProfileTheme(false);
+			applyKilnTheme(null);
+			await enableKilnTheme();
+		};
+
+		const openEditor = () => {
+			releaseProfileThemeHold();
+			suppressNativeProfileTheme(true);
+			window.history.replaceState(
+				null,
+				"",
+				`${window.location.pathname}?${PROFILE_THEME_QUERY_PARAM}`,
+			);
+			openProfileThemeEditor({ userId: selfUserId, onRestore: restore });
+		};
+
+		addProfileThemeButton(openEditor, showDisclosures);
+
+		if (
+			new URLSearchParams(window.location.search).has(PROFILE_THEME_QUERY_PARAM)
+		) {
+			openEditor();
+		}
+	}
+
+	if (!isOwnProfile && !viewOthers) return;
+
+	const theme = await fetchProfileTheme(targetUserId);
+	if (!theme) return;
+
+	holdProfileTheme(theme);
+	if (!isOwnProfile) addReportThemeItem(targetUserId);
+
+	if (!isOwnProfile) {
+		const config = await getConfig().catch(() => null);
+		if (getFlag(config?.flags, "features.customProfileThemes.useThisTheme"))
+			addUseThisThemeItem(targetUserId, theme);
+	}
+}
+
+function addUseThisThemeItem(userId: number, theme: PublicProfileTheme) {
+	const dropdown = document.getElementsByClassName(
+		"dropdown-menu dropdown-menu-right",
+	)[0];
+	if (!dropdown || dropdown.querySelector(".kiln-use-profile-theme")) return;
+
+	const item = document.createElement("a");
+	item.classList.add("dropdown-item", "text-primary", "kiln-use-profile-theme");
+	item.href = "#";
+	item.innerHTML = `
+    <i class="fas fa-palette me-1"></i>
+	(Kiln) Use This Theme
+    `;
+	item.addEventListener("click", (e) => {
+		e.preventDefault();
+		showUseThisThemeModal(userId, theme);
+	});
+
+	const report = dropdown.querySelector(".kiln-report-profile-theme");
+	if (report) report.insertAdjacentElement("beforebegin", item);
+	else dropdown.appendChild(item);
+}
+
+function showUseThisThemeModal(userId: number, theme: PublicProfileTheme) {
+	const username = getProfileUsername();
+	const name = username ? `${username}'s Theme` : "Profile Theme";
+
+	const modal = createModal();
+	modal.innerHTML = `
+		<div class="d-flex justify-content-between align-items-center mb-3">
+			<h5 class="mb-0 fw-bold">Use This Theme</h5>
+			<button class="btn-close" data-kiln="close" aria-label="Close"></button>
+		</div>
+		<div class="d-flex rounded overflow-hidden mb-3" style="height:48px;">
+			<div class="flex-fill" data-kiln="swatch-navbar"></div>
+			<div class="flex-fill" data-kiln="swatch-accent"></div>
+		</div>
+		<p class="small mb-1">Save <b data-kiln="name"></b> to your themes and use it across Polytoria.</p>
+		<p class="small text-muted">Profile-only parts like stickers, the banner, and layout stay on their profile.</p>
+		<div class="small mb-2" data-kiln="status"></div>
+		<div class="d-flex gap-2 justify-content-end">
+			<button class="btn btn-sm btn-secondary" data-kiln="save">Just Save</button>
+			<button class="btn btn-sm btn-primary" data-kiln="apply">
+				<i class="fas fa-check me-1"></i>Save &amp; Apply
+			</button>
+		</div>
+	`;
+	modal.querySelector<HTMLElement>('[data-kiln="name"]')!.textContent = name;
+	modal.querySelector<HTMLElement>(
+		'[data-kiln="swatch-navbar"]',
+	)!.style.background = theme.navbarColor;
+	modal.querySelector<HTMLElement>(
+		'[data-kiln="swatch-accent"]',
+	)!.style.background = theme.accentColor;
+	const status = modal.querySelector<HTMLElement>('[data-kiln="status"]')!;
+
+	modal
+		.querySelector('[data-kiln="close"]')!
+		.addEventListener("click", () => modal.close());
+
+	const save = async (apply: boolean) => {
+		const saved = await _savedThemes.getValue();
+		const existing = saved.find((t) => t.importedFromProfile === userId);
+		const id = existing?.id ?? crypto.randomUUID();
+		const copy = {
+			id,
+			name: existing?.name ?? name,
+			accentColor: theme.accentColor,
+			navbarColor: theme.navbarColor,
+			fontFamily: theme.fontFamily ?? undefined,
+			customCss: theme.customCss ?? undefined,
+			backgroundImage: theme.backgroundImage ?? undefined,
+			backgroundOverlayColor: theme.backgroundOverlayColor ?? undefined,
+			backgroundOverlayOpacity: theme.backgroundOverlayOpacity ?? undefined,
+			effects: theme.effects ?? undefined,
+			navbarIconColor: theme.navbarIconColor ?? undefined,
+			cursorUrl: theme.cursorUrl ?? undefined,
+			colorTokens: theme.colorTokens ?? undefined,
+			importedFromProfile: userId,
+		};
+		await _savedThemes.setValue(
+			existing ? saved.map((t) => (t.id === id ? copy : t)) : [...saved, copy],
+		);
+
+		if (!apply) {
+			status.innerHTML =
+				'<span class="text-success">Saved to your themes.</span>';
+			setTimeout(() => modal.close(), 1200);
+			return;
+		}
+
+		const values = await preferences.getValue();
+		(values.config as any).themeCreator = { activeThemeId: id };
+		if (!values.enabled.includes("themeCreator")) {
+			values.enabled.push("themeCreator");
+			values.disabled = values.disabled.filter((x) => x !== "themeCreator");
+		}
+		await preferences.setValue(values);
+		status.innerHTML =
+			'<span class="text-success">Applied! You\'ll see it everywhere outside of profiles.</span>';
+		setTimeout(() => modal.close(), 1600);
+	};
+
+	modal
+		.querySelector('[data-kiln="save"]')!
+		.addEventListener("click", () => save(false));
+	modal
+		.querySelector('[data-kiln="apply"]')!
+		.addEventListener("click", () => save(true));
+
+	modal.showModal();
+}
+
+function addReportThemeItem(userId: number) {
+	const dropdown = document.getElementsByClassName(
+		"dropdown-menu dropdown-menu-right",
+	)[0];
+	if (!dropdown || dropdown.querySelector(".kiln-report-profile-theme")) return;
+
+	const item = document.createElement("a");
+	item.classList.add(
+		"dropdown-item",
+		"text-danger",
+		"kiln-report-profile-theme",
+	);
+	item.href = "#";
+	item.innerHTML = `
+    <i class="fas fa-paint-brush me-1"></i>
+	(Kiln) Report Profile Theme
+    `;
+	item.addEventListener("click", (e) => {
+		e.preventDefault();
+		showReportThemeModal(userId);
+	});
+
+	const nativeReport = dropdown.querySelector('a[href^="/report/user/"]');
+	if (nativeReport) nativeReport.insertAdjacentElement("afterend", item);
+	else dropdown.appendChild(item);
 }

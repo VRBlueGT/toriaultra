@@ -60,6 +60,10 @@ export default defineContentScript({
 
 				if (page.type === "new") {
 					newTrade.nftItems(showDisclosures);
+
+					if (values.enabled.includes("nlfItems")) {
+						newTrade.nlfItems(showDisclosures);
+					}
 				} else if (page.type === "view") {
 					const trade = parseTrade(document);
 
@@ -85,6 +89,10 @@ export default defineContentScript({
 
 						if (values.enabled.includes("nftItems")) {
 							overview.nftItems(user, showDisclosures);
+						}
+
+						if (values.enabled.includes("nlfItems")) {
+							overview.nlfItems(user, showDisclosures);
 						}
 
 						if (values.enabled.includes("quickCounterTrades")) {

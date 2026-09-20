@@ -17,7 +17,9 @@ export type EffectType =
 	| "letter-spacing"
 	| "text-transform"
 	| "frame-image"
-	| "frame-shape";
+	| "frame-shape"
+	| "clicking-sound"
+	| "background-music";
 
 export type ThemeEffect = {
 	id: string;
@@ -32,7 +34,13 @@ export const EFFECT_SLOTS: Record<
 > = {
 	global: {
 		label: "Global",
-		types: ["border-radius", "letter-spacing", "text-transform"],
+		types: [
+			"border-radius",
+			"letter-spacing",
+			"text-transform",
+			"clicking-sound",
+			"background-music",
+		],
 	},
 	cards: {
 		label: "Cards",
@@ -108,7 +116,9 @@ export const EFFECT_TYPE_CONFIGS: Record<
 			  }
 			| { kind: "color"; default: string }
 			| { kind: "color-alpha"; default: string }
-			| { kind: "url"; default: string };
+			| { kind: "url"; default: string }
+			| { kind: "number"; min: number; max: number; default: number }
+			| { kind: "audio-volume"; min: number; max: number; default: string };
 	}
 > = {
 	"border-radius": {
@@ -190,6 +200,19 @@ export const EFFECT_TYPE_CONFIGS: Record<
 				{ value: "square", label: "Square" },
 			],
 			default: "round",
+		},
+	},
+	"clicking-sound": {
+		label: "Clicking Sound",
+		input: { kind: "number", min: 1, max: 2147483647, default: 0 },
+	},
+	"background-music": {
+		label: "Background Music",
+		input: {
+			kind: "audio-volume",
+			min: 1,
+			max: 2147483647,
+			default: "0:50",
 		},
 	},
 };
@@ -280,6 +303,12 @@ function buildSingleEffectCSS(
 
 		case "global:text-transform":
 			return `body { text-transform: ${effect.value} !important; }`;
+
+		// Clicking sound and background music are played by the extension
+		// directly — there's no CSS to generate for either.
+		case "global:clicking-sound":
+		case "global:background-music":
+			return "";
 		case "buttons:text-transform":
 			return `.btn { text-transform: ${effect.value} !important; }`;
 
@@ -458,6 +487,17 @@ export const COLOR_TOKENS: Record<
 		label: "Muted Text",
 		apply: (v) =>
 			`.text-muted { color: ${v} !important; } :root { --bs-secondary-color: ${v}; }`,
+	},
+	studsColor: {
+		label: "Studs Color",
+		apply: (v) => `.text-studs { color: ${v} !important; }`,
+	},
+	bricksColor: {
+		label: "Bricks Color",
+		// Bricks balance just reuses the generic .text-success class, so scope
+		// the override to spans containing the brick icon instead of hijacking
+		// every other text-success usage on the site.
+		apply: (v) => `.text-success:has(.pi-brick) { color: ${v} !important; }`,
 	},
 };
 

@@ -140,3 +140,96 @@ export async function nftItems(showDisclosures: boolean) {
 	await resolveHashes(cards);
 	cards.forEach(markCard);
 }
+
+export async function nlfItems(showDisclosures: boolean) {
+	const nlf = await sendMessage("getNLFItems", userId);
+	if (!nlf.ok) return;
+
+	const nlfIds = new Set(nlf.data.data);
+	if (!nlfIds.size) return;
+
+	const container = await new Promise<Element>((resolve) => {
+		const find = () =>
+			document.querySelector("#user-items")?.querySelector(".trd-box")
+				? document.getElementById("user-items")
+				: null;
+		const existing = find();
+		if (existing) return resolve(existing);
+
+		const observer = new MutationObserver(() => {
+			const found = find();
+			if (found) {
+				observer.disconnect();
+				resolve(found);
+			}
+		});
+		observer.observe(document.body, { childList: true, subtree: true });
+	});
+
+	const cards = [...container.querySelectorAll<Element>(".trd-box")];
+
+	const getCardHash = (card: Element): string | null => {
+		const img = card.querySelector("img") as HTMLImageElement | null;
+		if (!img?.src.includes("cdn.polytoria.com")) return null;
+		return img.src.split("/").pop()?.replace(".png", "") ?? null;
+	};
+
+	const hashes = [
+		...new Set(cards.map(getCardHash).filter((h): h is string => h !== null)),
+	];
+	const hashToItemId = new Map<string, number>();
+	for (let i = 0; i < hashes.length; i += 100) {
+		const result = await sendMessage(
+			"resolveItemThumbnails",
+			hashes.slice(i, i + 100),
+		);
+		if (!result.ok) continue;
+		for (const [hash, itemId] of Object.entries(result.data.data)) {
+			if (itemId !== null) hashToItemId.set(hash, itemId);
+		}
+	}
+
+	document.head.appendChild(
+		Object.assign(document.createElement("style"), {
+			textContent: `
+        .trd-box.is-nlf {
+            border-color: #dc3545 !important;
+            filter: opacity(0.3);
+            background: repeating-linear-gradient(
+                45deg,
+                #dc3545,
+                #dc3545 10px,
+                transparent 10px,
+                transparent 20px
+            ) !important;
+            pointer-events: none;
+            position: relative;
+        }
+        .nlf-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #000;
+            font-weight: 700;
+            font-size: 1.25rem;
+            text-align: center;
+            pointer-events: none;
+        }
+    `,
+		}),
+	);
+
+	for (const card of cards) {
+		const hash = getCardHash(card);
+		const itemId = hash ? hashToItemId.get(hash) : undefined;
+		if (itemId === undefined || !nlfIds.has(itemId)) continue;
+
+		card.classList.add("is-nlf");
+		const overlay = document.createElement("div");
+		overlay.className = "nlf-overlay";
+		overlay.innerHTML = `Not Looking For${kilnDisclosureBadgeHtml(showDisclosures)}`;
+		card.appendChild(overlay);
+	}
+}

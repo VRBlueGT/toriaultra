@@ -15,6 +15,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import { Theme } from "@kiln/schemas";
+import { POLYTORIA_CDN_URL } from "@/utils/decal";
+import { sendMessage } from "@/utils/messaging";
 import metadata from "@/utils/static/metadata.json";
 import type { ThemeEffect } from "./types";
 
@@ -42,7 +44,8 @@ export function proxyThemeImageUrl(url: string): string {
 	if (
 		!trimmed ||
 		trimmed.startsWith("data:") ||
-		trimmed.startsWith(metadata.endpoints.extension)
+		trimmed.startsWith(metadata.endpoints.extension) ||
+		POLYTORIA_CDN_URL.test(trimmed)
 	)
 		return trimmed;
 	return `${metadata.endpoints.extension}theme/image?url=${encodeURIComponent(trimmed)}`;
@@ -50,6 +53,190 @@ export function proxyThemeImageUrl(url: string): string {
 
 export function buildEffectsCSS(effects: ThemeEffect[]): string {
 	return Theme.buildEffectsCSS(effects, proxyThemeImageUrl);
+}
+
+const resolvedAudioUrls = new Map<number, string>();
+
+async function resolveAudioUrl(assetId: number): Promise<string | null> {
+	const cached = resolvedAudioUrls.get(assetId);
+	if (cached) return cached;
+	const result = await sendMessage("getAssetAudio", assetId);
+	if (!result.ok || !result.data.url) return null;
+	resolvedAudioUrls.set(assetId, result.data.url);
+	return result.data.url;
+}
+
+let clickSoundListener: ((e: MouseEvent) => void) | null = null;
+
+async function playClickSound(assetId: number) {
+	const url = await resolveAudioUrl(assetId);
+	if (url) new Audio(url).play().catch(() => {});
+}
+
+function getClickSoundAssetId(effects?: ThemeEffect[]): number | null {
+	const effect = effects?.find(
+		(e) => e.slot === "global" && e.type === "clicking-sound",
+	);
+	const id = Number(effect?.value);
+	return effect && Number.isFinite(id) && id > 0 ? id : null;
+}
+
+function applyClickSound(effects?: ThemeEffect[]) {
+	if (clickSoundListener) {
+		document.removeEventListener("click", clickSoundListener, true);
+		clickSoundListener = null;
+	}
+	const assetId = getClickSoundAssetId(effects);
+	if (assetId === null) return;
+	clickSoundListener = () => playClickSound(assetId);
+	document.addEventListener("click", clickSoundListener, true);
+}
+
+export function parseAssetVolume(
+	value: string | number,
+): { assetId: number; volume: number } | null {
+	const [idPart, volumePart] = String(value).split(":");
+	const assetId = Number(idPart);
+	if (!Number.isFinite(assetId) || assetId <= 0) return null;
+	const volume = Number(volumePart);
+	return {
+		assetId,
+		volume: Number.isFinite(volume) ? Math.min(100, Math.max(0, volume)) : 50,
+	};
+}
+
+let bgMusicAudio: HTMLAudioElement | null = null;
+let bgMusicAssetId: number | null = null;
+let bgMusicToken = 0;
+
+function stopBackgroundMusic() {
+	bgMusicAudio?.pause();
+	bgMusicAudio?.remove();
+	bgMusicAudio = null;
+	bgMusicAssetId = null;
+}
+
+const BG_MUSIC_POSITION_KEY = "kiln-bg-music-position";
+
+function saveBackgroundMusicPosition() {
+	if (!bgMusicAudio || bgMusicAssetId === null) return;
+	try {
+		localStorage.setItem(
+			BG_MUSIC_POSITION_KEY,
+			JSON.stringify({
+				assetId: bgMusicAssetId,
+				currentTime: bgMusicAudio.currentTime,
+				timestamp: Date.now(),
+			}),
+		);
+	} catch {}
+}
+
+window.addEventListener("pagehide", saveBackgroundMusicPosition);
+
+function loadBackgroundMusicPosition(assetId: number): number | null {
+	try {
+		const raw = localStorage.getItem(BG_MUSIC_POSITION_KEY);
+		if (!raw) return null;
+		const saved = JSON.parse(raw) as {
+			assetId: number;
+			currentTime: number;
+			timestamp: number;
+		};
+		if (saved.assetId !== assetId) return null;
+		return saved.currentTime + (Date.now() - saved.timestamp) / 1000;
+	} catch {
+		return null;
+	}
+}
+
+const BG_MUSIC_LOCK_NAME = "kiln-bg-music-playback";
+const HAS_WEB_LOCKS = typeof navigator !== "undefined" && "locks" in navigator;
+
+let bgMusicWantedAssetId: number | null = null;
+let bgMusicWantedVolume = 50;
+let bgMusicHasLock = false;
+let bgMusicLockRequested = false;
+let releaseBgMusicLock: (() => void) | null = null;
+
+function requestBgMusicLock() {
+	if (bgMusicLockRequested) return;
+	bgMusicLockRequested = true;
+	navigator.locks.request(BG_MUSIC_LOCK_NAME, () => {
+		bgMusicHasLock = true;
+		startWantedBackgroundMusic();
+		return new Promise<void>((resolve) => {
+			releaseBgMusicLock = () => {
+				bgMusicHasLock = false;
+				bgMusicLockRequested = false;
+				releaseBgMusicLock = null;
+				resolve();
+			};
+		});
+	});
+}
+
+async function startWantedBackgroundMusic() {
+	if (bgMusicWantedAssetId === null) {
+		releaseBgMusicLock?.();
+		return;
+	}
+
+	if (bgMusicAudio && bgMusicAssetId === bgMusicWantedAssetId) {
+		bgMusicAudio.volume = bgMusicWantedVolume / 100;
+		return;
+	}
+
+	stopBackgroundMusic();
+	const assetId = bgMusicWantedAssetId;
+	bgMusicAssetId = assetId;
+	const token = ++bgMusicToken;
+	const url = await resolveAudioUrl(assetId);
+	if (token !== bgMusicToken || !url || bgMusicWantedAssetId !== assetId)
+		return;
+
+	const audio = new Audio(url);
+	audio.id = "kiln-custom-bg-music";
+	audio.loop = true;
+	audio.volume = bgMusicWantedVolume / 100;
+
+	const resumeAt = loadBackgroundMusicPosition(assetId);
+	if (resumeAt !== null) {
+		audio.addEventListener(
+			"loadedmetadata",
+			() => {
+				if (Number.isFinite(audio.duration) && audio.duration > 0)
+					audio.currentTime = resumeAt % audio.duration;
+			},
+			{ once: true },
+		);
+	}
+
+	document.body.appendChild(audio);
+	bgMusicAudio = audio;
+
+	const tryPlay = () => audio.play().catch(() => {});
+	tryPlay();
+	document.addEventListener("click", tryPlay, { once: true });
+}
+
+async function applyBackgroundMusic(effects?: ThemeEffect[]) {
+	const effect = effects?.find(
+		(e) => e.slot === "global" && e.type === "background-music",
+	);
+	const parsed = effect ? parseAssetVolume(effect.value) : null;
+
+	bgMusicWantedAssetId = parsed?.assetId ?? null;
+	bgMusicWantedVolume = parsed?.volume ?? 50;
+
+	if (!parsed) {
+		stopBackgroundMusic();
+		releaseBgMusicLock?.();
+		return;
+	}
+
+	if (!HAS_WEB_LOCKS || bgMusicHasLock) await startWantedBackgroundMusic();
+	else requestBgMusicLock();
 }
 
 export function applyKilnTheme(
@@ -74,6 +261,8 @@ export function applyKilnTheme(
 	document.getElementById("kiln-custom-css")?.remove();
 	document.getElementById("kiln-custom-font")?.remove();
 	document.getElementById("kiln-custom-cursor")?.remove();
+	applyClickSound(colors?.effects);
+	applyBackgroundMusic(colors?.effects);
 	if (!colors) return;
 
 	const font =

@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import { Polytoria } from "@kiln/schemas";
-import type { Menus } from "webextension-polyfill";
+import type { Menus, Runtime } from "webextension-polyfill";
 import { onMessage } from "@/utils/messaging";
 import { cache, migrateThemesToLocal } from "@/utils/storage";
 import {
@@ -31,6 +31,7 @@ import "./background/config";
 import "./background/users";
 import "./background/items";
 import "./background/places";
+import "./background/profileThemes";
 import "./background/notifications";
 import "./background/trades";
 import "./background/auth";
@@ -42,12 +43,13 @@ import "./background/storeListing";
 import "./background/placesListing";
 import "./background/forumSearch";
 import "./background/feedSearch";
+import { scheduleAssetApprovalCheck } from "./background/assetApprovals";
 import { purgeOldErrors } from "./background/errors";
 import { scheduleThemeAutoUpdateCheck } from "./background/themeAutoUpdate";
 
 export { ApiDisabledError, ApiHttpError, NoSessionError };
 
-const MAX_CACHE_BYTES = 4 * 1024 * 1024; // 4 MB
+const MAX_CACHE_BYTES = 4 * 1024 * 1024;
 
 async function resolveIdFromUrl(linkUrl: string): Promise<string> {
 	const parts = new URL(linkUrl).pathname.split("/");
@@ -169,6 +171,8 @@ export default defineBackground(() => {
 
 	scheduleThemeAutoUpdateCheck();
 
+	scheduleAssetApprovalCheck();
+
 	migrateLegacySettings().then((migration) => {
 		if (migration) {
 			browser.tabs.create({
@@ -223,25 +227,28 @@ browser.runtime.onInstalled.addListener(async ({ reason }) => {
 		await cache.setValue(cache.fallback);
 		console.log("[Kiln] Cache cleared on update.");
 	}
-
-	if (reason == "install" && !import.meta.env.PROD) {
-		browser.tabs.create({
-			url: "https://kiln.indexx.dev/installed",
-			active: true,
-		});
-	}
 });
+
+async function resolveInjectableTabId(
+	sender?: Runtime.MessageSender,
+): Promise<number | null> {
+	if (sender?.tab?.id != null) return sender.tab.id;
+
+	const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+	if (tab?.id == null || !/^https?:/.test(tab.url ?? "")) return null;
+	return tab.id;
+}
 
 onMessage("openPreferences", () => {
 	browser.tabs.create({ url: "https://polytoria.com/my/settings/kiln" });
 });
 
-onMessage("registerBootstrapElements", async () => {
-	const tabs = await browser.tabs.query({ active: true, currentWindow: true });
-	if (!tabs[0]) return;
+onMessage("registerBootstrapElements", async ({ sender }) => {
+	const tabId = await resolveInjectableTabId(sender);
+	if (tabId == null) return;
 
 	browser.scripting.executeScript({
-		target: { tabId: tabs[0].id! },
+		target: { tabId },
 		world: "MAIN",
 		func: () => {
 			//@ts-expect-error
@@ -256,16 +263,13 @@ onMessage("registerBootstrapElements", async () => {
 	});
 });
 
-onMessage("getStreakFreezeCount", () =>
+onMessage("getStreakFreezeCount", ({ sender }) =>
 	handle(async () => {
-		const tabs = await browser.tabs.query({
-			active: true,
-			currentWindow: true,
-		});
-		if (!tabs[0]?.id) throw new Error("No active tab");
+		const tabId = await resolveInjectableTabId(sender);
+		if (tabId == null) throw new Error("No injectable tab");
 
 		const results = await browser.scripting.executeScript({
-			target: { tabId: tabs[0].id },
+			target: { tabId },
 			world: "MAIN",
 			func: () => {
 				//@ts-expect-error
@@ -278,12 +282,12 @@ onMessage("getStreakFreezeCount", () =>
 	}),
 );
 
-onMessage("disableFeedAutoScroll", async () => {
-	const tabs = await browser.tabs.query({ active: true, currentWindow: true });
-	if (!tabs[0]) return;
+onMessage("disableFeedAutoScroll", async ({ sender }) => {
+	const tabId = await resolveInjectableTabId(sender);
+	if (tabId == null) return;
 
 	browser.scripting.executeScript({
-		target: { tabId: tabs[0].id! },
+		target: { tabId },
 		world: "MAIN",
 		func: () => {
 			//@ts-expect-error
@@ -311,12 +315,12 @@ onMessage("disableFeedAutoScroll", async () => {
 	});
 });
 
-onMessage("disablePlacesAutoScroll", async () => {
-	const tabs = await browser.tabs.query({ active: true, currentWindow: true });
-	if (!tabs[0]) return;
+onMessage("disablePlacesAutoScroll", async ({ sender }) => {
+	const tabId = await resolveInjectableTabId(sender);
+	if (tabId == null) return;
 
 	browser.scripting.executeScript({
-		target: { tabId: tabs[0].id! },
+		target: { tabId },
 		world: "MAIN",
 		func: () => {
 			//@ts-expect-error

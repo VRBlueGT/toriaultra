@@ -32,6 +32,19 @@ export default defineContentScript({
 					return;
 				}
 
+				const pathSegments = window.location.pathname.split("/");
+
+				if (
+					pathSegments[2] === "create" &&
+					["clothing", "shirt", "pants"].includes(pathSegments[3])
+				) {
+					if (values.enabled.includes("clothingUploadBodyPreviews")) {
+						const { clothingCreateBodyPreview } = await import("./create");
+						clothingCreateBodyPreview(showDisclosures);
+					}
+					return;
+				}
+
 				if (!window.location.pathname.split("/")[2]) {
 					if (import.meta.env.MODE == "development") {
 						console.log("[Kiln] Running discovery page functions: ", discovery);
@@ -88,6 +101,9 @@ export default defineContentScript({
 						view.hoardersList(
 							values.config.hoardersList?.minCopies ?? 2,
 							values.config.hoardersList?.showAvatars ?? true,
+							values.config.collectibleOwnerLabels?.inactiveDays ?? 30,
+							values.enabled.includes("collectibleOwnerLabels"),
+							values.config.collectibleOwnerLabels?.ogYear ?? 2023,
 							showDisclosures,
 						);
 					}
@@ -100,6 +116,13 @@ export default defineContentScript({
 						itemDetails.data.isLimited
 					) {
 						view.nftItems(user.userId, showDisclosures);
+					}
+
+					if (
+						values.enabled.includes("nlfItems") &&
+						itemDetails.data.isLimited
+					) {
+						view.nlfItems(user.userId, showDisclosures);
 					}
 
 					if (

@@ -39,9 +39,20 @@ const MAT_TO_COLOR: Partial<Record<string, keyof AvatarIFrameState>> = {
 
 const isUrl = (v: unknown): v is string =>
 	typeof v === "string" &&
-	(v.startsWith("data:") || /^[a-z][a-z\d+.-]*:\/\//i.test(v));
+	(v.startsWith("data:") ||
+		v.startsWith("blob:") ||
+		/^[a-z][a-z\d+.-]*:\/\//i.test(v));
 
 async function loadImage(url: string): Promise<HTMLImageElement> {
+	if (url.startsWith("blob:") || url.startsWith("data:")) {
+		return new Promise((resolve, reject) => {
+			const img = new Image();
+			img.onload = () => resolve(img);
+			img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
+			img.src = url;
+		});
+	}
+
 	const buf = await fetch(url).then((r) => r.arrayBuffer());
 	const objUrl = URL.createObjectURL(new Blob([buf], { type: "image/png" }));
 	return new Promise((resolve, reject) => {
@@ -195,9 +206,11 @@ export class AvatarRenderer {
 	>();
 	private accessoryPivot = new Map<string, THREE.Vector3>();
 
-	constructor(canvas: HTMLCanvasElement) {
+	constructor(canvas: HTMLCanvasElement, options?: { transparent?: boolean }) {
 		this.scene = new THREE.Scene();
-		this.scene.background = new THREE.Color(0x1a1a1a);
+		if (!options?.transparent) {
+			this.scene.background = new THREE.Color(0x1a1a1a);
+		}
 
 		const w = canvas.clientWidth || 300;
 		const h = canvas.clientHeight || 314;
@@ -205,7 +218,12 @@ export class AvatarRenderer {
 		this.camera = new THREE.PerspectiveCamera(40, w / h, 0.01, 100);
 		this.camera.position.set(0, 3, 6);
 
-		this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+		this.renderer = new THREE.WebGLRenderer({
+			canvas,
+			antialias: true,
+			alpha: options?.transparent,
+		});
+		if (options?.transparent) this.renderer.setClearColor(0x000000, 0);
 		this.renderer.setPixelRatio(window.devicePixelRatio);
 		this.renderer.setSize(w, h, false);
 		this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -230,6 +248,7 @@ export class AvatarRenderer {
 		this.ro.observe(canvas);
 
 		this.loader.register((parser: any) => ({
+			name: "kiln-name-restore",
 			afterRoot: () => {
 				for (const node of (parser.json.nodes ?? []) as { name?: string }[]) {
 					if (!node.name) continue;
@@ -516,7 +535,7 @@ export class AvatarRenderer {
 		}
 	}
 
-	async exportGLB(): Promise<ArrayBuffer> {
+	async exportGLB(includeAnimations = true): Promise<ArrayBuffer> {
 		if (!this.avatarGroup) throw new Error("No avatar loaded");
 		const { GLTFExporter } = await import(
 			"three/addons/exporters/GLTFExporter.js"
@@ -527,7 +546,7 @@ export class AvatarRenderer {
 				this.avatarGroup!,
 				(result) => resolve(result as ArrayBuffer),
 				reject,
-				{ binary: true, animations: this.clips },
+				{ binary: true, animations: includeAnimations ? this.clips : [] },
 			);
 		});
 		return patchGLBNodeNames(raw, this.nameRestoreMap);

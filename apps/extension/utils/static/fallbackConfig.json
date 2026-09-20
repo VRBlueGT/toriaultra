@@ -1,6 +1,5 @@
 {
-	"latestVersion": "2.11.0",
-	"updateLogURL": "https://kiln.indexx.dev/blog/v2-3-0",
+	"latestVersion": "2.13.0",
 	"notices": [],
 	"apiAvailability": {
 		"public": true,
@@ -12,26 +11,22 @@
 	"flags": {
 		"apis.usePublicApiProxy": false,
 		"apis.isExtensionApiStable": true,
-		"features.timePlayed.enabled": false,
 		"features.placeConsumablesTab.enabled": false,
-		"features.outfitManagement.enabled": false
+		"features.outfitManagement.enabled": false,
+		"features.customProfileThemes.useThisTheme": false
 	},
 	"limits": {
 		"maxPinnedWorlds": 25,
 		"maxNFTItems": 50,
 		"maxNFTSerialsPerItem": 10,
+		"maxNLFItems": 50,
 		"maxBlockedTraders": 200,
 		"maxPublishedThemes": 15,
 		"maxPinnedAchievements": 5,
-		"minReviewPlaytimeMinutes": 5
+		"minReviewPlaytimeMinutes": 5,
+		"maxStarredImages": 100
 	},
 	"users": {
-		"generativeAI": [
-			48196,
-			767253,
-			48195,
-			826580,
-			826659
-		]
+		"generativeAI": [48196, 767253, 48195, 826580, 826659]
 	}
 }

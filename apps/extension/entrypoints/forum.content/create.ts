@@ -15,36 +15,109 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {
+	_forumDrafts,
+	_forumImages,
+	type ForumDraft,
+	removeForumImage,
+	type SavedForumImage,
+} from "@/utils/storage";
+import {
+	applyKilnDisclosureTitle,
 	createKilnDisclosureBadge,
+	createModal,
+	formatNotificationRelativeTime,
 	getProfanityFilter,
+	kilnDisclosureBadgeHtml,
 } from "@/utils/utilities";
 
 const DEFAULT_MAX_CHARS = 5000;
+const DRAFT_AUTOSAVE_DELAY = 1500;
 
-export function improvedForumComposer(
-	showCharacterCount: boolean,
-	showMarkdownBtns: boolean,
-	autoShowPreview: boolean,
-	highlightFilteredWords: boolean,
-	showDisclosures: boolean,
-) {
-	const textarea = document.querySelector<HTMLTextAreaElement>(
+function getComposerTextarea(): HTMLTextAreaElement | null {
+	return document.querySelector<HTMLTextAreaElement>(
 		'textarea[name="content"]',
 	);
+}
+
+interface ComposerToolbar {
+	start: HTMLElement;
+	end: HTMLElement;
+}
+
+interface ComposerEditor {
+	wrapper: HTMLElement;
+	container: HTMLElement;
+}
+
+const composerToolbars = new WeakMap<HTMLTextAreaElement, ComposerToolbar>();
+const composerEditors = new WeakMap<HTMLTextAreaElement, ComposerEditor>();
+
+function getComposerToolbar(
+	textarea: HTMLTextAreaElement,
+	showDisclosures: boolean,
+): ComposerToolbar {
+	const existing = composerToolbars.get(textarea);
+	if (existing) return existing;
+
+	const root = document.createElement("div");
+	root.className = "d-flex align-items-center gap-1 mb-1 flex-wrap";
+
+	const start = document.createElement("div");
+	start.className = "d-flex align-items-center gap-1 flex-wrap";
+
+	const end = document.createElement("div");
+	end.className = "ms-auto d-flex align-items-center gap-1";
+
+	if (showDisclosures) end.appendChild(createKilnDisclosureBadge());
+
+	root.append(start, end);
+
+	const anchor = composerEditors.get(textarea)?.wrapper ?? textarea;
+	anchor.parentElement?.insertBefore(root, anchor);
+
+	const toolbar = { start, end };
+	composerToolbars.set(textarea, toolbar);
+	return toolbar;
+}
+
+function getComposerEditor(textarea: HTMLTextAreaElement): ComposerEditor {
+	const existing = composerEditors.get(textarea);
+	if (existing) return existing;
+
+	const wrapper = document.createElement("div");
+	wrapper.className = "d-flex gap-2";
+	wrapper.style.minHeight =
+		textarea.style.height || `${textarea.offsetHeight}px`;
+
+	const container = document.createElement("div");
+	container.style.cssText = "position: relative; width: 100%;";
+
+	textarea.parentElement?.insertBefore(wrapper, textarea);
+	container.appendChild(textarea);
+	wrapper.appendChild(container);
+
+	const editor = { wrapper, container };
+	composerEditors.set(textarea, editor);
+	return editor;
+}
+
+export function forumMarkdownButtons(showDisclosures: boolean) {
+	const textarea = getComposerTextarea();
 	if (!textarea) return;
-
-	const MAX_CHARS =
-		textarea.maxLength > 0 ? textarea.maxLength : DEFAULT_MAX_CHARS;
-
-	const toolbar = document.createElement("div");
-	toolbar.className = "d-flex align-items-center gap-1 mb-1 flex-wrap";
 
 	const buttons = [
 		{
+			icon: "fa-bold",
+			title: "Bold",
+			prefix: "__",
+			suffix: "__",
+			placeholder: "bold text",
+		},
+		{
 			icon: "fa-italic",
 			title: "Italic",
-			prefix: "*",
-			suffix: "*",
+			prefix: "_",
+			suffix: "_",
 			placeholder: "italic text",
 		},
 		{
@@ -70,30 +143,30 @@ export function improvedForumComposer(
 		},
 	];
 
-	if (showMarkdownBtns) {
-		for (const btn of buttons) {
-			const button = document.createElement("button");
-			button.type = "button";
-			button.className = "btn btn-sm btn-outline-secondary";
-			button.innerHTML = `<i class="fas ${btn.icon}"></i>`;
-			button.title = btn.title;
-			button.addEventListener("click", () => {
-				wrapSelection(textarea, btn.prefix, btn.suffix, btn.placeholder);
-				textarea.focus();
-			});
-			toolbar.appendChild(button);
-		}
+	const { start } = getComposerToolbar(textarea, showDisclosures);
+	for (const btn of buttons) {
+		const button = document.createElement("button");
+		button.type = "button";
+		button.className = "btn btn-sm btn-outline-secondary";
+		button.innerHTML = `<i class="fas ${btn.icon}"></i>`;
+		button.title = btn.title;
+		button.addEventListener("click", () => {
+			wrapSelection(textarea, btn.prefix, btn.suffix, btn.placeholder);
+			textarea.focus();
+		});
+		start.appendChild(button);
 	}
+}
 
-	const previewBtn = document.createElement("button");
-	previewBtn.type = "button";
-	previewBtn.className = "btn btn-sm btn-outline-secondary";
-	previewBtn.innerHTML = '<i class="fas fa-eye"></i>';
-	previewBtn.title = "Toggle Preview";
-	toolbar.appendChild(previewBtn);
+export function forumCharacterCount(showDisclosures: boolean) {
+	const textarea = getComposerTextarea();
+	if (!textarea) return;
+
+	const MAX_CHARS =
+		textarea.maxLength > 0 ? textarea.maxLength : DEFAULT_MAX_CHARS;
 
 	const counter = document.createElement("span");
-	counter.className = "ms-auto text-muted small";
+	counter.className = "text-muted small";
 
 	const updateCounter = () => {
 		const len = textarea.value.length;
@@ -105,42 +178,31 @@ export function improvedForumComposer(
 		}
 	};
 
-	if (showCharacterCount) {
-		textarea.addEventListener("input", updateCounter);
-		updateCounter();
-		toolbar.appendChild(counter);
-	}
+	textarea.addEventListener("input", updateCounter);
+	updateCounter();
+	getComposerToolbar(textarea, showDisclosures).end.prepend(counter);
+}
 
-	if (showDisclosures) {
-		const badge = createKilnDisclosureBadge();
-		if (!showCharacterCount) badge.classList.add("ms-auto");
-		toolbar.appendChild(badge);
-	}
-	textarea.parentElement?.insertBefore(toolbar, textarea);
+export function forumPostPreview(autoShow: boolean, showDisclosures: boolean) {
+	const textarea = getComposerTextarea();
+	if (!textarea) return;
+
+	const { start } = getComposerToolbar(textarea, showDisclosures);
+	const { wrapper, container } = getComposerEditor(textarea);
+
+	const previewBtn = document.createElement("button");
+	previewBtn.type = "button";
+	previewBtn.className = "btn btn-sm btn-outline-secondary";
+	previewBtn.innerHTML = '<i class="fas fa-eye"></i>';
+	previewBtn.title = "Toggle Preview";
+	start.appendChild(previewBtn);
 
 	const preview = document.createElement("div");
 	preview.className =
 		"form-control bg-transparent border border-secondary d-none";
 	preview.style.cssText =
 		"overflow-y: auto; white-space: pre-wrap; word-break: break-word;";
-
-	const wrapper = document.createElement("div");
-	wrapper.className = "d-flex gap-2";
-	wrapper.style.minHeight =
-		textarea.style.height || `${textarea.offsetHeight}px`;
-
-	const textareaContainer = document.createElement("div");
-	textareaContainer.style.cssText = "position: relative; width: 100%;";
-
-	textarea.parentElement?.insertBefore(wrapper, textarea);
-	textareaContainer.appendChild(textarea);
-	wrapper.appendChild(textareaContainer);
 	wrapper.appendChild(preview);
-
-	if (highlightFilteredWords) {
-		initFilterHighlighting(textarea, textareaContainer);
-		initTitleFilterHighlighting(textarea);
-	}
 
 	const syncHeight = () => {
 		preview.style.height = `${textarea.offsetHeight}px`;
@@ -158,7 +220,7 @@ export function improvedForumComposer(
 	const openPreview = () => {
 		if (previewOpen) return;
 		previewOpen = true;
-		textareaContainer.style.width = "50%";
+		container.style.width = "50%";
 		preview.classList.remove("d-none");
 		preview.style.width = "50%";
 		previewBtn.classList.replace("btn-outline-secondary", "btn-secondary");
@@ -167,12 +229,12 @@ export function improvedForumComposer(
 
 	const closePreview = () => {
 		previewOpen = false;
-		textareaContainer.style.width = "100%";
+		container.style.width = "100%";
 		preview.classList.add("d-none");
 		previewBtn.classList.replace("btn-secondary", "btn-outline-secondary");
 	};
 
-	if (autoShowPreview) {
+	if (autoShow) {
 		textarea.addEventListener("input", () => {
 			if (textarea.value.length > 0) openPreview();
 		});
@@ -182,6 +244,349 @@ export function improvedForumComposer(
 		if (previewOpen) closePreview();
 		else openPreview();
 	});
+}
+
+export function forumFilteredWordHighlight() {
+	const textarea = getComposerTextarea();
+	if (!textarea) return;
+
+	initFilterHighlighting(textarea, getComposerEditor(textarea).container);
+	initTitleFilterHighlighting(textarea);
+}
+
+export function forumImageLibrary() {
+	const textarea = getComposerTextarea();
+	if (!textarea) return;
+
+	const imageLibraryBtn = document.createElement("button");
+	imageLibraryBtn.type = "button";
+	imageLibraryBtn.className = "btn btn-sm btn-dark border border-secondary";
+	imageLibraryBtn.innerHTML = '<i class="fas fa-images"></i>';
+	imageLibraryBtn.title = "Starred Images";
+	imageLibraryBtn.style.cssText =
+		"position: absolute; right: 0.5rem; bottom: 0.5rem; z-index: 2;";
+	imageLibraryBtn.addEventListener("click", () => {
+		openImageLibrary(textarea);
+	});
+	getComposerEditor(textarea).container.appendChild(imageLibraryBtn);
+}
+
+const IMAGES_PER_PAGE = 24;
+
+let imageLibraryModal: HTMLDialogElement | undefined;
+let imageLibraryImages: SavedForumImage[] = [];
+let imageLibraryPage = 1;
+
+function insertAtCursor(textarea: HTMLTextAreaElement, text: string) {
+	const start = textarea.selectionStart;
+	const end = textarea.selectionEnd;
+	const val = textarea.value;
+
+	textarea.value = val.slice(0, start) + text + val.slice(end);
+	const pos = start + text.length;
+	textarea.selectionStart = textarea.selectionEnd = pos;
+
+	textarea.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function renderImageEntry(
+	image: SavedForumImage,
+	textarea: HTMLTextAreaElement,
+	onChanged: () => void,
+): HTMLElement {
+	const entry = document.createElement("div");
+	entry.className = "col-6 col-md-4 col-lg-3";
+	entry.innerHTML = `
+		<div class="border border-secondary rounded p-1 position-relative" role="button" data-kiln="insert-image" style="cursor:pointer;">
+			<img src="https://polytoria.com/markdown/image/${image.imageId}" alt="Saved image ${image.imageId}" class="w-100 rounded" style="aspect-ratio:1;object-fit:cover;" loading="lazy" />
+			<button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-2" data-kiln="remove-image" aria-label="Remove saved image"><i class="fas fa-trash"></i></button>
+		</div>
+	`;
+
+	entry
+		.querySelector<HTMLElement>('[data-kiln="insert-image"]')!
+		.addEventListener("click", (event) => {
+			if ((event.target as HTMLElement).closest('[data-kiln="remove-image"]'))
+				return;
+			insertAtCursor(textarea, `[[image:${image.imageId}]]`);
+			textarea.focus();
+			imageLibraryModal?.close();
+		});
+
+	entry
+		.querySelector<HTMLButtonElement>('[data-kiln="remove-image"]')!
+		.addEventListener("click", async (event) => {
+			event.stopPropagation();
+			await removeForumImage(image.imageId);
+			onChanged();
+		});
+
+	return entry;
+}
+
+function renderImageLibraryPage(textarea: HTMLTextAreaElement): void {
+	const body =
+		imageLibraryModal?.querySelector<HTMLElement>("#kiln-images-body");
+	const prevBtn = imageLibraryModal?.querySelector<HTMLButtonElement>(
+		'[data-kiln="images-prev"]',
+	);
+	const nextBtn = imageLibraryModal?.querySelector<HTMLButtonElement>(
+		'[data-kiln="images-next"]',
+	);
+	const pageLabel = imageLibraryModal?.querySelector<HTMLElement>(
+		'[data-kiln="images-page"]',
+	);
+	if (!body || !prevBtn || !nextBtn || !pageLabel) return;
+
+	if (imageLibraryImages.length === 0) {
+		body.innerHTML = `<div class="text-center text-muted py-3">No starred images yet. Hover an image in a forum post and click the star to save it here.</div>`;
+		pageLabel.textContent = "";
+		prevBtn.disabled = true;
+		nextBtn.disabled = true;
+		return;
+	}
+
+	const totalPages = Math.max(
+		1,
+		Math.ceil(imageLibraryImages.length / IMAGES_PER_PAGE),
+	);
+	imageLibraryPage = Math.min(Math.max(imageLibraryPage, 1), totalPages);
+
+	const start = (imageLibraryPage - 1) * IMAGES_PER_PAGE;
+	const pageImages = imageLibraryImages.slice(start, start + IMAGES_PER_PAGE);
+
+	const onChanged = () => renderImageLibraryList(textarea);
+	const grid = document.createElement("div");
+	grid.className = "row g-2";
+	for (const image of pageImages) {
+		grid.appendChild(renderImageEntry(image, textarea, onChanged));
+	}
+	body.innerHTML = "";
+	body.appendChild(grid);
+
+	pageLabel.textContent = `Page ${imageLibraryPage} of ${totalPages}`;
+	prevBtn.disabled = imageLibraryPage <= 1;
+	nextBtn.disabled = imageLibraryPage >= totalPages;
+}
+
+async function renderImageLibraryList(
+	textarea: HTMLTextAreaElement,
+): Promise<void> {
+	imageLibraryImages = Object.values(await _forumImages.getValue()).sort(
+		(a, b) => b.starredAt.localeCompare(a.starredAt),
+	);
+	imageLibraryPage = 1;
+	renderImageLibraryPage(textarea);
+}
+
+function openImageLibrary(textarea: HTMLTextAreaElement) {
+	if (!imageLibraryModal) {
+		imageLibraryModal = createModal("lg");
+		imageLibraryModal.innerHTML = `
+			<div class="d-flex justify-content-between align-items-center mb-3">
+				<h5 class="mb-0 text-white">
+					<i class="fas fa-images me-2"></i>Starred Images
+				</h5>
+				<button type="button" class="btn btn-sm btn-secondary" data-kiln="close-images">✕</button>
+			</div>
+			<div id="kiln-images-body"></div>
+			<div class="d-flex justify-content-between align-items-center mt-3">
+				<button type="button" class="btn btn-sm btn-outline-secondary" data-kiln="images-prev" disabled>‹ Prev</button>
+				<span data-kiln="images-page" class="small text-muted"></span>
+				<button type="button" class="btn btn-sm btn-outline-secondary" data-kiln="images-next" disabled>Next ›</button>
+			</div>
+		`;
+		imageLibraryModal
+			.querySelector<HTMLButtonElement>('[data-kiln="close-images"]')!
+			.addEventListener("click", () => imageLibraryModal?.close());
+		imageLibraryModal
+			.querySelector<HTMLButtonElement>('[data-kiln="images-prev"]')!
+			.addEventListener("click", () => {
+				imageLibraryPage -= 1;
+				renderImageLibraryPage(textarea);
+			});
+		imageLibraryModal
+			.querySelector<HTMLButtonElement>('[data-kiln="images-next"]')!
+			.addEventListener("click", () => {
+				imageLibraryPage += 1;
+				renderImageLibraryPage(textarea);
+			});
+	}
+
+	renderImageLibraryList(textarea).then(() => imageLibraryModal?.showModal());
+}
+
+export function forumDrafts(showDisclosures: boolean, autoRestore: boolean) {
+	const form = document.querySelector<HTMLFormElement>("#create-form");
+	const titleInput = form?.querySelector<HTMLInputElement>(
+		'input[name="title"]',
+	);
+	const contentTextarea = form?.querySelector<HTMLTextAreaElement>(
+		'textarea[name="content"]',
+	);
+	const categoryInput = form?.querySelector<HTMLInputElement>(
+		'input[name="categoryID"]',
+	);
+	const submitButton = form?.querySelector<HTMLButtonElement>("#submit");
+	if (
+		!form ||
+		!titleInput ||
+		!contentTextarea ||
+		!categoryInput ||
+		!submitButton
+	)
+		return;
+
+	const getDraftId = (): string => String(Number(categoryInput.value) || 0);
+
+	const hasUnsavedContent = (): boolean =>
+		titleInput.value.trim().length > 0 ||
+		contentTextarea.value.trim().length > 0;
+
+	const writeDraft = async (): Promise<void> => {
+		const id = getDraftId();
+		const current = await _forumDrafts.getValue();
+		await _forumDrafts.setValue({
+			...current,
+			[id]: {
+				id,
+				categoryId: Number(categoryInput.value) || 0,
+				title: titleInput.value,
+				content: contentTextarea.value,
+				updatedAt: new Date().toISOString(),
+			},
+		});
+	};
+
+	const deleteDraft = async (id: string): Promise<void> => {
+		const current = await _forumDrafts.getValue();
+		const { [id]: _removed, ...rest } = current;
+		await _forumDrafts.setValue(rest);
+	};
+
+	const loadDraftIntoForm = (draft: ForumDraft): void => {
+		titleInput.value = draft.title;
+		contentTextarea.value = draft.content;
+		categoryInput.value = String(draft.categoryId);
+		titleInput.dispatchEvent(new Event("input", { bubbles: true }));
+		contentTextarea.dispatchEvent(new Event("input", { bubbles: true }));
+	};
+
+	const draftsButton = document.createElement("button");
+	draftsButton.type = "button";
+	draftsButton.className = "btn btn-outline-secondary me-2";
+	draftsButton.innerHTML = `<i class="fas fa-box-archive me-1"></i>Drafts${kilnDisclosureBadgeHtml(showDisclosures)}`;
+	applyKilnDisclosureTitle(draftsButton, showDisclosures);
+
+	submitButton.insertAdjacentElement("beforebegin", draftsButton);
+
+	let modal: HTMLDialogElement | undefined;
+
+	const renderDraftEntry = (
+		draft: ForumDraft,
+		onChanged: () => void,
+	): HTMLElement => {
+		const entry = document.createElement("div");
+		entry.className = "border border-secondary rounded p-2 mb-2";
+
+		const preview = draft.content.replace(/\s+/g, " ").trim();
+		const truncatedPreview =
+			preview.length > 140 ? `${preview.slice(0, 137)}...` : preview;
+
+		entry.innerHTML = `
+			<div class="d-flex justify-content-between align-items-start gap-2">
+				<div>
+					<h6 class="mb-1">${escapeHtml(draft.title || "Untitled draft")}</h6>
+					<div class="text-muted small">${escapeHtml(truncatedPreview) || "No content"}</div>
+					<small class="text-muted">Updated ${formatNotificationRelativeTime(new Date(draft.updatedAt))}</small>
+				</div>
+				<div class="d-flex gap-1">
+					<button type="button" class="btn btn-sm btn-outline-primary" data-kiln="load-draft">Load</button>
+					<button type="button" class="btn btn-sm btn-outline-danger" data-kiln="delete-draft"><i class="fas fa-trash"></i></button>
+				</div>
+			</div>
+		`;
+
+		entry
+			.querySelector<HTMLButtonElement>('[data-kiln="load-draft"]')!
+			.addEventListener("click", () => {
+				loadDraftIntoForm(draft);
+				modal?.close();
+			});
+
+		entry
+			.querySelector<HTMLButtonElement>('[data-kiln="delete-draft"]')!
+			.addEventListener("click", async () => {
+				await deleteDraft(draft.id);
+				onChanged();
+			});
+
+		return entry;
+	};
+
+	const renderDraftsList = async (): Promise<void> => {
+		const body = modal?.querySelector<HTMLElement>("#kiln-drafts-body");
+		if (!body) return;
+
+		const all = await _forumDrafts.getValue();
+		const drafts = Object.values(all).sort((a, b) =>
+			b.updatedAt.localeCompare(a.updatedAt),
+		);
+
+		body.innerHTML = "";
+		if (drafts.length === 0) {
+			body.innerHTML = `<div class="text-center text-muted py-3">No saved drafts yet.</div>`;
+			return;
+		}
+
+		for (const draft of drafts) {
+			body.appendChild(renderDraftEntry(draft, renderDraftsList));
+		}
+	};
+
+	draftsButton.addEventListener("click", async () => {
+		if (!modal) {
+			modal = createModal("lg");
+			modal.innerHTML = `
+				<div class="d-flex justify-content-between align-items-center mb-3">
+					<h5 class="mb-0 text-white">
+						<i class="fas fa-box-archive me-2"></i>Forum Drafts${kilnDisclosureBadgeHtml(showDisclosures)}
+					</h5>
+					<button type="button" class="btn btn-sm btn-secondary" data-kiln="close-drafts">✕</button>
+				</div>
+				<div id="kiln-drafts-body"></div>
+			`;
+			modal
+				.querySelector<HTMLButtonElement>('[data-kiln="close-drafts"]')!
+				.addEventListener("click", () => modal?.close());
+		}
+
+		await renderDraftsList();
+		modal.showModal();
+	});
+
+	form.addEventListener("submit", () => {
+		deleteDraft(getDraftId());
+	});
+
+	let autosaveTimer: ReturnType<typeof setTimeout> | undefined;
+	const scheduleAutosave = (): void => {
+		clearTimeout(autosaveTimer);
+		autosaveTimer = setTimeout(() => {
+			if (hasUnsavedContent()) writeDraft();
+			else deleteDraft(getDraftId());
+		}, DRAFT_AUTOSAVE_DELAY);
+	};
+
+	titleInput.addEventListener("input", scheduleAutosave);
+	contentTextarea.addEventListener("input", scheduleAutosave);
+
+	if (autoRestore) {
+		_forumDrafts.getValue().then((all) => {
+			const draft = all[getDraftId()];
+			if (draft && !hasUnsavedContent()) loadDraftIntoForm(draft);
+		});
+	}
 }
 
 type FilterField = HTMLTextAreaElement | HTMLInputElement;
@@ -385,34 +790,53 @@ function renderMarkdown(text: string): string {
 		.replace(/</g, "&lt;")
 		.replace(/>/g, "&gt;");
 
-	const codeBlocks: string[] = [];
-	const withoutCodeBlocks = escaped.replace(
-		/```\w*\n?([\s\S]*?)```/g,
-		(_match, code: string) => {
-			const token = `<codeblock-${codeBlocks.length}>`;
-			codeBlocks.push(
-				`<pre class="hljs markdown-code"><code>${code.replace(/\n/g, "<br>")}</code></pre>`,
-			);
-			return token;
-		},
-	);
+	const tokens: string[] = [];
+	const tokenize = (html: string): string => {
+		tokens.push(html);
+		return `<kilnmd-${tokens.length - 1}>`;
+	};
 
-	const rendered = withoutCodeBlocks
+	const withoutLiterals = escaped
+		.replace(/```\w*\n?([\s\S]*?)```/g, (_match, code: string) =>
+			tokenize(
+				`<pre class="hljs markdown-code"><code>${code.replace(/\n/g, "<br>")}</code></pre>`,
+			),
+		)
+		.replace(/`([^`]+)`/g, (_match, code: string) =>
+			tokenize(`<code>${code}</code>`),
+		)
+		.replace(/\[\[image:(\d+)\]\]/g, (_match, id: string) =>
+			tokenize(
+				`<img src="https://polytoria.com/markdown/image/${id}" alt="" loading="lazy" style="max-width:100%;">`,
+			),
+		);
+
+	const rendered = withoutLiterals
 		.replace(/^###### (.+)$/gm, "<h6>$1</h6>")
 		.replace(/^##### (.+)$/gm, "<h5>$1</h5>")
 		.replace(/^#### (.+)$/gm, "<h4>$1</h4>")
 		.replace(/^### (.+)$/gm, "<h3>$1</h3>")
 		.replace(/^## (.+)$/gm, "<h2>$1</h2>")
 		.replace(/^# (.+)$/gm, "<h1>$1</h1>")
-		.replace(/`([^`]+)`/g, "<code>$1</code>")
-		.replace(/\*(.+?)\*/g, "<em>$1</em>")
+		.replace(/__(.+?)__/g, "<strong>$1</strong>")
+		.replace(/_(.+?)_/g, "<em>$1</em>")
 		.replace(/~~(.+?)~~/g, "<s>$1</s>")
 		.replace(/\n/g, "<br>");
 
 	return rendered.replace(
-		/<codeblock-(\d+)>/g,
-		(_match, idx: string) => codeBlocks[Number(idx)],
+		/<kilnmd-(\d+)>/g,
+		(_match, idx: string) => tokens[Number(idx)],
 	);
+}
+
+function hasDelimiterAt(value: string, index: number, delim: string): boolean {
+	if (index < 0 || value.slice(index, index + delim.length) !== delim)
+		return false;
+
+	const char = delim[0];
+	if (![...delim].every((c) => c === char)) return true;
+
+	return value[index - 1] !== char && value[index + delim.length] !== char;
 }
 
 function wrapSelection(
@@ -426,12 +850,12 @@ function wrapSelection(
 	const val = textarea.value;
 
 	const insideWrapped =
-		val.slice(start, start + prefix.length) === prefix &&
-		(suffix === "" || val.slice(end - suffix.length, end) === suffix);
+		hasDelimiterAt(val, start, prefix) &&
+		(suffix === "" || hasDelimiterAt(val, end - suffix.length, suffix));
 
 	const outsideWrapped =
-		val.slice(start - prefix.length, start) === prefix &&
-		(suffix === "" || val.slice(end, end + suffix.length) === suffix);
+		hasDelimiterAt(val, start - prefix.length, prefix) &&
+		(suffix === "" || hasDelimiterAt(val, end, suffix));
 
 	if (insideWrapped) {
 		const inner = val.slice(start + prefix.length, end - (suffix.length || 0));

@@ -606,6 +606,18 @@ onMessage("deleteAvatarOutfit", ({ data: { userId, outfitId } }) =>
 	),
 );
 
+onMessage("exportUserData", ({ data: userId }) =>
+	handle(() =>
+		withAuthSession(userId, (token, config) =>
+			safeFetch(
+				`${config.resolvedUrls.extension}users/${userId}/export`,
+				Extension.DataExportApi,
+				{ headers: { Authorization: `Bearer ${token}` } },
+			),
+		),
+	),
+);
+
 onMessage("getUserCharts", ({ data: userId }) =>
 	handle(async () => {
 		return pullKVCache(

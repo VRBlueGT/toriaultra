@@ -283,6 +283,22 @@ export const UserCreationsApiSchema = z.object({
 });
 export type UserCreationsApi = z.infer<typeof UserCreationsApiSchema>;
 
+// Response of the site's internal GET /api/avatar/outfits (the signed-in user's outfits)
+export const OutfitsApiSchema = z.object({
+	meta: z.object({
+		currentPage: z.number().int(),
+		lastPage: z.number().int(),
+	}),
+	data: z.array(
+		z.object({
+			id: z.number().int(),
+			name: z.string(),
+			avatar: z.object({ thumbnail: z.string() }),
+		}),
+	),
+});
+export type OutfitsApi = z.infer<typeof OutfitsApiSchema>;
+
 export const IndividualOwnerApiSchema = z.object({
 	owned: z.boolean(),
 	inventory: z

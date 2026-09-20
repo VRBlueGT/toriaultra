@@ -56,14 +56,6 @@
 					"text": "Limit of 25 worlds pinned at once."
 				}
 			],
-			"config": [
-				{
-					"type": "check",
-					"subsetting": "notifyOnUpdate",
-					"label": "Notify Me When a Pinned World Updates",
-					"default": true
-				}
-			],
 			"tags": [
 				"expression"
 			]
@@ -83,10 +75,18 @@
 			"desc": "Get a quick link to the popular person everyone is talking about's profile!",
 			"id": "forumMentions",
 			"defaultEnabled": true,
+			"config": [
+				{
+					"type": "check",
+					"subsetting": "notifications",
+					"label": "Notify Me When I'm Mentioned",
+					"default": true
+				}
+			],
 			"notes": [
 				{
 					"type": "warning",
-					"text": "Forum mentions do not notify the user or show up as a notification on their account."
+					"text": "Polytoria does not notify users of forum mentions. Mention notifications are found by searching the forum for your username, so they may take a moment to show up."
 				}
 			],
 			"tags": [
@@ -380,7 +380,7 @@
 		},
 		{
 			"name": "Show Outfit Cost on Profiles",
-			"desc": "Quickly see how many bricks a user spent on their character! Located next to the \"Avatar\" text at the top of profiles.",
+			"desc": "Quickly see how many bricks a user spent on their avatar! Located next to the \"Avatar\" text at the top of profiles.",
 			"id": "outfitCost",
 			"defaultEnabled": true,
 			"tags": [
@@ -426,7 +426,7 @@
 				{
 					"type": "check",
 					"subsetting": "showAvatars",
-					"label": "Show Character Icons",
+					"label": "Show Avatar Icons",
 					"default": false
 				},
 				{
@@ -517,8 +517,7 @@
 			"desc": "Adds an \"Owner Check\" button next to the \"Not for Trade\" button on collectible item pages. Enter someone's username and it'll tell you whether they own it or not and if so what serial!",
 			"id": "itemOwnerCheck",
 			"tags": [
-				"economy",
-				"new"
+				"economy"
 			]
 		},
 		{
@@ -647,8 +646,8 @@
 			]
 		},
 		{
-			"name": "Character Sandbox",
-			"desc": "Create a character with all the item possibilities available to your heart's content! Sandbox can be accessed from the button under the \"Body Colors\" section on the avatar customization page.",
+			"name": "Avatar Sandbox",
+			"desc": "Create an avatar with all the item possibilities available to your heart's content! Sandbox can be accessed from the button under the \"Body Colors\" section on the avatar customization page.",
 			"id": "avatarSandbox",
 			"defaultEnabled": true,
 			"notes": [
@@ -993,6 +992,12 @@
 			"desc": "Shrinks the \"2.0\" label placed on every 2.0-compatible world with a more subtle version of your choosing. Applies to the worlds page.",
 			"id": "subtleV2Labels",
 			"defaultEnabled": true,
+			"notes": [
+				{
+					"type": "info",
+					"text": "Only takes effect on the worlds page when Legacy World Discovery Layout is enabled."
+				}
+			],
 			"config": [
 				{
 					"type": "select",
@@ -1170,6 +1175,14 @@
 			"name": "Legacy World View Layout",
 			"desc": "Revert the world page to be the old layout from before February 2026.",
 			"id": "legacyWorldViewLayout",
+			"config": [
+				{
+					"type": "check",
+					"subsetting": "newerFeatures",
+					"label": "Add Newer Features (Follow & Favorite Buttons)",
+					"default": true
+				}
+			],
 			"notes": [
 				{
 					"type": "warning",
@@ -1177,8 +1190,7 @@
 				}
 			],
 			"tags": [
-				"expression",
-				"experimental"
+				"expression"
 			]
 		},
 		{
@@ -1320,6 +1332,10 @@
 				{
 					"type": "info",
 					"text": "Reviews are only visible to other Kiln users."
+				},
+				{
+					"type": "warning",
+					"text": "Polytoria is planning on implementing their own version of world reviews. When that happens, you *should* be able to easily migrate all of your Kiln reviews to the official system."
 				}
 			],
 			"tags": [
@@ -1327,37 +1343,56 @@
 			]
 		},
 		{
-			"name": "Improved Forum Composer",
-			"desc": "Postfarm with ease with an improved composer! (jk.. if you postfarm.. uh don't.. or do, I don't judge!)",
-			"id": "improvedForumComposer",
+			"name": "Forum Composer Character Count",
+			"desc": "Check to see if your rant is too long for the masses!",
+			"id": "forumCharacterCount",
+			"defaultEnabled": true,
+			"tags": [
+				"utility"
+			]
+		},
+		{
+			"name": "Forum Composer Markdown Tools",
+			"desc": "Quickly apply markdown to your forum posts with easy to use formatting buttons!",
+			"id": "forumMarkdownButtons",
+			"defaultEnabled": true,
+			"tags": [
+				"utility"
+			]
+		},
+		{
+			"name": "Forum Post Preview",
+			"desc": "Check if your markdown looks alright before posting your hot takes and drama or whatever forumers post.",
+			"id": "forumPostPreview",
 			"defaultEnabled": true,
 			"config": [
 				{
 					"type": "check",
-					"subsetting": "showCharacterCount",
-					"label": "Show Character Count",
-					"default": true
-				},
-				{
-					"type": "check",
-					"subsetting": "showMarkdownBtns",
-					"label": "Show Markdown Buttons",
-					"default": true
-				},
-				{
-					"type": "check",
-					"subsetting": "autoShowPreview",
+					"subsetting": "autoShow",
 					"label": "Automatically Show Preview",
 					"default": false
-				},
-				{
-					"type": "check",
-					"subsetting": "highlightFilteredWords",
-					"label": "Highlight Words Blocked by the Site Filter",
-					"default": true
 				}
 			],
 			"tags": [
+				"utility"
+			]
+		},
+		{
+			"name": "Forum Filtered Word Highlighting",
+			"desc": "Check if your forum post draft contains any filtered words before posting it!",
+			"id": "forumFilteredWordHighlight",
+			"defaultEnabled": true,
+			"tags": [
+				"utility"
+			]
+		},
+		{
+			"name": "Forum Starred Image Gallery",
+			"desc": "Keep coming back to an image? Star it, and re-use it later with ease!",
+			"id": "forumImageLibrary",
+			"defaultEnabled": true,
+			"tags": [
+				"new",
 				"utility"
 			]
 		},
@@ -1395,6 +1430,12 @@
 			"name": "Disable Infinite Scrolling",
 			"desc": "Replaces automatic load-on-scroll pages with a manual \"Load More\" button, so content only loads when you ask for it.",
 			"id": "disableInfiniteScrolling",
+			"notes": [
+				{
+					"type": "info",
+					"text": "The Worlds Page option only takes effect when Legacy World Discovery Layout is enabled."
+				}
+			],
 			"config": [
 				{
 					"type": "check",
@@ -1519,13 +1560,13 @@
 		},
 		{
 			"name": "Bookmarked Threads",
-			"desc": "Adds a bookmark button to forum posts and adds a \"Bookmarks\" button below the forum search bar to view all of your bookmarked threads.",
+			"desc": "Adds a bookmark button to forum threads and replies, and adds a \"Bookmarks\" button below the forum search bar to view all of your bookmarked threads and replies.",
 			"id": "bookmarkedThreads",
 			"defaultEnabled": true,
 			"notes": [
 				{
 					"type": "info",
-					"text": "Bookmarked threads are private and do not sync, regardless of if you have a linked Kiln account."
+					"text": "Bookmarked threads and replies are private and do not sync, regardless of if you have a linked Kiln account."
 				}
 			],
 			"tags": [
@@ -1591,8 +1632,7 @@
 				}
 			],
 			"tags": [
-				"social",
-				"new"
+				"social"
 			]
 		},
 		{
@@ -1607,18 +1647,239 @@
 				}
 			],
 			"tags": [
-				"utility",
-				"new"
+				"utility"
 			]
 		},
 		{
 			"name": "Reorder-able Homepage",
 			"desc": "Reorder your homepage the way you want it!",
 			"id": "reorderableHomepage",
+			"defaultEnabled": true,
 			"tags": [
 				"utility",
 				"expression",
 				"new"
+			]
+		},
+		{
+			"name": "Favored Development Guild",
+			"desc": "Jump automatically to your preferred guild in the \"Guild Creations\" tab!",
+			"id": "favoredDevelopmentGuild",
+			"defaultEnabled": true,
+			"tags": [
+				"new",
+				"utility",
+				"development"
+			]
+		},
+		{
+			"name": "Like Users",
+			"desc": "Show that you really like a person! Adds a heart button to the \"Info\" section of user profiles.",
+			"id": "likeUser",
+			"requiresSync": true,
+			"defaultEnabled": true,
+			"tags": [
+				"new",
+				"social"
+			]
+		},
+		{
+			"name": "Legacy World Discovery Layout",
+			"desc": "Revert the world discovery page to be the old layout from before September 2026.",
+			"id": "legacyWorldDiscoveryLayout",
+			"tags": [
+				"new",
+				"expression"
+			]
+		},
+		{
+			"name": "Kiln Registration Date on Profiles",
+			"desc": "See if your friends are using Kiln too! If they aren't, they aren't real friends.",
+			"id": "kilnRegistrationDate",
+			"defaultEnabled": true,
+			"tags": [
+				"new",
+				"utility",
+				"social"
+			]
+		},
+		{
+			"name": "Forum Drafts",
+			"desc": "Have a post that you aren't sure if you'll get mob rushed for? Save it for later!",
+			"id": "forumDrafts",
+			"defaultEnabled": true,
+			"config": [
+				{
+					"type": "check",
+					"subsetting": "autoRestore",
+					"label": "Automatically Restore the Last Draft When Opening a New Post",
+					"default": false
+				}
+			],
+			"notes": [
+				{
+					"type": "info",
+					"text": "Drafts are private and do not sync, regardless of if you have a linked Kiln account."
+				}
+			],
+			"tags": [
+				"utility",
+				"new"
+			]
+		},
+		{
+			"name": "Server User Search",
+			"desc": "Quickly search servers for a specific user!",
+			"id": "serverUserSearch",
+			"defaultEnabled": true,
+			"tags": [
+				"utility",
+				"social",
+				"new"
+			]
+		},
+		{
+			"name": "Clothing Upload Body Previews",
+			"desc": "Preview your clothes on all of the available bodies!",
+			"id": "clothingUploadBodyPreviews",
+			"defaultEnabled": true,
+			"tags": [
+				"new",
+				"utility"
+			]
+		},
+		{
+			"name": "Disable Membership Themes",
+			"desc": "Disable membership themes to let your custom made themes shine through!",
+			"id": "disableMembershipThemes",
+			"tags": [
+				"new",
+				"expression"
+			]
+		},
+		{
+			"name": "Past Notifications",
+			"desc": "Review your historical notifications easily, adds a \"Past Notifications\" tab to the notification drawer.",
+			"id": "pastNotifications",
+			"defaultEnabled": true,
+			"tags": [
+				"new",
+				"utility"
+			]
+		},
+		{
+			"name": "Asset Approved Notifications",
+			"desc": "Get notified as soon as your asset(s) get past the moderation queue!",
+			"id": "assetApprovedNotifications",
+			"tags": [
+				"new",
+				"development"
+			]
+		},
+		{
+			"name": "Banned User Detail",
+			"desc": "Someone's profile stop being available? Be assured whether or not they are banned.",
+			"id": "bannedUserDetail",
+			"defaultEnabled": true,
+			"tags": [
+				"new",
+				"utility"
+			]
+		},
+		{
+			"name": "Custom Profile Themes",
+			"desc": "Spruce up your profile with a profile theme tailored to you! Change colors, the layout, add a banner, add stickers, add sticky notes, add effects! Create a theme by clicking \"Edit Profile Theme\" on your profile!",
+			"id": "customProfileThemes",
+			"defaultEnabled": true,
+			"requiresSync": true,
+			"config": [
+				{
+					"type": "check",
+					"subsetting": "viewOthers",
+					"label": "View other users' themes",
+					"default": true
+				}
+			],
+			"tags": [
+				"new",
+				"expression"
+			]
+		},
+		{
+			"name": "Timezone Sharing",
+			"desc": "See what time it is for other Kiln users on their profiles! You can also share your own timezone, which is detected automatically from your device.",
+			"id": "timezoneSharing",
+			"defaultEnabled": true,
+			"config": [
+				{
+					"type": "check",
+					"subsetting": "shareTimezone",
+					"label": "Share my timezone publicly",
+					"default": false
+				}
+			],
+			"notes": [
+				{
+					"type": "info",
+					"text": "Sharing your timezone requires a linked Kiln account."
+				},
+				{
+					"type": "info",
+					"text": "Only your timezone (for example, \"America/New_York\") is shared, never your exact location. Turning off sharing (or this feature) removes it from your profile."
+				}
+			],
+			"tags": [
+				"new",
+				"social"
+			]
+		},
+		{
+			"name": "Public Avatar Outfits",
+			"desc": "Share your works of art from the avatar editor!",
+			"id": "publicAvatarOutfits",
+			"defaultEnabled": true,
+			"config": [
+				{
+					"type": "check",
+					"subsetting": "shareOutfits",
+					"label": "Share my outfits publicly",
+					"default": false
+				}
+			],
+			"notes": [
+				{
+					"type": "info",
+					"text": "Sharing your outfits requires a linked Kiln account."
+				},
+				{
+					"type": "info",
+					"text": "Avatar Sandbox outfits are not shared or made public with this feature."
+				}
+			],
+			"tags": [
+				"new",
+				"social"
+			]
+		},
+		{
+			"name": "\"Not Looking For\" Items",
+			"desc": "I don't want that item, stop trying to trade me it! Auto rejects trades you receive when someone tries to give you an item you don't want.",
+			"id": "nlfItems",
+			"defaultEnabled": true,
+			"requiresSync": true,
+			"tags": [
+				"new",
+				"economy"
+			]
+		},
+		{
+			"name": "Quick Copyable World Downloads",
+			"desc": "Quickly download a world that is uncopylocked! Adds a \"Download\" button to the right of the \"Favorite\" button.",
+			"id": "downloadableCopyableWorlds",
+			"tags": [
+				"new",
+				"utility",
+				"development"
 			]
 		}
 	]

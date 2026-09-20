@@ -134,6 +134,21 @@ onMessage("checkUserActivity", ({ data: { userIds, days } }) =>
 	}),
 );
 
+onMessage("getAvatarHashes", ({ data: userIds }) =>
+	handle(async () => {
+		const config = await withApi("kiln_api", "extension");
+		const response = await safeFetch(
+			`${config.resolvedUrls.extension}activity/avatars`,
+			Extension.AvatarHashesApi,
+			{
+				method: "POST",
+				body: JSON.stringify({ userIds }),
+			},
+		);
+		return response.data;
+	}),
+);
+
 onMessage("showSecurityKeyRenamePrompt", ({ data: { currentName } }) =>
 	handle(async () => {
 		const tabs = await browser.tabs.query({
@@ -178,6 +193,121 @@ onMessage("showSecurityKeyRenamePrompt", ({ data: { currentName } }) =>
 	}),
 );
 
+function waitForTabLoad(tabId: number): Promise<void> {
+	return new Promise((resolve) => {
+		const listener = (
+			updatedTabId: number,
+			changeInfo: { status?: string },
+		) => {
+			if (updatedTabId === tabId && changeInfo.status === "complete") {
+				browser.tabs.onUpdated.removeListener(listener);
+				resolve();
+			}
+		};
+		browser.tabs.onUpdated.addListener(listener);
+	});
+}
+
+onMessage("showBannedUserAlert", ({ data: user }) =>
+	handle(async () => {
+		const tabs = await browser.tabs.query({
+			active: true,
+			currentWindow: true,
+		});
+		const tab = tabs[0];
+		if (!tab?.id) throw new Error("No active tab found");
+
+		const loadPromise = waitForTabLoad(tab.id);
+		await browser.tabs.update(tab.id, { url: "https://polytoria.com/home" });
+		await loadPromise;
+
+		const results = await browser.scripting.executeScript({
+			target: { tabId: tab.id },
+			world: "MAIN",
+			args: [user],
+			func: async (user: {
+				userId: number;
+				username: string;
+				thumbnailUrl: string | null;
+				isStaff: boolean;
+				userRoleClass: string | null;
+				registeredAt: string;
+				lastSeenAt: string;
+			}) => {
+				const formatDate = (iso: string) =>
+					new Date(iso).toLocaleDateString(undefined, {
+						year: "numeric",
+						month: "short",
+						day: "numeric",
+					});
+
+				const bodyHtml = `
+					<p>This profile leads nowhere, but Kiln's search index still has a record of this exact username, which usually means the account has been permanently banned.</p>
+					<div class="card">
+						<div class="card-body">
+							${
+								user.thumbnailUrl
+									? `<img src="${user.thumbnailUrl}" style="width: 48px; height: 48px; border-radius: 6px;">`
+									: ""
+							}
+							<p class="mb-2 text-strong">${user.username}</p>
+							<small class="d-block">User ID: ${user.userId}</small>
+							<small class="d-block">Registered: ${formatDate(user.registeredAt)}</small>
+							<small class="d-block">Last seen: ${formatDate(user.lastSeenAt)}</small>
+						</div>
+					</div>
+				`;
+
+				try {
+					// @ts-expect-error
+					if (window.Swal?.fire) {
+						// @ts-expect-error
+						await window.Swal.fire({
+							icon: "error",
+							title: "User Banned",
+							html: bodyHtml,
+							confirmButtonText: "Got it",
+							allowOutsideClick: false,
+						});
+						return;
+					}
+				} catch (err) {
+					console.warn(
+						"[Kiln] Swal alert failed, falling back to manual modal:",
+						err,
+					);
+				}
+
+				await new Promise<void>((resolve) => {
+					const overlay = document.createElement("div");
+					overlay.style.cssText =
+						"position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:2147483647;display:flex;align-items:center;justify-content:center;font-family:sans-serif;";
+
+					const modal = document.createElement("div");
+					modal.style.cssText =
+						"background:#1e1e1e;color:#fff;padding:24px;border-radius:8px;max-width:400px;width:90%;text-align:center;";
+					modal.innerHTML = `<h2 style="margin-top:0;color:#dc3545;">User Banned</h2>${bodyHtml}`;
+
+					const button = document.createElement("button");
+					button.textContent = "Got it";
+					button.style.cssText =
+						"margin-top:16px;padding:8px 16px;border:none;border-radius:4px;background:#0d6efd;color:#fff;cursor:pointer;";
+					button.onclick = () => {
+						overlay.remove();
+						resolve();
+					};
+
+					modal.appendChild(button);
+					overlay.appendChild(modal);
+					document.body.appendChild(overlay);
+				});
+			},
+		});
+
+		if (results[0]?.error) throw results[0].error;
+	}),
+);
+
 onMessage("showHomepageReorderModal", ({ data: { sections } }) =>
 	handle(async () => {
 		const tabs = await browser.tabs.query({
@@ -191,26 +321,32 @@ onMessage("showHomepageReorderModal", ({ data: { sections } }) =>
 			world: "MAIN",
 			args: [sections],
 			func: async (
-				sections: Array<{ id: string; label: string; locked?: boolean }>,
+				sections: Array<{
+					id: string;
+					label: string;
+					locked?: boolean;
+					group?: string;
+				}>,
 			) => {
 				// @ts-expect-error
 				const Swal = window.Swal;
 
-				const { value } = await Swal.fire({
+				const { value, isDenied } = await Swal.fire({
 					title: "Reorder Homepage",
-					html: '<div id="kiln-reorder-list" style="text-align: left;"></div>',
+					html: '<div id="kiln-reorder-root" style="text-align: left;"></div>',
 					showCancelButton: true,
+					showDenyButton: true,
 					confirmButtonText: "Save",
+					denyButtonText: "Reset to Default",
 					cancelButtonText: "Cancel",
 					width: 500,
 					didOpen: () => {
-						const list = document.getElementById(
-							"kiln-reorder-list",
+						const root = document.getElementById(
+							"kiln-reorder-root",
 						) as HTMLElement;
 
-						// Animates `el` from `firstRect` to its current (post-mutation)
-						// position using a FLIP transform, instead of the browser's
-						// native (and visually janky) HTML5 drag-and-drop.
+						let list: HTMLElement;
+
 						const flip = (el: HTMLElement, firstRect: DOMRect) => {
 							const lastRect = el.getBoundingClientRect();
 							const dy = firstRect.top - lastRect.top;
@@ -272,6 +408,7 @@ onMessage("showHomepageReorderModal", ({ data: { sections } }) =>
 							const finalRect = placeholder.getBoundingClientRect();
 							const finishedDragEl = dragEl;
 							const finishedPlaceholder = placeholder;
+							const finishedList = list;
 							dragEl = null;
 							placeholder = null;
 
@@ -282,7 +419,7 @@ onMessage("showHomepageReorderModal", ({ data: { sections } }) =>
 							finishedDragEl.style.boxShadow = "none";
 
 							const cleanup = () => {
-								list.insertBefore(finishedDragEl, finishedPlaceholder);
+								finishedList.insertBefore(finishedDragEl, finishedPlaceholder);
 								finishedPlaceholder.remove();
 								finishedDragEl.style.cssText = "";
 								finishedDragEl.classList.remove("kiln-reorder-dragging");
@@ -296,6 +433,7 @@ onMessage("showHomepageReorderModal", ({ data: { sections } }) =>
 						const startDrag = (e: PointerEvent, row: HTMLElement) => {
 							e.preventDefault();
 
+							list = row.parentElement as HTMLElement;
 							const rect = row.getBoundingClientRect();
 							grabOffsetX = e.clientX - rect.left;
 							grabOffsetY = e.clientY - rect.top;
@@ -329,6 +467,20 @@ onMessage("showHomepageReorderModal", ({ data: { sections } }) =>
 							document.addEventListener("pointerup", onPointerUp);
 						};
 
+						const groupNames = [...new Set(sections.map((s) => s.group ?? ""))];
+						const lists = new Map<string, HTMLElement>();
+						for (const name of groupNames) {
+							if (groupNames.length > 1) {
+								const heading = document.createElement("div");
+								heading.className = "small text-muted fw-semibold mb-2 mt-3";
+								heading.textContent = name;
+								root.appendChild(heading);
+							}
+							const groupList = document.createElement("div");
+							root.appendChild(groupList);
+							lists.set(name, groupList);
+						}
+
 						for (const section of sections) {
 							const row = document.createElement("div");
 							row.className =
@@ -349,7 +501,7 @@ onMessage("showHomepageReorderModal", ({ data: { sections } }) =>
 								<button type="button" class="btn btn-sm btn-outline-secondary" data-dir="up"><i class="fas fa-chevron-up"></i></button>
 								<button type="button" class="btn btn-sm btn-outline-secondary" data-dir="down"><i class="fas fa-chevron-down"></i></button>
 							`;
-							list.appendChild(row);
+							lists.get(section.group ?? "")!.appendChild(row);
 
 							if (section.locked) continue;
 
@@ -360,7 +512,7 @@ onMessage("showHomepageReorderModal", ({ data: { sections } }) =>
 									if (!prev) return;
 									const firstRow = row.getBoundingClientRect();
 									const firstPrev = prev.getBoundingClientRect();
-									list.insertBefore(row, prev);
+									row.parentElement!.insertBefore(row, prev);
 									flip(row, firstRow);
 									flip(prev, firstPrev);
 								});
@@ -371,7 +523,7 @@ onMessage("showHomepageReorderModal", ({ data: { sections } }) =>
 									if (!next || next.dataset.locked === "true") return;
 									const firstRow = row.getBoundingClientRect();
 									const firstNext = next.getBoundingClientRect();
-									list.insertBefore(next, row);
+									row.parentElement!.insertBefore(next, row);
 									flip(row, firstRow);
 									flip(next, firstNext);
 								});
@@ -382,15 +534,16 @@ onMessage("showHomepageReorderModal", ({ data: { sections } }) =>
 						}
 					},
 					preConfirm: () => {
-						const list = document.getElementById(
-							"kiln-reorder-list",
+						const root = document.getElementById(
+							"kiln-reorder-root",
 						) as HTMLElement;
-						return Array.from(list.children).map(
-							(el) => (el as HTMLElement).dataset.id as string,
-						);
+						return Array.from(
+							root.querySelectorAll<HTMLElement>("[data-id]"),
+						).map((el) => el.dataset.id as string);
 					},
 				});
 
+				if (isDenied) return [];
 				return value ?? null;
 			},
 		});
@@ -468,6 +621,63 @@ onMessage("unmarkItemAsNFT", ({ data: { userId, itemId } }) =>
 	}),
 );
 
+onMessage("getNLFItems", ({ data: userId }) =>
+	handle(async () => {
+		const config = await withApi("extension_api", "extension");
+		return pullKVCache(
+			"nlfItems",
+			String(userId),
+			() =>
+				safeFetch(
+					`${config.resolvedUrls.extension}users/${userId}/nlfs`,
+					Extension.NLFItems,
+				),
+			6 * 60 * 60 * 1000,
+			false,
+		);
+	}),
+);
+
+onMessage("markItemAsNLF", ({ data: { userId, itemId } }) =>
+	handle(async () => {
+		const result = await withAuthSession(userId, (token, config) =>
+			safeFetch(
+				`${config.resolvedUrls.extension}items/${itemId}/nlf`,
+				z.object({ success: z.boolean() }),
+				{
+					method: "PUT",
+					headers: {
+						Authorization: `Bearer ${token}`,
+						"x-kiln-version": browser.runtime.getManifest().version,
+					},
+				},
+			),
+		);
+		expireKVCache("nlfItems", String(userId));
+		return result;
+	}),
+);
+
+onMessage("unmarkItemAsNLF", ({ data: { userId, itemId } }) =>
+	handle(async () => {
+		const result = await withAuthSession(userId, (token, config) =>
+			safeFetch(
+				`${config.resolvedUrls.extension}items/${itemId}/nlf`,
+				z.object({ success: z.boolean() }),
+				{
+					method: "DELETE",
+					headers: {
+						Authorization: `Bearer ${token}`,
+						"x-kiln-version": browser.runtime.getManifest().version,
+					},
+				},
+			),
+		);
+		expireKVCache("nlfItems", String(userId));
+		return result;
+	}),
+);
+
 onMessage("getPinnedAchievements", ({ data: userId }) =>
 	handle(async () => {
 		const config = await withApi("kiln_api", "extension");
@@ -522,6 +732,222 @@ onMessage("unpinAchievement", ({ data: { userId, achievementId } }) =>
 		);
 		expireKVCache("pinnedAchievements", String(userId));
 		return result as null;
+	}),
+);
+
+onMessage("getLikeCount", ({ data: userId }) =>
+	handle(async () => {
+		const config = await withApi("kiln_api", "extension");
+		return pullKVCache(
+			"userLikeCount",
+			String(userId),
+			() =>
+				safeFetch(
+					`${config.resolvedUrls.extension}users/${userId}/likes`,
+					Extension.LikeCountApi,
+				),
+			5 * 60 * 1000,
+			false,
+		);
+	}),
+);
+
+onMessage("getKilnUsage", ({ data: userId }) =>
+	handle(async () => {
+		const config = await withApi("kiln_api", "extension");
+		return pullKVCache(
+			"userKilnUsage",
+			String(userId),
+			() =>
+				safeFetch(
+					`${config.resolvedUrls.extension}users/${userId}/kiln-usage`,
+					Extension.KilnUsageApi,
+				),
+			5 * 60 * 1000,
+			false,
+		);
+	}),
+);
+
+onMessage("getUserTimezone", ({ data: userId }) =>
+	handle(async () => {
+		const config = await withApi("kiln_api", "extension");
+		return pullKVCache(
+			"userTimezone",
+			String(userId),
+			() =>
+				safeFetch(
+					`${config.resolvedUrls.extension}users/${userId}/timezone`,
+					Extension.UserTimezoneApi,
+				),
+			5 * 60 * 1000,
+			false,
+		);
+	}),
+);
+
+onMessage("setUserTimezone", ({ data: { userId, timezone } }) =>
+	handle(async () => {
+		const result = await withAuthSession(userId, (token, config) =>
+			safeFetch(
+				`${config.resolvedUrls.extension}users/${userId}/timezone`,
+				z.object({ success: z.boolean() }),
+				{
+					method: "PUT",
+					headers: {
+						Authorization: `Bearer ${token}`,
+						"x-kiln-version": browser.runtime.getManifest().version,
+					},
+					body: JSON.stringify({ timezone }),
+				},
+			),
+		);
+		expireKVCache("userTimezone", String(userId));
+		return result;
+	}),
+);
+
+onMessage("clearUserTimezone", ({ data: userId }) =>
+	handle(async () => {
+		const result = await withAuthSession(userId, (token, config) =>
+			safeFetch(
+				`${config.resolvedUrls.extension}users/${userId}/timezone`,
+				z.object({ success: z.boolean() }),
+				{
+					method: "DELETE",
+					headers: {
+						Authorization: `Bearer ${token}`,
+						"x-kiln-version": browser.runtime.getManifest().version,
+					},
+				},
+			),
+		);
+		expireKVCache("userTimezone", String(userId));
+		return result;
+	}),
+);
+
+onMessage("getPublicOutfits", ({ data: userId }) =>
+	handle(async () => {
+		const config = await withApi("kiln_api", "extension");
+		return pullKVCache(
+			"publicOutfits",
+			String(userId),
+			() =>
+				safeFetch(
+					`${config.resolvedUrls.extension}users/${userId}/public-outfits`,
+					Extension.PublicOutfitsApi,
+				),
+			5 * 60 * 1000,
+			false,
+		);
+	}),
+);
+
+onMessage("syncPublicOutfits", ({ data: { userId, outfits } }) =>
+	handle(async () => {
+		const result = await withAuthSession(userId, (token, config) =>
+			safeFetch(
+				`${config.resolvedUrls.extension}users/${userId}/public-outfits`,
+				z.object({ success: z.boolean() }),
+				{
+					method: "PUT",
+					headers: {
+						Authorization: `Bearer ${token}`,
+						"x-kiln-version": browser.runtime.getManifest().version,
+					},
+					body: JSON.stringify({ outfits }),
+				},
+			),
+		);
+		expireKVCache("publicOutfits", String(userId));
+		return result;
+	}),
+);
+
+onMessage("clearPublicOutfits", ({ data: userId }) =>
+	handle(async () => {
+		const result = await withAuthSession(userId, (token, config) =>
+			safeFetch(
+				`${config.resolvedUrls.extension}users/${userId}/public-outfits`,
+				z.object({ success: z.boolean() }),
+				{
+					method: "DELETE",
+					headers: {
+						Authorization: `Bearer ${token}`,
+						"x-kiln-version": browser.runtime.getManifest().version,
+					},
+				},
+			),
+		);
+		expireKVCache("publicOutfits", String(userId));
+		return result;
+	}),
+);
+
+onMessage("getLikeStatus", ({ data: { userId, targetUserId } }) =>
+	handle(async () =>
+		pullKVCache(
+			"likeStatus",
+			`${userId}_${targetUserId}`,
+			() =>
+				withAuthSession(userId, (token, config) =>
+					safeFetch(
+						`${config.resolvedUrls.extension}users/${userId}/likes/${targetUserId}`,
+						Extension.LikeStatusApi,
+						{
+							headers: {
+								Authorization: `Bearer ${token}`,
+								"x-kiln-version": browser.runtime.getManifest().version,
+							},
+						},
+					),
+				),
+			5 * 60 * 1000,
+			false,
+		),
+	),
+);
+
+onMessage("likeUser", ({ data: { userId, targetUserId } }) =>
+	handle(async () => {
+		const result = await withAuthSession(userId, (token, config) =>
+			safeFetch(
+				`${config.resolvedUrls.extension}users/${userId}/likes/${targetUserId}`,
+				z.object({ success: z.boolean() }),
+				{
+					method: "PUT",
+					headers: {
+						Authorization: `Bearer ${token}`,
+						"x-kiln-version": browser.runtime.getManifest().version,
+					},
+				},
+			),
+		);
+		expireKVCache("likeStatus", `${userId}_${targetUserId}`);
+		expireKVCache("userLikeCount", String(targetUserId));
+		return result;
+	}),
+);
+
+onMessage("unlikeUser", ({ data: { userId, targetUserId } }) =>
+	handle(async () => {
+		const result = await withAuthSession(userId, (token, config) =>
+			safeFetch(
+				`${config.resolvedUrls.extension}users/${userId}/likes/${targetUserId}`,
+				z.object({ success: z.boolean() }),
+				{
+					method: "DELETE",
+					headers: {
+						Authorization: `Bearer ${token}`,
+						"x-kiln-version": browser.runtime.getManifest().version,
+					},
+				},
+			),
+		);
+		expireKVCache("likeStatus", `${userId}_${targetUserId}`);
+		expireKVCache("userLikeCount", String(targetUserId));
+		return result;
 	}),
 );
 

@@ -71,7 +71,11 @@ export const ALL_FEATURE_IDS = [
 	"autoRefreshData",
 	"stickyNavbar",
 	"detailedPlaceReviews",
-	"improvedForumComposer",
+	"forumCharacterCount",
+	"forumMarkdownButtons",
+	"forumPostPreview",
+	"forumFilteredWordHighlight",
+	"forumImageLibrary",
 	"placeConsumablesTab",
 	"serverRefreshing",
 	"dailyChallengesRefreshing",
@@ -91,7 +95,23 @@ export const ALL_FEATURE_IDS = [
 	"streakFreezeDisplay",
 	"myFeedPosts",
 	"searchFeedPosts",
-	"reorderableHomepage"
+	"reorderableHomepage",
+	"favoredDevelopmentGuild",
+	"likeUser",
+	"legacyWorldDiscoveryLayout",
+	"kilnRegistrationDate",
+	"forumDrafts",
+	"serverUserSearch",
+	"clothingUploadBodyPreviews",
+	"disableMembershipThemes",
+	"pastNotifications",
+	"assetApprovedNotifications",
+	"bannedUserDetail",
+	"customProfileThemes",
+	"timezoneSharing",
+	"publicAvatarOutfits",
+	"nlfItems",
+	"downloadableCopyableWorlds"
 ] as const;
 
 export type FeatureId = (typeof ALL_FEATURE_IDS)[number];

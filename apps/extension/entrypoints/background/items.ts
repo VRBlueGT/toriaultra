@@ -15,6 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import { Polytoria } from "@kiln/schemas";
+import { POLYTORIA_CDN_URL } from "@/utils/decal";
 import { onMessage } from "@/utils/messaging";
 import { pullKVCache } from "@/utils/utilities";
 import { handle, safeFetch, withApi } from "./shared";
@@ -66,12 +67,38 @@ onMessage("getItemTexture", ({ data: id }) =>
 	}),
 );
 
+const MAX_CDN_IMAGE_BYTES = 5 * 1024 * 1024;
+
+onMessage("fetchCdnImageDataUrl", ({ data: url }) =>
+	handle(async () => {
+		if (!POLYTORIA_CDN_URL.test(url)) throw new Error("Not a Polytoria image");
+		const response = await fetch(url);
+		if (!response.ok)
+			throw new Error(`Image request failed (${response.status})`);
+		const type = response.headers.get("content-type") ?? "";
+		if (!type.startsWith("image/")) throw new Error("Not an image");
+		const bytes = new Uint8Array(await response.arrayBuffer());
+		if (bytes.length > MAX_CDN_IMAGE_BYTES) throw new Error("Image too large");
+		let binary = "";
+		for (let i = 0; i < bytes.length; i += 0x8000)
+			binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+		return `data:${type};base64,${btoa(binary)}`;
+	}),
+);
+
 onMessage("getAssetAudio", ({ data: id }) =>
 	handle(async () => {
 		const config = await withApi("public_api", "public");
-		return safeFetch(
-			`${config.resolvedUrls.public}assets/serve-audio/${id}`,
-			Polytoria.AudioApiSchema,
+		return pullKVCache(
+			"assetAudio",
+			String(id),
+			() =>
+				safeFetch(
+					`${config.resolvedUrls.public}assets/serve-audio/${id}`,
+					Polytoria.AudioApiSchema,
+				),
+			-1,
+			false,
 		);
 	}),
 );

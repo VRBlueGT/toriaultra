@@ -17,13 +17,22 @@
 import { _showKilnDisclosures, preferences } from "@/utils/storage";
 import * as discovery from "./discovery";
 import * as models from "./models";
+import * as uploads from "./uploads";
 import * as worlds from "./worlds";
+
+const PENDING_ASSET_APPROVAL_PATHS = [
+	"/create/audio",
+	"/create/image",
+	"/create/mesh",
+	"/create/gamePass",
+	"/create/consumable",
+];
 
 export default defineContentScript({
 	matches: [
 		"https://polytoria.com/library",
 		"https://polytoria.com/models/*",
-		"https://polytoria.com/create",
+		"https://polytoria.com/create*",
 		"https://polytoria.com/create/place*",
 	],
 	main() {
@@ -49,8 +58,85 @@ export default defineContentScript({
 					if (values.enabled.includes("v2WorldLabels")) {
 						worlds.v2WorldLabels(showDisclosures);
 					}
+
+					if (values.enabled.includes("favoredDevelopmentGuild")) {
+						console.log("aa");
+						favoredDevelopmentGuild(
+							values.config.favoredDevelopmentGuild.guildId,
+						);
+					}
+
+					if (
+						values.enabled.includes("assetApprovedNotifications") &&
+						PENDING_ASSET_APPROVAL_PATHS.some((path) =>
+							window.location.pathname.startsWith(path),
+						)
+					) {
+						uploads.trackPendingAssetApprovals();
+					}
 				}
 			});
 		});
 	},
 });
+
+function favoredDevelopmentGuild(favoredGuildId: number | null) {
+	const getCurrentGuildId = (): number | null => {
+		const guildId = new URLSearchParams(window.location.search).get("guildID");
+		return guildId ? Number(guildId) : null;
+	};
+
+	const updateGuildsTabLink = (guildId: number): void => {
+		const tab = document.querySelector<HTMLAnchorElement>("#guilds-tab");
+		if (tab) tab.href = `/create?guildID=${guildId}`;
+	};
+
+	const saveFavoredGuild = async (guildId: number): Promise<void> => {
+		const current = await preferences.getValue();
+		await preferences.setValue({
+			...current,
+			config: {
+				...current.config,
+				favoredDevelopmentGuild: {
+					...current.config.favoredDevelopmentGuild,
+					guildId,
+				},
+			},
+		});
+	};
+
+	const addFavoriteButton = (currentGuildId: number): void => {
+		const select = document.querySelector<HTMLSelectElement>("#guild-select");
+		if (!select) return;
+
+		const button = document.createElement("button");
+		button.type = "button";
+		button.className = "btn btn-outline-primary w-100 mb-3";
+
+		const refreshButtonState = (isFavored: boolean): void => {
+			button.innerHTML = isFavored
+				? '<i class="fas fa-star me-1"></i> Favored Guild'
+				: '<i class="fad fa-star me-1"></i> Mark as Favored Guild';
+			button.disabled = isFavored;
+		};
+		refreshButtonState(currentGuildId === favoredGuildId);
+
+		button.addEventListener("click", async () => {
+			await saveFavoredGuild(currentGuildId);
+			favoredGuildId = currentGuildId;
+			refreshButtonState(true);
+			updateGuildsTabLink(currentGuildId);
+		});
+
+		select.insertAdjacentElement("afterend", button);
+	};
+
+	if (favoredGuildId !== null) {
+		updateGuildsTabLink(favoredGuildId);
+	}
+
+	const currentGuildId = getCurrentGuildId();
+	if (currentGuildId !== null) {
+		addFavoriteButton(currentGuildId);
+	}
+}

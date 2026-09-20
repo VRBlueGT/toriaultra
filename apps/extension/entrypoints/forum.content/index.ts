@@ -19,6 +19,24 @@ import * as create from "./create";
 import * as search from "./search";
 import * as view from "./view";
 
+function composerFeatures(
+	values: Awaited<ReturnType<typeof preferences.getPreferences>>,
+	showDisclosures: boolean,
+) {
+	if (values.enabled.includes("forumMarkdownButtons"))
+		create.forumMarkdownButtons(showDisclosures);
+	if (values.enabled.includes("forumPostPreview"))
+		create.forumPostPreview(
+			values.config.forumPostPreview.autoShow,
+			showDisclosures,
+		);
+	if (values.enabled.includes("forumCharacterCount"))
+		create.forumCharacterCount(showDisclosures);
+	if (values.enabled.includes("forumImageLibrary")) create.forumImageLibrary();
+	if (values.enabled.includes("forumFilteredWordHighlight"))
+		create.forumFilteredWordHighlight();
+}
+
 export default defineContentScript({
 	matches: ["https://polytoria.com/forum", "https://polytoria.com/forum/*"],
 	main() {
@@ -51,26 +69,19 @@ export default defineContentScript({
 						values.config.collectibleOwnerLabels?.ogYear ?? 2023,
 						showDisclosures,
 					);
-				if (values.enabled.includes("improvedForumComposer"))
-					create.improvedForumComposer(
-						values.config.improvedForumComposer.showCharacterCount,
-						values.config.improvedForumComposer.showMarkdownBtns,
-						values.config.improvedForumComposer.autoShowPreview,
-						values.config.improvedForumComposer.highlightFilteredWords,
-						showDisclosures,
-					);
+				composerFeatures(values, showDisclosures);
+				if (values.enabled.includes("forumImageLibrary"))
+					view.forumImageStarring(showDisclosures);
 			} else if (second == "new") {
 				if (import.meta.env.MODE == "development") {
 					console.log("[Kiln] Running create page functions: ", create);
 				}
 
-				if (values.enabled.includes("improvedForumComposer"))
-					create.improvedForumComposer(
-						values.config.improvedForumComposer.showCharacterCount,
-						values.config.improvedForumComposer.showMarkdownBtns,
-						values.config.improvedForumComposer.autoShowPreview,
-						values.config.improvedForumComposer.highlightFilteredWords,
+				composerFeatures(values, showDisclosures);
+				if (values.enabled.includes("forumDrafts"))
+					create.forumDrafts(
 						showDisclosures,
+						values.config.forumDrafts.autoRestore,
 					);
 			} else if (!second || second == "category") {
 				if (values.enabled.includes("advancedForumSearch")) {

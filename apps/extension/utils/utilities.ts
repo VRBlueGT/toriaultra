@@ -20,6 +20,7 @@ import fallbackCurrencyRates from "./static/fallbackCurrencyRates.json";
 import staticMetadata from "./static/metadata.json";
 import {
 	_kilnNotifications,
+	_notificationBellOpenedAt,
 	apiSessions,
 	cache,
 	dismissedNotices,
@@ -33,6 +34,15 @@ import type {
 
 const KILN_DISCLOSURE_TITLE =
 	"This is a Kiln extension feature, not part of Polytoria.";
+
+export const DEFAULT_PLACE_THUMBNAILS = [
+	"https://cdn.polytoria.com/static/dft1-xzU-zWxM.png",
+	"https://cdn.polytoria.com/static/dft2-DBQ3ipQw.png",
+	"https://cdn.polytoria.com/static/dft3-BtyqU0FJ.png",
+	"https://cdn.polytoria.com/static/dft4-N_Ef3AQ6.png",
+	"https://cdn.polytoria.com/static/dft5-CRPCTPiv.png",
+	"https://cdn.polytoria.com/static/dft6-CKhz_MVp.png",
+];
 
 export function kilnDisclosureBadgeHtml(show: boolean): string {
 	if (!show) return "";
@@ -50,6 +60,16 @@ export function createKilnDisclosureBadge(): HTMLSpanElement {
 	badge.title = KILN_DISCLOSURE_TITLE;
 	badge.textContent = "Kiln";
 	return badge;
+}
+
+export function condenseTabBar(tabList: HTMLElement): void {
+	tabList.classList.add("nav-fill");
+	for (const link of tabList.querySelectorAll<HTMLElement>(".nav-link")) {
+		link.querySelector("i")?.classList.remove("me-1");
+		for (const node of Array.from(link.childNodes)) {
+			if (node.nodeType === Node.TEXT_NODE) node.remove();
+		}
+	}
 }
 
 export function applyKilnDisclosureTitle(
@@ -619,11 +639,6 @@ export async function migrateLegacySettings(): Promise<boolean> {
 			bulkWhitelist:
 				legacy.ImprovedPlaceManagement.MultiWhitelistOn ??
 				defaultPreferences.config.placeManagement.bulkWhitelist,
-			/*
-			clearWhitelist:
-				legacy.ImprovedPlaceManagement.ClearWhitelistOn ??
-				defaultPreferences.config.placeManagement.clearWhitelist,
-				*/
 		};
 	}
 
@@ -1083,6 +1098,7 @@ export interface FabricatedNotification {
 	url: string;
 	avatarUrl: string;
 	unread?: boolean;
+	lightBell?: boolean;
 	onClick?: () => void;
 }
 
@@ -1108,7 +1124,7 @@ export function formatNotificationRelativeTime(date: Date): string {
 	return "Just now";
 }
 
-function parseNotificationRelativeTime(text: string): Date | null {
+export function parseNotificationRelativeTime(text: string): Date | null {
 	const trimmed = text.trim().toLowerCase();
 	if (trimmed === "just now") return new Date();
 
@@ -1127,9 +1143,48 @@ function parseNotificationRelativeTime(text: string): Date | null {
 	return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function lightNotificationBell(): void {
+	for (const toggle of document.querySelectorAll<HTMLElement>(
+		".notifications-toggle",
+	)) {
+		if (toggle.querySelector(".unread-indicator")) continue;
+
+		toggle.dataset.kilnBellOpacity = toggle.style.opacity;
+		toggle.style.removeProperty("opacity");
+		const icon = toggle.querySelector("i");
+		icon?.classList.remove("far", "fa-bell");
+		icon?.classList.add("fas", "fa-bell-on");
+
+		const indicator = document.createElement("span");
+		indicator.className = "unread-indicator";
+		indicator.dataset.kiln = "bell-indicator";
+		toggle.appendChild(indicator);
+	}
+}
+
+function restoreNotificationBell(): void {
+	for (const toggle of document.querySelectorAll<HTMLElement>(
+		".notifications-toggle",
+	)) {
+		const indicator = toggle.querySelector('[data-kiln="bell-indicator"]');
+		if (!indicator) continue;
+
+		indicator.remove();
+		const icon = toggle.querySelector("i");
+		icon?.classList.remove("fas", "fa-bell-on");
+		icon?.classList.add("far", "fa-bell");
+		if (toggle.dataset.kilnBellOpacity) {
+			toggle.style.opacity = toggle.dataset.kilnBellOpacity;
+		}
+		delete toggle.dataset.kilnBellOpacity;
+	}
+}
+
 export function injectNotification(notification: FabricatedNotification): void {
 	const popup = document.querySelector<HTMLElement>(".notifications-popup");
 	if (!popup) return;
+
+	if (notification.lightBell) lightNotificationBell();
 
 	const existingItems = Array.from(
 		popup.querySelectorAll(":scope > a"),
@@ -1170,6 +1225,7 @@ export function injectNotification(notification: FabricatedNotification): void {
 }
 
 export interface KilnNotificationInput {
+	userId: number;
 	id: string;
 	message: string;
 	date: Date;
@@ -1186,12 +1242,17 @@ export async function fireKilnNotification(
 	const dedupeValue = input.dedupeValue ?? input.date.toISOString();
 
 	notifications[input.id] = {
+		userId: input.userId,
 		message: input.message,
 		date: input.date.toISOString(),
 		url: input.url,
 		avatarUrl: input.avatarUrl,
 		dedupeValue,
 		read: existing?.dedupeValue === dedupeValue ? existing.read : false,
+		notifiedAt:
+			existing?.dedupeValue === dedupeValue
+				? existing.notifiedAt
+				: new Date().toISOString(),
 	};
 
 	await _kilnNotifications.setValue(notifications);
@@ -1223,8 +1284,27 @@ export async function renderKilnNotifications(userId: number): Promise<void> {
 			? new Date(Math.min(...existingDates.map((d) => d.getTime())))
 			: null;
 
+	for (const toggle of document.querySelectorAll<HTMLElement>(
+		".notifications-toggle",
+	)) {
+		toggle.addEventListener("click", async () => {
+			restoreNotificationBell();
+			const opened = await _notificationBellOpenedAt.getValue();
+			await _notificationBellOpenedAt.setValue({
+				...opened,
+				[userId]: Date.now(),
+			});
+		});
+	}
+
+	const bellOpenedAt =
+		(await _notificationBellOpenedAt.getValue())[userId] ?? 0;
+
 	const notifications = await _kilnNotifications.getValue();
-	for (const notification of Object.values(notifications)) {
+	for (const [id, notification] of Object.entries(notifications)) {
+		if (notification.userId !== undefined && notification.userId !== userId) {
+			continue;
+		}
 		const date = new Date(notification.date);
 		if (oldestExistingDate !== null && date < oldestExistingDate) continue;
 
@@ -1234,6 +1314,11 @@ export async function renderKilnNotifications(userId: number): Promise<void> {
 			url: notification.url,
 			avatarUrl: notification.avatarUrl,
 			unread: !notification.read,
+			lightBell:
+				!notification.read &&
+				!!notification.notifiedAt &&
+				new Date(notification.notifiedAt).getTime() > bellOpenedAt,
+			onClick: () => markKilnNotificationRead(id),
 		});
 	}
 
@@ -1252,6 +1337,7 @@ export async function renderKilnNotifications(userId: number): Promise<void> {
 			url: notification.url,
 			avatarUrl: notification.avatarUrl ?? "",
 			unread: notification.seenAt === null,
+			lightBell: notification.seenAt === null && date.getTime() > bellOpenedAt,
 			onClick: () => {
 				sendMessage("markKilnNotificationSeen", {
 					userId,
